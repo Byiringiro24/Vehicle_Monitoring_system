@@ -1,42 +1,29 @@
-*.toDelete
-output/**
-*.class
-*~
-*.iml
-*/.idea/**
-.idea/**
-.idea
+﻿# Node
+node_modules/
+.npm
+npm-debug.log*
+
+# Build
+dist/
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
 *.log
-*.log.[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]
-*/.classpath
-.classpath
-*/.project
-.project
-.cache/**
-target/
-build/
-tmp_deb_control/
-tmp_rpm_control/
-tmp_sh/
-.gwt/
-.settings/
-/bin
-bin/
-**/dependency-reduced-pom.xml
-pom.xml.versionsBackup
+
+# OS
 .DS_Store
-**/.gradle
-**/local.properties
-**/build
-**/target
-**/Californium.properties
-**/Californium3.properties
-**/.env
-.instance_id
-rebuild-docker.sh
-*/.run/**
-.run/**
-.run
-.claude
-.planning
-docs/superpowers/
+Thumbs.db
+
+# Prisma
+prisma/migrations/
+
+# Editor
+.vscode/
+.idea/

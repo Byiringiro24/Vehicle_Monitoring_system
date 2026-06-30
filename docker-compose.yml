@@ -1,0 +1,68 @@
+﻿version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: artic_vms
+      POSTGRES_USER: artic
+      POSTGRES_PASSWORD: artic_secret
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U artic -d artic_vms']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '4000:4000'
+      - '1883:1883'
+    environment:
+      DATABASE_URL: postgresql://artic:artic_secret@postgres:5432/artic_vms
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: artic-super-secret-jwt-key-change-in-production
+      JWT_REFRESH_SECRET: artic-refresh-secret-change-in-production
+      PORT: 4000
+      MQTT_PORT: 1883
+      NODE_ENV: production
+      CORS_ORIGIN: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_WS_URL: ws://localhost:4000
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:

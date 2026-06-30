@@ -1,0 +1,297 @@
+﻿generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  FLEET_MANAGER
+  DRIVER
+  VIEWER
+}
+
+enum VehicleStatus {
+  ACTIVE
+  IDLE
+  OFFLINE
+  MAINTENANCE
+  DECOMMISSIONED
+}
+
+enum AlertSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum AlertType {
+  SPEEDING
+  GEOFENCE_ENTRY
+  GEOFENCE_EXIT
+  LOW_FUEL
+  ENGINE_OVERHEAT
+  BATTERY_LOW
+  HARSH_BRAKING
+  HARSH_ACCELERATION
+  ACCIDENT
+  IDLE_TOO_LONG
+  OFFLINE
+  CUSTOM
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  logoUrl     String?
+  address     String?
+  phone       String?
+  email       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users    User[]
+  fleets   Fleet[]
+  vehicles Vehicle[]
+  geofences Geofence[]
+  alertRules AlertRule[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole @default(VIEWER)
+  phone          String?
+  avatarUrl      String?
+  isActive       Boolean  @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  managedFleets  Fleet[]
+  driverProfile  Driver?
+  refreshTokens  RefreshToken[]
+  acknowledgedAlerts Alert[] @relation("AcknowledgedBy")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model Fleet {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  color       String  @default("#3B82F6")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  managerId      String?
+  manager        User?    @relation(fields: [managerId], references: [id])
+
+  vehicles Vehicle[]
+
+  @@map("fleets")
+}
+
+model Vehicle {
+  id              String        @id @default(uuid())
+  name            String
+  licensePlate    String        @unique
+  make            String
+  model           String
+  year            Int
+  color           String?
+  vin             String?       @unique
+  deviceToken     String        @unique @default(uuid())
+  status          VehicleStatus @default(OFFLINE)
+  fuelCapacity    Float         @default(60)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  fleetId        String?
+  fleet          Fleet?       @relation(fields: [fleetId], references: [id])
+  driver         Driver?
+
+  telemetry      Telemetry[]
+  alerts         Alert[]
+  geofenceEvents GeofenceEvent[]
+  lastLocation   LastLocation?
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id            String   @id @default(uuid())
+  licenseNumber String   @unique
+  licenseExpiry DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  vehicleId String?  @unique
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+
+  @@map("drivers")
+}
+
+model Telemetry {
+  id          String   @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  timestamp   DateTime @default(now())
+
+  // GPS
+  latitude    Float?
+  longitude   Float?
+  altitude    Float?
+  heading     Float?
+  accuracy    Float?
+
+  // Motion
+  speed       Float?   // km/h
+  odometer    Float?   // km
+
+  // Engine
+  engineTemp  Float?   // celsius
+  rpm         Int?
+  engineOn    Boolean  @default(false)
+
+  // Fuel
+  fuelLevel   Float?   // percentage
+  fuelUsed    Float?   // litres
+
+  // Power
+  batteryVoltage Float?
+  ignition       Boolean @default(false)
+
+  // Diagnostics
+  rawData     Json?
+
+  @@index([vehicleId, timestamp(sort: Desc)])
+  @@map("telemetry")
+}
+
+model LastLocation {
+  id         String   @id @default(uuid())
+  vehicleId  String   @unique
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  latitude   Float
+  longitude  Float
+  speed      Float    @default(0)
+  heading    Float    @default(0)
+  fuelLevel  Float?
+  engineTemp Float?
+  engineOn   Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@map("last_locations")
+}
+
+model Alert {
+  id          String        @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id])
+  type        AlertType
+  severity    AlertSeverity
+  status      AlertStatus   @default(ACTIVE)
+  title       String
+  message     String
+  metadata    Json?
+  triggeredAt DateTime      @default(now())
+  acknowledgedAt DateTime?
+  acknowledgedById String?
+  acknowledgedBy   User?   @relation("AcknowledgedBy", fields: [acknowledgedById], references: [id])
+  resolvedAt  DateTime?
+
+  @@index([vehicleId, triggeredAt(sort: Desc)])
+  @@index([status])
+  @@map("alerts")
+}
+
+model AlertRule {
+  id             String        @id @default(uuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  name           String
+  type           AlertType
+  severity       AlertSeverity @default(MEDIUM)
+  isActive       Boolean       @default(true)
+  conditions     Json
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("alert_rules")
+}
+
+model Geofence {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  description    String?
+  color          String   @default("#EF4444")
+  coordinates    Json
+  type           String   @default("polygon")
+  alertOnEntry   Boolean  @default(true)
+  alertOnExit    Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  events GeofenceEvent[]
+
+  @@map("geofences")
+}
+
+model GeofenceEvent {
+  id          String   @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  geofenceId  String
+  geofence    Geofence @relation(fields: [geofenceId], references: [id])
+  eventType   String
+  timestamp   DateTime @default(now())
+
+  @@map("geofence_events")
+}
