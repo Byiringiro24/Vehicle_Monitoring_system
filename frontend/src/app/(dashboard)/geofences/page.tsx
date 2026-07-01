@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { geofenceApi } from '@/lib/api';
-import { MapPin, Plus, Trash2, Toggle, Shield } from 'lucide-react';
+import { MapPin, Plus, Trash2, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
