@@ -54,5 +54,18 @@ export function initMqttBroker(port: number) {
   broker.on('client',           (c: { id: string }) => logger.info(`MQTT client connected: ${c.id}`));
   broker.on('clientDisconnect', (c: { id: string }) => logger.info(`MQTT client disconnected: ${c.id}`));
 
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.warn(
+        `MQTT port ${port} is already in use (mosquitto may be running). ` +
+        `The built-in MQTT broker will not start. ` +
+        `ESP32 devices should connect to the existing broker on port ${port}.`
+      );
+      // Do NOT throw — let the rest of the app continue running
+    } else {
+      logger.error('MQTT broker error', err);
+    }
+  });
+
   server.listen(port, () => logger.info(`MQTT broker listening on port ${port}`));
 }

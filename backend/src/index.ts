@@ -23,8 +23,16 @@ async function bootstrap() {
   const httpServer = createServer(app);
   initSocketServer(httpServer);
 
-  // MQTT broker
-  initMqttBroker(MQTT_PORT);
+  // MQTT broker — skip if port is already in use (e.g. mosquitto on Ubuntu)
+  try {
+    initMqttBroker(MQTT_PORT);
+  } catch (err: any) {
+    if (err?.code === 'EADDRINUSE') {
+      logger.warn(`MQTT port ${MQTT_PORT} already in use — MQTT broker disabled. Set MQTT_PORT to a free port (e.g. 1884).`);
+    } else {
+      throw err;
+    }
+  }
 
   httpServer.listen(PORT, () => {
     logger.info(`ARTIC VMS backend running on port ${PORT}`);

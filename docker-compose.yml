@@ -5,7 +5,7 @@
     environment:
       POSTGRES_DB: fleet_management
       POSTGRES_USER: artic_user
-      POSTGRES_PASSWORD: "Artic$2026"
+      POSTGRES_PASSWORD: "Artic$$2026"
     ports:
       - '5433:5432'
     volumes:
@@ -34,7 +34,7 @@
       - '4000:4000'
       - '1883:1883'
     environment:
-      DATABASE_URL: "postgresql://artic_user:Artic$2026@postgres:5432/fleet_management?schema=public&sslmode=disable"
+      DATABASE_URL: "postgresql://artic_user:Artic$$2026@postgres:5432/fleet_management?schema=public&sslmode=disable"
       REDIS_URL: redis://redis:6379
       JWT_SECRET: artic-super-secret-jwt-key-change-in-production
       JWT_REFRESH_SECRET: artic-refresh-secret-change-in-production
