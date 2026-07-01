@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
 import { listAlerts, acknowledge, resolve, listRules, createRule, deleteRule } from '../controllers/alert.controller';
 

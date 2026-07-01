@@ -1,20 +1,26 @@
-﻿import aedes from 'aedes';
+import Aedes from 'aedes';
 import net from 'net';
 import { prisma } from '../config/database';
 import { processTelemetry } from './telemetry.service';
 import logger from '../utils/logger';
 
 export function initMqttBroker(port: number) {
-  const broker = aedes();
-  const server = net.createServer(broker.handle as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const broker = new (Aedes as any)();
+  const server = net.createServer(broker.handle);
 
-  // Authenticate devices by token
-  broker.authenticate = async (client, username, password, callback) => {
-    const token = password?.toString() ?? username?.toString() ?? '';
+  // Authenticate devices by deviceToken
+  broker.authenticate = async (
+    client: { id: string; vehicleId?: string },
+    username: Buffer | string | null,
+    password: Buffer | null,
+    callback: (err: Error | null, success: boolean) => void
+  ) => {
+    const token = (password?.toString() ?? username?.toString() ?? '').trim();
     try {
       const vehicle = await prisma.vehicle.findFirst({ where: { deviceToken: token } });
       if (vehicle) {
-        (client as any).vehicleId = vehicle.id;
+        client.vehicleId = vehicle.id;
         callback(null, true);
       } else {
         callback(null, false);
@@ -24,28 +30,29 @@ export function initMqttBroker(port: number) {
     }
   };
 
-  // Handle incoming telemetry messages
-  broker.on('publish', async (packet, client) => {
+  // Handle incoming telemetry
+  broker.on('publish', async (
+    packet: { topic: string; payload: Buffer },
+    client: { id: string; vehicleId?: string } | null
+  ) => {
     if (!client) return;
-    const vehicleId = (client as any).vehicleId as string;
+    const vehicleId = client.vehicleId;
     if (!vehicleId) return;
-
     const topic = packet.topic;
     if (!topic.startsWith('artic/')) return;
-
     try {
       const payload = JSON.parse(packet.payload.toString());
       if (topic.endsWith('/telemetry')) {
         await processTelemetry(vehicleId, payload);
-        logger.debug(Telemetry received from vehicle );
+        logger.debug(`Telemetry received from vehicle ${vehicleId}`);
       }
     } catch (err) {
       logger.error('MQTT message processing error', err);
     }
   });
 
-  broker.on('client', (client) => logger.info(MQTT client connected: ));
-  broker.on('clientDisconnect', (client) => logger.info(MQTT client disconnected: ));
+  broker.on('client',           (c: { id: string }) => logger.info(`MQTT client connected: ${c.id}`));
+  broker.on('clientDisconnect', (c: { id: string }) => logger.info(`MQTT client disconnected: ${c.id}`));
 
-  server.listen(port, () => logger.info(MQTT broker listening on port ));
+  server.listen(port, () => logger.info(`MQTT broker listening on port ${port}`));
 }

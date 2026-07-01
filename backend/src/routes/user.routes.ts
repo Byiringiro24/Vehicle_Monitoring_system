@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
 import { prisma } from '../config/database';
 import bcrypt from 'bcryptjs';

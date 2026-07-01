@@ -1,4 +1,4 @@
-﻿import { Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../types';
 import { prisma } from '../config/database';
 import { getPagination, paginatedResponse } from '../middleware/paginate';
@@ -8,29 +8,36 @@ import { v4 as uuidv4 } from 'uuid';
 export async function listVehicles(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const { page, limit, skip } = getPagination(req);
-    const search = req.query.search as string | undefined;
-    const fleetId = req.query.fleetId as string | undefined;
-    const status = req.query.status as string | undefined;
+    const search   = req.query.search   as string | undefined;
+    const fleetId  = req.query.fleetId  as string | undefined;
+    const status   = req.query.status   as string | undefined;
+    const energyType = req.query.energyType as string | undefined;
 
     const where: any = {
       organizationId: req.user!.organizationId,
       ...(search && { OR: [
-        { name: { contains: search, mode: 'insensitive' } },
+        { name:         { contains: search, mode: 'insensitive' } },
         { licensePlate: { contains: search, mode: 'insensitive' } },
+        { manufacturer: { contains: search, mode: 'insensitive' } },
       ]}),
-      ...(fleetId && { fleetId }),
-      ...(status && { status }),
+      ...(fleetId    && { fleetId }),
+      ...(status     && { status }),
+      ...(energyType && { energyType }),
     };
 
     const [vehicles, total] = await Promise.all([
       prisma.vehicle.findMany({
         where, skip, take: limit,
         include: {
-          fleet: { select: { id: true, name: true, color: true } },
-          lastLocation: true,
-          driver: { include: { user: { select: { firstName: true, lastName: true } } } },
+          fleet:          { select: { id: true, name: true, color: true } },
+          lastLocation:   true,
+          currentDriver:  {
+            include: { user: { select: { firstName: true, lastName: true, phone: true } } }
+          },
+          gpsDevice:      { select: { deviceId: true, status: true, lastCommunication: true } },
+          _count:         { select: { telemetry: true, alerts: true, trips: true } },
         },
-        orderBy: { name: 'asc' },
+        orderBy: { licensePlate: 'asc' },
       }),
       prisma.vehicle.count({ where }),
     ]);
@@ -43,9 +50,13 @@ export async function getVehicle(req: AuthenticatedRequest, res: Response, next:
     const vehicle = await prisma.vehicle.findFirst({
       where: { id: req.params.id, organizationId: req.user!.organizationId },
       include: {
-        fleet: true, lastLocation: true,
-        driver: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } } } },
-        _count: { select: { telemetry: true, alerts: true } },
+        fleet:         true,
+        lastLocation:  true,
+        gpsDevice:     true,
+        currentDriver: {
+          include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } } }
+        },
+        _count: { select: { telemetry: true, alerts: true, trips: true } },
       },
     });
     if (!vehicle) throw new AppError(404, 'Vehicle not found');
@@ -55,8 +66,20 @@ export async function getVehicle(req: AuthenticatedRequest, res: Response, next:
 
 export async function createVehicle(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
+    const { purchaseDate, insuranceStart, insuranceExpiry, roadTaxExpiry,
+            inspectionExpiry, batteryWarranty, warrantyExpiry, ...rest } = req.body;
     const vehicle = await prisma.vehicle.create({
-      data: { ...req.body, organizationId: req.user!.organizationId, deviceToken: uuidv4() },
+      data: {
+        ...rest,
+        organizationId: req.user!.organizationId,
+        deviceToken:    uuidv4(),
+        purchaseDate:   purchaseDate    ? new Date(purchaseDate)    : undefined,
+        insuranceExpiry:insuranceExpiry ? new Date(insuranceExpiry) : undefined,
+        roadTaxExpiry:  roadTaxExpiry   ? new Date(roadTaxExpiry)   : undefined,
+        inspectionExpiry:inspectionExpiry ? new Date(inspectionExpiry) : undefined,
+        batteryWarranty:batteryWarranty ? new Date(batteryWarranty) : undefined,
+        warrantyExpiry: warrantyExpiry  ? new Date(warrantyExpiry)  : undefined,
+      },
       include: { fleet: { select: { id: true, name: true } } },
     });
     res.status(201).json(vehicle);
@@ -69,8 +92,16 @@ export async function updateVehicle(req: AuthenticatedRequest, res: Response, ne
       where: { id: req.params.id, organizationId: req.user!.organizationId },
     });
     if (!existing) throw new AppError(404, 'Vehicle not found');
+    const { purchaseDate, insuranceExpiry, roadTaxExpiry, inspectionExpiry, ...rest } = req.body;
     const vehicle = await prisma.vehicle.update({
-      where: { id: req.params.id }, data: req.body,
+      where: { id: req.params.id },
+      data: {
+        ...rest,
+        ...(purchaseDate     && { purchaseDate:     new Date(purchaseDate)     }),
+        ...(insuranceExpiry  && { insuranceExpiry:  new Date(insuranceExpiry)  }),
+        ...(roadTaxExpiry    && { roadTaxExpiry:    new Date(roadTaxExpiry)    }),
+        ...(inspectionExpiry && { inspectionExpiry: new Date(inspectionExpiry) }),
+      },
       include: { fleet: { select: { id: true, name: true } } },
     });
     res.json(vehicle);
@@ -91,8 +122,56 @@ export async function deleteVehicle(req: AuthenticatedRequest, res: Response, ne
 export async function regenerateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const vehicle = await prisma.vehicle.update({
-      where: { id: req.params.id }, data: { deviceToken: uuidv4() },
+      where: { id: req.params.id },
+      data: { deviceToken: uuidv4() },
     });
     res.json({ deviceToken: vehicle.deviceToken });
+  } catch (err) { next(err); }
+}
+
+// ─── GPS History for a vehicle ────────────────────────────────────────────────
+export async function getGpsHistory(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const { vehicleId } = req.params;
+    const from  = req.query.from  ? new Date(req.query.from  as string) : new Date(Date.now() - 86400000);
+    const to    = req.query.to    ? new Date(req.query.to    as string) : new Date();
+    const limit = Math.min(5000, parseInt(req.query.limit as string ?? '2000', 10));
+
+    // Verify vehicle belongs to org
+    const vehicle = await prisma.vehicle.findFirst({
+      where: { id: vehicleId, organizationId: req.user!.organizationId },
+      select: { id: true, name: true, licensePlate: true },
+    });
+    if (!vehicle) throw new AppError(404, 'Vehicle not found');
+
+    const history = await prisma.gpsHistory.findMany({
+      where: { vehicleId, timestamp: { gte: from, lte: to } },
+      orderBy: { timestamp: 'asc' },
+      take: limit,
+      select: { id: true, latitude: true, longitude: true, speed: true, heading: true, timestamp: true },
+    });
+
+    res.json({ vehicle, from, to, points: history, count: history.length });
+  } catch (err) { next(err); }
+}
+
+// ─── Trips for a vehicle ──────────────────────────────────────────────────────
+export async function getTrips(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const { vehicleId } = req.params;
+    const { page, limit, skip } = getPagination(req);
+    const from = req.query.from ? new Date(req.query.from as string) : new Date(Date.now() - 30 * 86400000);
+    const to   = req.query.to   ? new Date(req.query.to   as string) : new Date();
+
+    const [trips, total] = await Promise.all([
+      prisma.trip.findMany({
+        where: { vehicleId, startTime: { gte: from, lte: to } },
+        orderBy: { startTime: 'desc' },
+        skip, take: limit,
+      }),
+      prisma.trip.count({ where: { vehicleId, startTime: { gte: from, lte: to } } }),
+    ]);
+
+    res.json(paginatedResponse(trips, total, page, limit));
   } catch (err) { next(err); }
 }

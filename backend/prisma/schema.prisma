@@ -1,4 +1,4 @@
-﻿generator client {
+generator client {
   provider = "prisma-client-js"
 }
 
@@ -7,7 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
+// =============================================================================
+//  ENUMS
+// =============================================================================
 
 enum UserRole {
   SUPER_ADMIN
@@ -15,15 +17,161 @@ enum UserRole {
   FLEET_MANAGER
   DRIVER
   VIEWER
+  FINANCE_MANAGER
 }
 
+// ─── Vehicle ──────────────────────────────────────────────────────────────────
+
 enum VehicleStatus {
+  AVAILABLE
   ACTIVE
   IDLE
-  OFFLINE
+  RENTED
+  LEASED
+  SOLD_INSTALLMENT
+  RESERVED
   MAINTENANCE
+  OUT_OF_SERVICE
+  STOLEN
+  RETIRED
   DECOMMISSIONED
+  OFFLINE
 }
+
+enum VehicleClass {
+  SEDAN
+  SUV
+  PICKUP
+  VAN
+  TRUCK
+  BUS
+  MINIBUS
+  MOTORCYCLE
+  BICYCLE
+  TRAILER
+  TRACTOR
+  FORKLIFT
+  HEAVY_EQUIPMENT
+  OTHER
+}
+
+enum VehiclePurpose {
+  TAXI
+  DELIVERY
+  COMPANY
+  CONSTRUCTION
+  AGRICULTURE
+  LOGISTICS
+  AMBULANCE
+  GOVERNMENT
+  RENTAL
+  PERSONAL
+  OTHER
+}
+
+enum EnergyType {
+  PETROL
+  DIESEL
+  ELECTRIC
+  HYBRID
+  PHEV
+  HYDROGEN
+  LPG
+  CNG
+}
+
+enum TransmissionType {
+  MANUAL
+  AUTOMATIC
+  CVT
+  SEMI_AUTO
+}
+
+enum OwnershipType {
+  COMPANY_OWNED
+  LEASED
+  CUSTOMER_OWNED
+  FINANCED
+}
+
+// ─── Driver ───────────────────────────────────────────────────────────────────
+
+enum DriverStatus {
+  ACTIVE
+  ON_LEAVE
+  SUSPENDED
+  TERMINATED
+  INACTIVE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// ─── Contract / Finance ───────────────────────────────────────────────────────
+
+enum ContractType {
+  RENTAL_DAILY
+  RENTAL_WEEKLY
+  RENTAL_MONTHLY
+  RENTAL_QUARTERLY
+  RENTAL_YEARLY
+  LEASE
+  INSTALLMENT_SALE
+  HIRE_PURCHASE
+  DRIVER_DAILY_SUBMISSION
+  DELIVERY
+  CARGO
+  PASSENGER
+  TAXI
+  CUSTOM
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+  TERMINATED
+  SUSPENDED
+  PENDING
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+  WAIVED
+  CANCELLED
+}
+
+enum ExpenseCategory {
+  FUEL
+  CHARGING
+  MAINTENANCE
+  INSURANCE
+  ROAD_TAX
+  INSPECTION
+  PERMIT
+  GPS_SIM
+  TYRE
+  BATTERY_REPLACE
+  ACCIDENT_REPAIR
+  PARKING
+  FINE
+  CLEANING
+  TOWING
+  DRIVER_SALARY
+  LOAN_PAYMENT
+  ACCESSORIES
+  REPAIR
+  OTHER
+}
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
 
 enum AlertSeverity {
   CRITICAL
@@ -44,17 +192,24 @@ enum AlertType {
   GEOFENCE_ENTRY
   GEOFENCE_EXIT
   LOW_FUEL
+  LOW_BATTERY
   ENGINE_OVERHEAT
-  BATTERY_LOW
+  BATTERY_LOW_VOLTAGE
   HARSH_BRAKING
   HARSH_ACCELERATION
   ACCIDENT
   IDLE_TOO_LONG
   OFFLINE
+  INSURANCE_EXPIRING
+  ROAD_TAX_EXPIRING
+  INSPECTION_DUE
+  MAINTENANCE_DUE
   CUSTOM
 }
 
-// ─── Models ───────────────────────────────────────────────────────────────────
+// =============================================================================
+//  CORE MODELS
+// =============================================================================
 
 model Organization {
   id          String   @id @default(uuid())
@@ -65,39 +220,55 @@ model Organization {
   address     String?
   phone       String?
   email       String?
+  country     String   @default("Rwanda")
+  currency    String   @default("RWF")
+  taxId       String?
+  website     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users    User[]
-  fleets   Fleet[]
-  vehicles Vehicle[]
-  geofences Geofence[]
-  alertRules AlertRule[]
+  users         User[]
+  fleets        Fleet[]
+  vehicles      Vehicle[]
+  gpsDevices    GpsDevice[]
+  drivers       Driver[]
+  customers     Customer[]
+  geofences     Geofence[]
+  alertRules    AlertRule[]
+  contracts     VehicleContract[]
+  expenses      VehicleExpense[]
+  cashFlows     CashFlow[]
+  fuelRecords   FuelRecord[]
 
   @@map("organizations")
 }
 
+// ─── Users ────────────────────────────────────────────────────────────────────
+
 model User {
-  id             String   @id @default(uuid())
-  email          String   @unique
-  passwordHash   String
-  firstName      String
-  lastName       String
-  role           UserRole @default(VIEWER)
-  phone          String?
-  avatarUrl      String?
-  isActive       Boolean  @default(true)
-  lastLoginAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  middleName   String?
+  role         UserRole    @default(VIEWER)
+  phone        String?
+  altPhone     String?
+  avatarUrl    String?
+  nationalId   String?
+  isActive     Boolean     @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  managedFleets  Fleet[]
-  driverProfile  Driver?
-  refreshTokens  RefreshToken[]
-  acknowledgedAlerts Alert[] @relation("AcknowledgedBy")
+  managedFleets      Fleet[]
+  driverProfile      Driver?
+  refreshTokens      RefreshToken[]
+  acknowledgedAlerts Alert[]         @relation("AcknowledgedBy")
 
   @@map("users")
 }
@@ -113,67 +284,589 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// ─── Fleet ───────────────────────────────────────────────────────────────────
+
 model Fleet {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   description String?
-  color       String  @default("#3B82F6")
+  color       String   @default("#3B82F6")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   managerId      String?
-  manager        User?    @relation(fields: [managerId], references: [id])
+  manager        User?        @relation(fields: [managerId], references: [id])
 
   vehicles Vehicle[]
 
   @@map("fleets")
 }
 
+// ─── GPS Device ───────────────────────────────────────────────────────────────
+
+model GpsDevice {
+  id               String    @id @default(uuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  deviceId         String    @unique
+  imei             String?   @unique
+  simNumber        String?
+  networkProvider  String?
+  dataPlan         String?
+  firmwareVersion  String?
+  installationDate DateTime?
+  removedDate      DateTime?
+  technicianName   String?
+  status           String    @default("ACTIVE")
+  lastCommunication DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  vehicle   Vehicle?  @relation(fields: [vehicleId], references: [id])
+  vehicleId String?   @unique
+
+  @@map("gps_devices")
+}
+
+// ─── Vehicle ─────────────────────────────────────────────────────────────────
+
 model Vehicle {
-  id              String        @id @default(uuid())
+  id              String         @id @default(uuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  fleetId         String?
+  fleet           Fleet?         @relation(fields: [fleetId], references: [id])
+
+  // Identity
   name            String
-  licensePlate    String        @unique
-  make            String
+  licensePlate    String         @unique
+  fleetNumber     String?
+  assetTag        String?
+  vin             String?        @unique
+  engineNumber    String?
+  registrationNumber String?
+
+  // Classification
+  vehicleClass    VehicleClass   @default(SEDAN)
+  vehicleType     String         @default("CAR")
+  purpose         VehiclePurpose @default(COMPANY)
+  manufacturer    String
   model           String
   year            Int
+  trim            String?
   color           String?
-  vin             String?       @unique
-  deviceToken     String        @unique @default(uuid())
-  status          VehicleStatus @default(OFFLINE)
-  fuelCapacity    Float         @default(60)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
 
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  fleetId        String?
-  fleet          Fleet?       @relation(fields: [fleetId], references: [id])
-  driver         Driver?
+  // Status
+  status          VehicleStatus  @default(OFFLINE)
+  engineLocked    Boolean        @default(false)
 
-  telemetry      Telemetry[]
-  alerts         Alert[]
-  geofenceEvents GeofenceEvent[]
-  lastLocation   LastLocation?
+  // Energy
+  energyType      EnergyType     @default(PETROL)
+  fuelCapacity    Float?
+  recommendedFuel String?
+  avgConsumption  Float?
+  minFuelAlert    Float?
+  fuelCardNumber  String?
+  preferredStation String?
+  batteryCapacityKwh  Float?
+  batterySerial       String?
+  batteryManufacturer String?
+  batteryHealth       Float?
+  batteryWarranty     DateTime?
+  chargerType         String?
+  chargingSpeedKw     Float?
+  batteryReplaceCost  Float?
+
+  // Engine
+  engineType      String?
+  engineCc        Float?
+  horsepower      Int?
+  transmission    TransmissionType @default(MANUAL)
+  driveType       String?
+  maxSpeedKph     Float?
+
+  // GPS / Device Auth (deviceToken = MQTT password for this vehicle)
+  deviceToken     String         @unique @default(uuid())
+
+  // Ownership
+  ownerName       String?
+  ownerCompany    String?
+  ownershipType   OwnershipType  @default(COMPANY_OWNED)
+  purchaseDate    DateTime?
+  purchasePrice   Float?
+  currentValue    Float?
+  supplierName    String?
+  warrantyExpiry  DateTime?
+
+  // Insurance
+  insuranceCompany    String?
+  insurancePolicyNo   String?
+  insuranceStart      DateTime?
+  insuranceExpiry     DateTime?
+  insurancePremium    Float?
+  insuranceCoverage   String?
+  insuranceAgent      String?
+  insuranceEmergency  String?
+
+  // Government compliance
+  roadTaxExpiry       DateTime?
+  inspectionExpiry    DateTime?
+  transportPermit     String?
+  transportPermitExpiry DateTime?
+  commercialLicense   String?
+  commercialLicExpiry DateTime?
+  taxiPermit          String?
+  taxiPermitExpiry    DateTime?
+  roadworthinessCert  String?
+  emissionCert        String?
+  emissionExpiry      DateTime?
+
+  // Maintenance schedule
+  oilChangeKmInterval    Float?
+  nextServiceDate        DateTime?
+  lastServiceDate        DateTime?
+  lastServiceOdometer    Float?
+
+  // Tyre info
+  tyreBrand        String?
+  tyreSize         String?
+  tyreFrontLeft    String?
+  tyreFrontRight   String?
+  tyreRearLeft     String?
+  tyreRearRight    String?
+  tyreSpare        String?
+  tyrePurchaseDate DateTime?
+
+  // Documents (file URLs)
+  docRegistrationCard  String?
+  docInsurancePdf      String?
+  docInspectionCert    String?
+  docPurchaseInvoice   String?
+  docPhoto             String?
+  docOwnershipCert     String?
+
+  odometer        Float          @default(0)
+  engineHours     Float          @default(0)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  gpsDevice       GpsDevice?
+  currentDriver   Driver?        @relation("CurrentVehicle")
+  driverAssignments DriverAssignment[]
+  telemetry       Telemetry[]
+  lastLocation    LastLocation?
+  alerts          Alert[]
+  geofenceEvents  GeofenceEvent[]
+  trips           Trip[]
+  fuelRecords     FuelRecord[]
+  expenses        VehicleExpense[]
+  contracts       VehicleContract[]
+  maintenance     MaintenanceRecord[]
 
   @@map("vehicles")
 }
 
-model Driver {
-  id            String   @id @default(uuid())
-  licenseNumber String   @unique
-  licenseExpiry DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// ─── Driver ───────────────────────────────────────────────────────────────────
 
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id])
-  vehicleId String?  @unique
-  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+model Driver {
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  userId          String       @unique
+  user            User         @relation(fields: [userId], references: [id])
+
+  // Employment
+  employeeNumber  String?
+  department      String?
+  position        String?
+  employmentDate  DateTime?
+  status          DriverStatus @default(ACTIVE)
+  baseSalary      Float?
+  commissionRate  Float?
+
+  // Personal
+  gender          Gender?
+  dateOfBirth     DateTime?
+  nationality     String?
+  nationalId      String?       @unique
+  passportNumber  String?
+  photoUrl        String?
+  address         String?
+  city            String?
+  district        String?
+  altPhone        String?
+  emergencyContact String?
+  emergencyPhone  String?
+
+  // License
+  licenseNumber   String        @unique
+  licenseClass    String?
+  licenseIssueDate DateTime?
+  licenseExpiry   DateTime?
+  licenseCountry  String?
+  licenseRestrictions String?
+  licensePhotoUrl String?
+
+  // Experience
+  yearsDriving    Int?
+  taxiExperience  Boolean @default(false)
+  truckExperience Boolean @default(false)
+  motoExperience  Boolean @default(false)
+  busExperience   Boolean @default(false)
+  specialSkills   String?
+
+  // Health
+  bloodGroup      String?
+  medicalCertUrl  String?
+  medicalExpiry   DateTime?
+  visionTest      Boolean @default(false)
+  medicalNotes    String?
+
+  // Banking
+  bankName        String?
+  bankAccount     String?
+  mobileMoney     String?
+  taxId           String?
+
+  // Documents
+  docLicenseUrl    String?
+  docNationalIdUrl String?
+  docPassportUrl   String?
+  docPoliceUrl     String?
+  docMedicalUrl    String?
+  docContractUrl   String?
+
+  joiningDate     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Current vehicle assignment (for quick lookup)
+  currentVehicleId String?   @unique
+  currentVehicle   Vehicle?  @relation("CurrentVehicle", fields: [currentVehicleId], references: [id])
+
+  assignments     DriverAssignment[]
+  payments        DriverPayment[]
+  contracts       VehicleContract[]
+  fuelRecords     FuelRecord[]
+  expenses        VehicleExpense[]
 
   @@map("drivers")
 }
+
+model DriverAssignment {
+  id          String   @id @default(uuid())
+  driverId    String
+  driver      Driver   @relation(fields: [driverId], references: [id])
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  startDate   DateTime
+  endDate     DateTime?
+  purpose     String?
+  department  String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([driverId])
+  @@index([vehicleId])
+  @@map("driver_assignments")
+}
+
+// ─── Customer ─────────────────────────────────────────────────────────────────
+
+model Customer {
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  name            String
+  photoUrl        String?
+  nationalId      String?
+  passportNumber  String?
+  phone           String
+  altPhone        String?
+  email           String?
+  address         String?
+  city            String?
+  district        String?
+  occupation      String?
+  employer        String?
+  emergencyContact String?
+  emergencyPhone  String?
+  guarantorName   String?
+  guarantorPhone  String?
+  creditScore     Int          @default(100)
+  creditStatus    String       @default("GOOD")
+  notes           String?
+
+  // Documents
+  docNationalIdUrl String?
+  docPassportUrl   String?
+  docPhotoUrl      String?
+  docOtherUrl      String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  contracts       VehicleContract[]
+  payments        ContractPayment[]
+
+  @@map("customers")
+}
+
+// =============================================================================
+//  CONTRACTS & PAYMENTS
+// =============================================================================
+
+model VehicleContract {
+  id              String         @id @default(uuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  vehicleId       String
+  vehicle         Vehicle        @relation(fields: [vehicleId], references: [id])
+  customerId      String
+  customer        Customer       @relation(fields: [customerId], references: [id])
+  driverId        String?
+  driver          Driver?        @relation(fields: [driverId], references: [id])
+
+  contractNumber  String         @unique @default(uuid())
+  contractType    ContractType
+  status          ContractStatus @default(ACTIVE)
+
+  startDate       DateTime
+  endDate         DateTime?
+  expectedEndDate DateTime?
+
+  totalValue      Float
+  depositAmount   Float          @default(0)
+  depositPaid     Float          @default(0)
+  periodicAmount  Float
+  periodDays      Int?
+  customSchedule  String?
+
+  dailyRate       Float?
+  weeklyRate      Float?
+  monthlyRate     Float?
+
+  sellingPrice    Float?
+  installmentAmount Float?
+  installmentCount  Int?
+  ownershipTransferDate DateTime?
+
+  totalPaid       Float          @default(0)
+  totalBalance    Float          @default(0)
+  lateFees        Float          @default(0)
+  overdueAmount   Float          @default(0)
+
+  notes           String?
+  contractFileUrl String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  payments        ContractPayment[]
+
+  @@index([organizationId, status])
+  @@index([vehicleId])
+  @@index([customerId])
+  @@map("vehicle_contracts")
+}
+
+model ContractPayment {
+  id          String          @id @default(uuid())
+  contractId  String
+  contract    VehicleContract @relation(fields: [contractId], references: [id])
+  customerId  String
+  customer    Customer        @relation(fields: [customerId], references: [id])
+
+  amount      Float
+  currency    String          @default("RWF")
+  dueDate     DateTime
+  paidDate    DateTime?
+  status      PaymentStatus   @default(PENDING)
+  method      String?
+  reference   String?
+  lateFee     Float           @default(0)
+  notes       String?
+  receiptUrl  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([contractId, dueDate])
+  @@index([status])
+  @@map("contract_payments")
+}
+
+// ─── Driver Payments ─────────────────────────────────────────────────────────
+
+model DriverPayment {
+  id             String        @id @default(uuid())
+  driverId       String
+  driver         Driver        @relation(fields: [driverId], references: [id])
+  date           DateTime      @default(now())
+  month          Int
+  year           Int
+  expectedAmount Float         @default(0)
+  paidAmount     Float         @default(0)
+  difference     Float         @default(0)
+  baseSalary     Float         @default(0)
+  commission     Float         @default(0)
+  bonus          Float         @default(0)
+  deductions     Float         @default(0)
+  totalAmount    Float         @default(0)
+  status         PaymentStatus @default(PENDING)
+  paidAt         DateTime?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([driverId, month, year])
+  @@map("driver_payments")
+}
+
+// =============================================================================
+//  FUEL & ENERGY
+// =============================================================================
+
+model FuelRecord {
+  id              String   @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  vehicleId       String
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id])
+  driverId        String?
+  driver          Driver?  @relation(fields: [driverId], references: [id])
+
+  date            DateTime @default(now())
+  energyType      EnergyType
+  fuelStation     String?
+  stationCity     String?
+
+  // Petrol/Diesel
+  litres          Float?
+  pricePerLitre   Float?
+
+  // Electric
+  isHomeCharging  Boolean  @default(false)
+  startBatteryPct Float?
+  endBatteryPct   Float?
+  kwhAdded        Float?
+  pricePerKwh     Float?
+  chargingMinutes Int?
+
+  totalCost       Float
+  mileageAtFuel   Float?
+  receiptUrl      String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([vehicleId, date(sort: Desc)])
+  @@map("fuel_records")
+}
+
+// =============================================================================
+//  MAINTENANCE
+// =============================================================================
+
+model MaintenanceRecord {
+  id              String   @id @default(uuid())
+  vehicleId       String
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  date            DateTime @default(now())
+  maintenanceType String
+  description     String
+  garage          String?
+  garageAddress   String?
+  mechanicName    String?
+  invoiceNumber   String?
+  cost            Float
+  currency        String   @default("RWF")
+  mileageAtService Float?
+  nextServiceDate DateTime?
+  nextServiceOdometer Float?
+  receiptUrl      String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([vehicleId, date(sort: Desc)])
+  @@map("maintenance_records")
+}
+
+// =============================================================================
+//  EXPENSES
+// =============================================================================
+
+model VehicleExpense {
+  id              String          @id @default(uuid())
+  organizationId  String
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  vehicleId       String
+  vehicle         Vehicle         @relation(fields: [vehicleId], references: [id])
+  driverId        String?
+  driver          Driver?         @relation(fields: [driverId], references: [id])
+
+  category        ExpenseCategory
+  amount          Float
+  currency        String          @default("RWF")
+  date            DateTime        @default(now())
+  description     String
+  supplier        String?
+  invoiceNumber   String?
+  receiptUrl      String?
+
+  // Fuel (if using expense for fuel)
+  fuelStation     String?
+  litres          Float?
+  pricePerLitre   Float?
+  fuelTypePumped  String?
+  mileageAtFuel   Float?
+
+  // Maintenance
+  maintenanceType String?
+  mechanicName    String?
+  garageAddress   String?
+  mileageAtService Float?
+
+  // Insurance
+  insuranceCompany String?
+  policyNumber     String?
+  policyStartDate  DateTime?
+  policyEndDate    DateTime?
+  coverType        String?
+
+  // Fine
+  fineNumber      String?
+  fineReason      String?
+  fineLocation    String?
+  officerName     String?
+  fineDate        DateTime?
+
+  // Tyre
+  tyrePosition    String?
+  tyreSerial      String?
+  tyreBrand       String?
+
+  // GPS/SIM
+  simNumber       String?
+  gpsDeviceId     String?
+
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, date(sort: Desc)])
+  @@index([vehicleId, category])
+  @@map("vehicle_expenses")
+}
+
+// =============================================================================
+//  GPS TRACKING
+// =============================================================================
 
 model Telemetry {
   id          String   @id @default(uuid())
@@ -181,68 +874,115 @@ model Telemetry {
   vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
   timestamp   DateTime @default(now())
 
-  // GPS
   latitude    Float?
   longitude   Float?
   altitude    Float?
   heading     Float?
   accuracy    Float?
-
-  // Motion
-  speed       Float?   // km/h
-  odometer    Float?   // km
-
-  // Engine
-  engineTemp  Float?   // celsius
+  speed       Float?      // km/h
+  odometer    Float?      // km
+  engineTemp  Float?      // celsius
   rpm         Int?
   engineOn    Boolean  @default(false)
-
-  // Fuel
-  fuelLevel   Float?   // percentage
-  fuelUsed    Float?   // litres
-
-  // Power
-  batteryVoltage Float?
-  ignition       Boolean @default(false)
-
-  // Diagnostics
-  rawData     Json?
+  fuelLevel   Float?      // percentage
+  fuelUsed    Float?
+  batteryVoltage   Float?
+  batteryLevelPct  Float?
+  ignition         Boolean @default(false)
+  rawData          Json?
 
   @@index([vehicleId, timestamp(sort: Desc)])
   @@map("telemetry")
 }
 
 model LastLocation {
-  id         String   @id @default(uuid())
-  vehicleId  String   @unique
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
-  latitude   Float
-  longitude  Float
-  speed      Float    @default(0)
-  heading    Float    @default(0)
-  fuelLevel  Float?
-  engineTemp Float?
-  engineOn   Boolean  @default(false)
-  updatedAt  DateTime @updatedAt
+  id              String   @id @default(uuid())
+  vehicleId       String   @unique
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  latitude        Float
+  longitude       Float
+  speed           Float    @default(0)
+  heading         Float    @default(0)
+  fuelLevel       Float?
+  batteryLevelPct Float?
+  engineTemp      Float?
+  engineOn        Boolean  @default(false)
+  address         String?
+  distanceTodayKm Float    @default(0)
+  distanceMonthKm Float    @default(0)
+  totalDistanceKm Float    @default(0)
+  updatedAt       DateTime @updatedAt
 
   @@map("last_locations")
 }
 
+model Trip {
+  id           String   @id @default(uuid())
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  driverId     String?
+
+  startTime    DateTime
+  endTime      DateTime?
+  startLat     Float?
+  startLon     Float?
+  endLat       Float?
+  endLon       Float?
+  startAddress String?
+  endAddress   String?
+  distanceKm   Float    @default(0)
+  maxSpeedKph  Float    @default(0)
+  avgSpeedKph  Float    @default(0)
+  engineHours  Float    @default(0)
+  idleMinutes  Float    @default(0)
+  fuelUsed     Float?
+  // Store the GPS path as array of {lat,lng,ts} for replay
+  pathPoints   Json?
+
+  createdAt    DateTime @default(now())
+
+  @@index([vehicleId, startTime(sort: Desc)])
+  @@map("trips")
+}
+
+// GPS history points stored separately for high-resolution replay
+model GpsHistory {
+  id        String   @id @default(uuid())
+  vehicleId String
+  tripId    String?
+  timestamp DateTime @default(now())
+  latitude  Float
+  longitude Float
+  speed     Float    @default(0)
+  heading   Float    @default(0)
+  accuracy  Float?
+
+  @@index([vehicleId, timestamp(sort: Desc)])
+  @@index([tripId])
+  @@map("gps_history")
+}
+
+// =============================================================================
+//  ALERTS & GEOFENCES
+// =============================================================================
+
 model Alert {
-  id          String        @id @default(uuid())
-  vehicleId   String
-  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id])
-  type        AlertType
-  severity    AlertSeverity
-  status      AlertStatus   @default(ACTIVE)
-  title       String
-  message     String
-  metadata    Json?
-  triggeredAt DateTime      @default(now())
-  acknowledgedAt DateTime?
+  id        String        @id @default(uuid())
+  vehicleId String
+  vehicle   Vehicle       @relation(fields: [vehicleId], references: [id])
+  type      AlertType
+  severity  AlertSeverity
+  status    AlertStatus   @default(ACTIVE)
+  title     String
+  message   String
+  metadata  Json?
+
+  triggeredAt      DateTime  @default(now())
+  acknowledgedAt   DateTime?
   acknowledgedById String?
-  acknowledgedBy   User?   @relation("AcknowledgedBy", fields: [acknowledgedById], references: [id])
-  resolvedAt  DateTime?
+  acknowledgedBy   User?     @relation("AcknowledgedBy", fields: [acknowledgedById], references: [id])
+  resolvedAt       DateTime?
 
   @@index([vehicleId, triggeredAt(sort: Desc)])
   @@index([status])
@@ -265,19 +1005,19 @@ model AlertRule {
 }
 
 model Geofence {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   name           String
   description    String?
-  color          String   @default("#EF4444")
+  color          String       @default("#EF4444")
   coordinates    Json
-  type           String   @default("polygon")
-  alertOnEntry   Boolean  @default(true)
-  alertOnExit    Boolean  @default(true)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  type           String       @default("polygon")
+  alertOnEntry   Boolean      @default(true)
+  alertOnExit    Boolean      @default(true)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   events GeofenceEvent[]
 
@@ -285,13 +1025,35 @@ model Geofence {
 }
 
 model GeofenceEvent {
-  id          String   @id @default(uuid())
-  vehicleId   String
-  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
-  geofenceId  String
-  geofence    Geofence @relation(fields: [geofenceId], references: [id])
-  eventType   String
-  timestamp   DateTime @default(now())
+  id         String   @id @default(uuid())
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  geofenceId String
+  geofence   Geofence @relation(fields: [geofenceId], references: [id])
+  eventType  String
+  timestamp  DateTime @default(now())
 
   @@map("geofence_events")
+}
+
+// =============================================================================
+//  CASH FLOW
+// =============================================================================
+
+model CashFlow {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  date           DateTime @default(now())
+  description    String
+  amount         Float
+  type           String   // INCOME | EXPENSE
+  category       String
+  method         String   @default("CASH")
+  reference      String?
+  balance        Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, date(sort: Desc)])
+  @@map("cash_flows")
 }

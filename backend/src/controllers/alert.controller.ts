@@ -1,4 +1,4 @@
-﻿import { Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../types';
 import { getAlerts, acknowledgeAlert, resolveAlert } from '../services/alert.service';
 import { prisma } from '../config/database';

@@ -1,4 +1,4 @@
-﻿import { Server as HttpServer } from 'http';
+import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { jwtConfig } from '../config/jwt';
@@ -29,18 +29,18 @@ export function initSocketServer(httpServer: HttpServer) {
 
   io.on('connection', (socket: Socket) => {
     const user = (socket as any).user as JwtPayload;
-    logger.info(WS connected: );
+    logger.info(`WS connected: ${user.email}`);
 
     // Join organisation room for scoped broadcasts
-    socket.join(org:);
+    socket.join(`org:${user.organizationId}`);
 
     socket.on('subscribe:vehicle', (vehicleId: string) => {
-      socket.join(ehicle:);
+      socket.join(`vehicle:${vehicleId}`);
     });
     socket.on('unsubscribe:vehicle', (vehicleId: string) => {
-      socket.leave(ehicle:);
+      socket.leave(`vehicle:${vehicleId}`);
     });
-    socket.on('disconnect', () => logger.info(WS disconnected: ));
+    socket.on('disconnect', () => logger.info(`WS disconnected: ${user.email}`));
   });
 
   logger.info('Socket.IO server initialised');

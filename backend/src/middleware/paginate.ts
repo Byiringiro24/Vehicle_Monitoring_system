@@ -1,4 +1,4 @@
-﻿import { Request } from 'express';
+import { Request } from 'express';
 
 export function getPagination(req: Request) {
   const page = Math.max(1, parseInt(req.query.page as string ?? '1', 10));

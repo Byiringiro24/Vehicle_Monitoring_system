@@ -1,6 +1,5 @@
-﻿import { prisma } from '../config/database';
+import { prisma } from '../config/database';
 import { TelemetryData } from '../types';
-import { AlertType, AlertSeverity } from '@prisma/client';
 import { getSocketServer } from '../websocket/socketServer';
 
 export async function checkAlertRules(vehicleId: string, data: TelemetryData) {
@@ -14,33 +13,39 @@ export async function checkAlertRules(vehicleId: string, data: TelemetryData) {
   });
 
   for (const rule of rules) {
-    const cond = rule.conditions as Record<string, any>;
+    const cond = rule.conditions as Record<string, number>;
     let triggered = false;
     let message = '';
 
     switch (rule.type) {
       case 'SPEEDING':
-        if (data.speed && cond.maxSpeed && data.speed > cond.maxSpeed) {
+        if (data.speed != null && cond.maxSpeed && data.speed > cond.maxSpeed) {
           triggered = true;
-          message = Vehicle speed  km/h exceeds limit of  km/h;
+          message = `Vehicle speed ${data.speed} km/h exceeds limit of ${cond.maxSpeed} km/h`;
         }
         break;
       case 'LOW_FUEL':
-        if (data.fuelLevel !== undefined && cond.minFuel && data.fuelLevel < cond.minFuel) {
+        if (data.fuelLevel != null && cond.minFuel && data.fuelLevel < cond.minFuel) {
           triggered = true;
-          message = Fuel level % is below threshold of %;
+          message = `Fuel level ${data.fuelLevel}% is below threshold of ${cond.minFuel}%`;
         }
         break;
       case 'ENGINE_OVERHEAT':
-        if (data.engineTemp && cond.maxTemp && data.engineTemp > cond.maxTemp) {
+        if (data.engineTemp != null && cond.maxTemp && data.engineTemp > cond.maxTemp) {
           triggered = true;
-          message = Engine temperature °C exceeds °C;
+          message = `Engine temperature ${data.engineTemp}°C exceeds ${cond.maxTemp}°C`;
         }
         break;
-      case 'BATTERY_LOW':
-        if (data.batteryVoltage && cond.minVoltage && data.batteryVoltage < cond.minVoltage) {
+      case 'BATTERY_LOW_VOLTAGE':
+        if (data.batteryVoltage != null && cond.minVoltage && data.batteryVoltage < cond.minVoltage) {
           triggered = true;
-          message = Battery voltage V is below V;
+          message = `Battery voltage ${data.batteryVoltage}V is below ${cond.minVoltage}V`;
+        }
+        break;
+      case 'LOW_BATTERY':
+        if ((data as any).batteryLevelPct != null && cond.minPct && (data as any).batteryLevelPct < cond.minPct) {
+          triggered = true;
+          message = `Battery level ${(data as any).batteryLevelPct}% is below ${cond.minPct}%`;
         }
         break;
     }
@@ -48,17 +53,19 @@ export async function checkAlertRules(vehicleId: string, data: TelemetryData) {
     if (triggered) {
       const alert = await prisma.alert.create({
         data: {
-          vehicleId, type: rule.type as AlertType,
-          severity: rule.severity as AlertSeverity,
-          title: rule.name, message,
-          metadata: { ruleId: rule.id, telemetry: data },
+          vehicleId,
+          type:     rule.type,
+          severity: rule.severity,
+          title:    rule.name,
+          message,
+          metadata: JSON.parse(JSON.stringify({ ruleId: rule.id })),
         },
         include: { vehicle: { select: { name: true, licensePlate: true } } },
       });
 
       const io = getSocketServer();
       if (io) {
-        io.to(org:).emit('alert:new', alert);
+        io.to(`org:${vehicle.organizationId}`).emit('alert:new', alert);
       }
     }
   }
@@ -71,14 +78,17 @@ export async function getAlerts(organizationId: string, filters: {
   const { page = 1, limit = 20 } = filters;
   const skip = (page - 1) * limit;
 
-  const where: any = {
+  const where: Record<string, unknown> = {
     vehicle: { organizationId },
-    ...(filters.status && { status: filters.status }),
-    ...(filters.severity && { severity: filters.severity }),
+    ...(filters.status    && { status:   filters.status }),
+    ...(filters.severity  && { severity: filters.severity }),
     ...(filters.vehicleId && { vehicleId: filters.vehicleId }),
-    ...(filters.from || filters.to
-      ? { triggeredAt: { ...(filters.from && { gte: filters.from }), ...(filters.to && { lte: filters.to }) } }
-      : {}),
+    ...((filters.from || filters.to) && {
+      triggeredAt: {
+        ...(filters.from && { gte: filters.from }),
+        ...(filters.to   && { lte: filters.to   }),
+      },
+    }),
   };
 
   const [alerts, total] = await Promise.all([

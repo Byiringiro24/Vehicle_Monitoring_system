@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 
 const COLORS: Record<string, string> = {
@@ -15,14 +15,20 @@ export function VehicleStatusChart({ data }: { data: Record<string, number> }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <PieChart>
-        <Pie data={chartData} cx="50%" cy="50%" innerRadius={55} outerRadius={80}
-          paddingAngle={3} dataKey="value">
+        <Pie
+          data={chartData}
+          cx="50%"
+          cy="50%"
+          innerRadius={55}
+          outerRadius={80}
+          paddingAngle={3}
+          dataKey="value">
           {chartData.map((entry) => (
             <Cell key={entry.name} fill={COLORS[entry.name] ?? '#6b7280'} />
           ))}
         </Pie>
-        <Tooltip formatter={(v: any) => [${v} vehicles]} />
-        <Legend formatter={(value) => value.toLowerCase().replace('_', ' ')} />
+        <Tooltip formatter={(v: number) => [`${v} vehicles`]} />
+        <Legend formatter={(value: string) => value.toLowerCase().replace('_', ' ')} />
       </PieChart>
     </ResponsiveContainer>
   );

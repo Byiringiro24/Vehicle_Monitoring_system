@@ -1,21 +1,21 @@
-﻿import { clsx, type ClassValue } from 'clsx';
+import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); }
 
 export function formatSpeed(speed: number | null | undefined): string {
   if (speed == null) return 'N/A';
-  return ${Math.round(speed)} km/h;
+  return `${Math.round(speed)} km/h`;
 }
 
 export function formatFuel(level: number | null | undefined): string {
   if (level == null) return 'N/A';
-  return ${Math.round(level)}%;
+  return `${Math.round(level)}%`;
 }
 
 export function formatTemp(temp: number | null | undefined): string {
   if (temp == null) return 'N/A';
-  return ${Math.round(temp)}°C;
+  return `${Math.round(temp)}°C`;
 }
 
 export function formatDate(date: string | Date): string {

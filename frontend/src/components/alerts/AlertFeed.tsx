@@ -1,4 +1,4 @@
-﻿import { getSeverityColor, formatDate } from '@/lib/utils';
+import { getSeverityColor, formatDate } from '@/lib/utils';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, alertApi } from '@/lib/api';
 import { Settings, Plus, Trash2, AlertTriangle } from 'lucide-react';

@@ -1,4 +1,4 @@
-﻿import { Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../types';
 import { getVehicleTelemetry, getLatestTelemetry, processTelemetry } from '../services/telemetry.service';
 import { prisma } from '../config/database';

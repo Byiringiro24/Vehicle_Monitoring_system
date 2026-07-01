@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import { createServer } from 'http';
 import app from './app';
 import { initSocketServer } from './websocket/socketServer';
@@ -12,7 +12,7 @@ const MQTT_PORT = parseInt(process.env.MQTT_PORT ?? '1883', 10);
 
 async function bootstrap() {
   // Test DB connection
-  await prisma.();
+  await prisma.$connect();
   logger.info('PostgreSQL connected');
 
   // Test Redis
@@ -27,9 +27,9 @@ async function bootstrap() {
   initMqttBroker(MQTT_PORT);
 
   httpServer.listen(PORT, () => {
-    logger.info(ARTIC VMS backend running on port );
-    logger.info(MQTT broker running on port );
-    logger.info(Environment: );
+    logger.info(`ARTIC VMS backend running on port ${PORT}`);
+    logger.info(`MQTT broker running on port ${MQTT_PORT}`);
+    logger.info(`Environment: ${process.env.NODE_ENV}`);
   });
 }
 

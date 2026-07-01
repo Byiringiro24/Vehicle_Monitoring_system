@@ -1,4 +1,4 @@
-﻿import { Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { jwtConfig } from '../config/jwt';
 import { AuthenticatedRequest, JwtPayload } from '../types';

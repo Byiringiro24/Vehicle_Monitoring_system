@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
@@ -37,7 +37,7 @@ export default function UsersPage() {
 
   const mutation = useMutation({
     mutationFn: (d: UserForm) => editing
-      ? apiClient.put(/users/, d).then(r => r.data)
+      ? apiClient.put(`/users/${editing.id}`, d).then(r => r.data)
       : apiClient.post('/users', d).then(r => r.data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast.success(editing ? 'User updated' : 'User created'); setShowModal(false); setEditing(null); },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),

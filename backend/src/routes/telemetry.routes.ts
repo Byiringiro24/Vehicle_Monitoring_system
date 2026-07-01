@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { getTelemetry, getLatest, ingestHttp, getFleetLocations } from '../controllers/telemetry.controller';
 
