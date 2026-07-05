@@ -4,6 +4,7 @@ import { listVehicles, getVehicle, createVehicle, updateVehicle, deleteVehicle,
          regenerateToken, getGpsHistory, getTrips } from '../controllers/vehicle.controller';
 import { prisma } from '../config/database';
 import { getSocketServer } from '../websocket/socketServer';
+import { publishCommand } from '../services/mqttClient';
 
 const router = Router();
 router.use(authenticate);
@@ -28,6 +29,15 @@ router.patch('/:id/lock', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), as
     });
     if (!vehicle) { res.status(404).json({ error: 'Vehicle not found' }); return; }
     await prisma.vehicle.update({ where: { id: req.params.id }, data: { engineLocked: locked } });
+
+    // 1. Publish MQTT command → ESP32 acts on it immediately
+    publishCommand('artic/vehicle/command', {
+      command:   locked ? 'lock' : 'unlock',
+      vehicleId: vehicle.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    // 2. Broadcast via Socket.IO → dashboard updates in real-time
     const io = getSocketServer();
     if (io) {
       io.to(`org:${req.user.organizationId}`).emit('vehicle:lock', {

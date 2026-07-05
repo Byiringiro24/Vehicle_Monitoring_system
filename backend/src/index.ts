@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import app from './app';
 import { initSocketServer } from './websocket/socketServer';
 import { initMqttBroker } from './services/mqttBroker';
+import { initMqttClient } from './services/mqttClient';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
 import logger from './utils/logger';
@@ -33,6 +34,9 @@ async function bootstrap() {
       throw err;
     }
   }
+
+  // MQTT publisher client — used to send lock/unlock commands to devices
+  initMqttClient();
 
   httpServer.listen(PORT, () => {
     logger.info(`ARTIC VMS backend running on port ${PORT}`);
