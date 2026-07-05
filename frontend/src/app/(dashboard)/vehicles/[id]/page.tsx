@@ -1,12 +1,12 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vehicleApi, telemetryApi } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import { getStatusColor, formatDate, formatSpeed, formatFuel, formatTemp } from '@/lib/utils';
 import { ArrowLeft, Truck, MapPin, Fuel, Thermometer, Gauge, Battery,
   Lock, Unlock, History, BarChart2, Info, Route, Calendar, Copy, Check,
-  Wifi, WifiOff } from 'lucide-react';
+  Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
@@ -23,25 +23,151 @@ const GpsHistoryMap  = dynamic(() => import('@/components/maps/GpsHistoryMap'), 
 
 type Tab = 'overview' | 'history' | 'trips' | 'telemetry';
 
-// ─── Copy-to-clipboard button ─────────────────────────────────────────────────
-function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+// ─── Copy button — works on HTTP and HTTPS ────────────────────────────────────
+function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      toast.success('Device token copied!');
-      setTimeout(() => setCopied(false), 2000);
-    });
+    // Modern clipboard API (HTTPS / localhost)
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => done()).catch(fallback);
+    } else {
+      fallback();
+    }
   };
+
+  const fallback = () => {
+    // HTTP fallback — create a temporary textarea and execCommand
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    try { document.execCommand('copy'); done(); }
+    catch { toast.error('Copy failed — select the token manually'); }
+    document.body.removeChild(el);
+  };
+
+  const done = () => {
+    setCopied(true);
+    toast.success('Device token copied!');
+    setTimeout(() => setCopied(false), 2500);
+  };
+
   return (
     <button
       onClick={handleCopy}
-      className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-300 transition"
-      title="Copy to clipboard"
+      className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 hover:bg-blue-50 hover:border-blue-300 text-gray-600 hover:text-blue-700 border border-gray-300 transition shrink-0"
+      title="Copy device token"
     >
       {copied ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
-      {copied ? 'Copied!' : label}
+      {copied ? 'Copied!' : 'Copy'}
     </button>
+  );
+}
+
+// ─── Plate-confirmation lock/unlock modal ─────────────────────────────────────
+function LockConfirmModal({
+  plate,
+  action,
+  onConfirm,
+  onCancel,
+}: {
+  plate: string;
+  action: 'lock' | 'unlock';
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isLock   = action === 'lock';
+  const match    = input.trim().toUpperCase() === plate.toUpperCase();
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+
+        {/* Icon + title */}
+        <div className="flex items-center gap-3">
+          <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center',
+            isLock ? 'bg-red-100' : 'bg-green-100')}>
+            {isLock
+              ? <Lock size={22} className="text-red-600" />
+              : <Unlock size={22} className="text-green-600" />}
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">
+              {isLock ? 'Lock Engine' : 'Unlock Engine'}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {isLock ? 'This will cut the ignition' : 'This will restore ignition'}
+            </p>
+          </div>
+        </div>
+
+        {/* Warning */}
+        <div className={cn('flex items-start gap-2 p-3 rounded-xl text-sm',
+          isLock ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800')}>
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            {isLock
+              ? 'The vehicle engine will be cut immediately via the relay. Only lock a stationary vehicle.'
+              : 'The engine relay will be released. Make sure it is safe to do so.'}
+          </span>
+        </div>
+
+        {/* Plate input */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700">
+            Type the plate number <span className="font-mono font-bold text-gray-900">{plate}</span> to confirm
+          </label>
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && match) onConfirm(); }}
+            placeholder={plate}
+            className={cn(
+              'w-full px-4 py-2.5 border-2 rounded-xl font-mono text-sm uppercase tracking-widest outline-none transition',
+              input.length === 0
+                ? 'border-gray-300 focus:border-blue-400'
+                : match
+                  ? 'border-green-400 bg-green-50 text-green-800'
+                  : 'border-red-300 bg-red-50 text-red-700'
+            )}
+          />
+          {input.length > 0 && !match && (
+            <p className="text-xs text-red-500">Plate doesn't match — check and try again</p>
+          )}
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!match}
+            className={cn(
+              'flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition',
+              isLock
+                ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-200'
+                : 'bg-green-600 hover:bg-green-700 disabled:bg-green-200',
+              'disabled:cursor-not-allowed'
+            )}
+          >
+            {isLock ? '🔒 Confirm Lock' : '🔓 Confirm Unlock'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -53,10 +179,13 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const [to, setTo]     = useState(format(new Date(), 'yyyy-MM-dd'));
 
   // Live telemetry overlay (updated via Socket.IO)
-  const [liveLoc, setLiveLoc]       = useState<any>(null);
-  const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  const [liveLoc, setLiveLoc]           = useState<any>(null);
+  const [liveStatus, setLiveStatus]     = useState<string | null>(null);
   const [engineLocked, setEngineLocked] = useState<boolean | null>(null);
   const [wsConnected, setWsConnected]   = useState(false);
+
+  // Lock confirmation modal
+  const [confirmAction, setConfirmAction] = useState<'lock' | 'unlock' | null>(null);
 
   // ── Fetch vehicle ──────────────────────────────────────────────────────────
   const { data: vehicle, isLoading } = useQuery({
@@ -211,9 +340,9 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
           </p>
         </div>
 
-        {/* Lock / Unlock button */}
+        {/* Lock / Unlock button — opens confirmation modal */}
         <button
-          onClick={() => lockMutation.mutate(!locked)}
+          onClick={() => setConfirmAction(locked ? 'unlock' : 'lock')}
           disabled={lockMutation.isPending}
           className={cn(
             'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 transition shadow-sm',
@@ -237,6 +366,19 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
           )}
         </button>
       </div>
+
+      {/* Plate-confirmation modal */}
+      {confirmAction && (
+        <LockConfirmModal
+          plate={vehicle.licensePlate}
+          action={confirmAction}
+          onConfirm={() => {
+            lockMutation.mutate(confirmAction === 'lock');
+            setConfirmAction(null);
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
 
       {/* ── Live telemetry cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
