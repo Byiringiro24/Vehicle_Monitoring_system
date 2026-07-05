@@ -92,17 +92,42 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
     await prisma.vehicle.update({ where: { id: vehicleId }, data: { status: newStatus as any } });
   }
 
-  // 5. Broadcast to dashboard
+  // 5. Broadcast to dashboard — include location so map updates instantly
   const io = getSocketServer();
   if (io) {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: vehicleId },
-      select: { organizationId: true },
+      select: {
+        organizationId: true, name: true, licensePlate: true, status: true,
+        fleet: { select: { id: true, name: true, color: true } },
+      },
     });
     if (vehicle) {
+      // Emit raw telemetry for charts
       io.to(`org:${vehicle.organizationId}`).emit('telemetry:update', {
         vehicleId, data: record, timestamp: new Date().toISOString(),
       });
+      // Emit location update for live map — only if we have GPS
+      if (data.latitude !== undefined && data.longitude !== undefined && data.latitude && data.longitude) {
+        io.to(`org:${vehicle.organizationId}`).emit('location:update', {
+          vehicleId,
+          latitude:    data.latitude,
+          longitude:   data.longitude,
+          speed:       data.speed   ?? 0,
+          heading:     data.heading ?? 0,
+          fuelLevel:   data.fuelLevel,
+          engineTemp:  data.engineTemp,
+          engineOn:    data.engineOn ?? false,
+          updatedAt:   new Date().toISOString(),
+          vehicle: {
+            id:           vehicleId,
+            name:         vehicle.name,
+            licensePlate: vehicle.licensePlate,
+            status:       data.engineOn ? (data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE') : 'OFFLINE',
+            fleet:        vehicle.fleet,
+          },
+        });
+      }
     }
   }
 
