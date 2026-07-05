@@ -18,7 +18,7 @@ router.delete('/:id', authorize('SUPER_ADMIN', 'ADMIN'), deleteVehicle);
 router.post('/:id/regenerate-token', authorize('SUPER_ADMIN', 'ADMIN'), regenerateToken);
 
 // ─── GPS Ping — check if GPS module is online ─────────────────────────────────
-router.get('/:id/gps-ping', async (req: any, res, next) => {
+router.post('/:id/gps-ping', async (req: any, res, next) => {
   try {
     const vehicle = await prisma.vehicle.findFirst({
       where:  { id: req.params.id, organizationId: req.user.organizationId },
@@ -60,8 +60,9 @@ router.patch('/:id/lock', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), as
     if (!vehicle) { res.status(404).json({ error: 'Vehicle not found' }); return; }
     await prisma.vehicle.update({ where: { id: req.params.id }, data: { engineLocked: locked } });
 
-    // 1. Publish MQTT command → ESP32 acts on it immediately
-    publishCommand('artic/vehicle/command', {
+    // 1. Publish MQTT command → ESP32 on its specific token topic
+    //    Topic format: artic/<DEVICE_TOKEN>/command  (matches ESP32 sketch exactly)
+    publishCommand(`artic/${vehicle.deviceToken}/command`, {
       command:   locked ? 'lock' : 'unlock',
       vehicleId: vehicle.id,
       timestamp: new Date().toISOString(),
