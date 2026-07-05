@@ -11,7 +11,11 @@ export function getSocketServer(): SocketIOServer | null { return io; }
 
 export function initSocketServer(httpServer: HttpServer) {
   io = new SocketIOServer(httpServer, {
-    cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000', credentials: true },
+    cors: {
+      origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
+        .split(',').map(o => o.trim()),
+      credentials: true,
+    },
     transports: ['websocket', 'polling'],
   });
 
