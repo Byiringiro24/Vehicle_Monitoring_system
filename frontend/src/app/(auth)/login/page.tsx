@@ -95,9 +95,8 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Default: <code className="bg-gray-100 px-1 rounded">admin@artic.io</code> /{' '}
-          <code className="bg-gray-100 px-1 rounded">Admin1234!</code>
+        <p className="text-center text-sm text-gray-400 mt-6">
+          Contact your system administrator if you need access.
         </p>
       </div>
     </div>

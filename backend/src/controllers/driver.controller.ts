@@ -25,6 +25,19 @@ export async function createDriver(req: AuthenticatedRequest, res: Response, nex
       password,
     } = req.body;
 
+    if (!email)         throw new AppError(400, 'Email is required');
+    if (!firstName)     throw new AppError(400, 'First name is required');
+    if (!lastName)      throw new AppError(400, 'Last name is required');
+    if (!licenseNumber) throw new AppError(400, 'License number is required');
+
+    // Check if email already exists
+    const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (existingUser) throw new AppError(409, 'A user with this email already exists');
+
+    // Check if license number already taken
+    const existingLicense = await prisma.driver.findUnique({ where: { licenseNumber } });
+    if (existingLicense) throw new AppError(409, 'A driver with this license number already exists');
+
     const passwordHash = await bcrypt.hash(password ?? uuidv4(), 12);
 
     const user = await prisma.user.create({
@@ -50,7 +63,7 @@ export async function createDriver(req: AuthenticatedRequest, res: Response, nex
         licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : null,
         licenseClass,
         licenseCountry,
-        nationalId,
+        nationalId: nationalId || null,  // only set if provided to avoid unique constraint conflicts
         passportNumber,
         gender,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,

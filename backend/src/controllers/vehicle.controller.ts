@@ -66,19 +66,52 @@ export async function getVehicle(req: AuthenticatedRequest, res: Response, next:
 
 export async function createVehicle(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const { purchaseDate, insuranceStart, insuranceExpiry, roadTaxExpiry,
-            inspectionExpiry, batteryWarranty, warrantyExpiry, ...rest } = req.body;
+    const {
+      purchaseDate, insuranceStart, insuranceExpiry, roadTaxExpiry,
+      inspectionExpiry, batteryWarranty, warrantyExpiry,
+      // Pull out fields that need type coercion or validation
+      year, fuelCapacity, purchasePrice, currentValue, odometer, engineHours,
+      horsepower, engineCc, batteryCapacityKwh, chargingSpeedKw, batteryReplaceCost,
+      batteryHealth, avgConsumption, minFuelAlert, insurancePremium,
+      oilChangeKmInterval, lastServiceOdometer, yearsDriving, baseSalary, commissionRate,
+      ...rest
+    } = req.body;
+
+    // Required field check
+    if (!rest.name)         throw new AppError(400, 'Vehicle name is required');
+    if (!rest.licensePlate) throw new AppError(400, 'License plate is required');
+    if (!rest.manufacturer) throw new AppError(400, 'Manufacturer is required');
+    if (!rest.model)        throw new AppError(400, 'Model is required');
+    if (!year)              throw new AppError(400, 'Year is required');
+
     const vehicle = await prisma.vehicle.create({
       data: {
         ...rest,
-        organizationId: req.user!.organizationId,
-        deviceToken:    uuidv4(),
-        purchaseDate:   purchaseDate    ? new Date(purchaseDate)    : undefined,
-        insuranceExpiry:insuranceExpiry ? new Date(insuranceExpiry) : undefined,
-        roadTaxExpiry:  roadTaxExpiry   ? new Date(roadTaxExpiry)   : undefined,
-        inspectionExpiry:inspectionExpiry ? new Date(inspectionExpiry) : undefined,
-        batteryWarranty:batteryWarranty ? new Date(batteryWarranty) : undefined,
-        warrantyExpiry: warrantyExpiry  ? new Date(warrantyExpiry)  : undefined,
+        organizationId:   req.user!.organizationId,
+        deviceToken:      uuidv4(),
+        year:             parseInt(year, 10),
+        fuelCapacity:     fuelCapacity     ? parseFloat(fuelCapacity)     : undefined,
+        purchasePrice:    purchasePrice    ? parseFloat(purchasePrice)    : undefined,
+        currentValue:     currentValue     ? parseFloat(currentValue)     : undefined,
+        odometer:         odometer         ? parseFloat(odometer)         : 0,
+        engineHours:      engineHours      ? parseFloat(engineHours)      : 0,
+        horsepower:       horsepower       ? parseInt(horsepower, 10)     : undefined,
+        engineCc:         engineCc         ? parseFloat(engineCc)         : undefined,
+        batteryCapacityKwh: batteryCapacityKwh ? parseFloat(batteryCapacityKwh) : undefined,
+        chargingSpeedKw:  chargingSpeedKw  ? parseFloat(chargingSpeedKw)  : undefined,
+        batteryReplaceCost: batteryReplaceCost ? parseFloat(batteryReplaceCost) : undefined,
+        batteryHealth:    batteryHealth    ? parseFloat(batteryHealth)    : undefined,
+        avgConsumption:   avgConsumption   ? parseFloat(avgConsumption)   : undefined,
+        minFuelAlert:     minFuelAlert     ? parseFloat(minFuelAlert)     : undefined,
+        insurancePremium: insurancePremium ? parseFloat(insurancePremium) : undefined,
+        oilChangeKmInterval: oilChangeKmInterval ? parseFloat(oilChangeKmInterval) : undefined,
+        lastServiceOdometer: lastServiceOdometer ? parseFloat(lastServiceOdometer) : undefined,
+        purchaseDate:     purchaseDate     ? new Date(purchaseDate)       : undefined,
+        insuranceExpiry:  insuranceExpiry  ? new Date(insuranceExpiry)    : undefined,
+        roadTaxExpiry:    roadTaxExpiry    ? new Date(roadTaxExpiry)      : undefined,
+        inspectionExpiry: inspectionExpiry ? new Date(inspectionExpiry)   : undefined,
+        batteryWarranty:  batteryWarranty  ? new Date(batteryWarranty)    : undefined,
+        warrantyExpiry:   warrantyExpiry   ? new Date(warrantyExpiry)     : undefined,
       },
       include: { fleet: { select: { id: true, name: true } } },
     });
