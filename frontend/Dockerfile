@@ -2,8 +2,15 @@
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-COPY . .
+
+# Accept build-time env vars so Next.js bakes them into the bundle
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_WS_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY . .
 RUN npm run build
 
 FROM node:20-alpine

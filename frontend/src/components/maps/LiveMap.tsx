@@ -119,6 +119,12 @@ export default function LiveMap({ locations, selectedId, onSelect }: LiveMapProp
     Math.abs(l.latitude) > 0.001 && Math.abs(l.longitude) > 0.001
   );
 
+  // Vehicles without GPS data (no coordinates ever received)
+  const noGps = locations.filter(l =>
+    !l.latitude || !l.longitude ||
+    (Math.abs(l.latitude) <= 0.001 && Math.abs(l.longitude) <= 0.001)
+  );
+
   const center: [number, number] = valid.length
     ? [valid[0].latitude, valid[0].longitude]
     : [-1.9403, 29.8739]; // Rwanda centre
@@ -138,6 +144,11 @@ export default function LiveMap({ locations, selectedId, onSelect }: LiveMapProp
       }}>
         <div style={{ fontWeight: 700, marginBottom: 2, color: '#374151' }}>
           {valid.length} vehicle{valid.length !== 1 ? 's' : ''} on map
+          {noGps.length > 0 && (
+            <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 10, display: 'block' }}>
+              {noGps.length} without GPS fix
+            </span>
+          )}
         </div>
         {[
           { color: '#22c55e', label: `Active (${activeCount})` },

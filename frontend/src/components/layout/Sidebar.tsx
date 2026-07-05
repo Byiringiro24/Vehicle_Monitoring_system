@@ -12,7 +12,7 @@ import { useAuthStore } from '@/store/authStore';
 const navItems = [
   { href: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
   { href: '/vehicles',   label: 'Vehicles',   icon: Truck },
-  { href: '/telemetry',  label: 'Live Map',   icon: Map },
+  { href: '/map',        label: 'Live Map',   icon: Map },
   { href: '/alerts',     label: 'Alerts',     icon: Bell },
   { href: '/drivers',    label: 'Drivers',    icon: UserCheck },
   { href: '/geofences',  label: 'Geofences',  icon: MapPin },

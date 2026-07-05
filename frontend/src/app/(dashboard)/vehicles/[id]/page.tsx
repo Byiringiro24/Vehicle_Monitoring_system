@@ -2,11 +2,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vehicleApi, telemetryApi } from '@/lib/api';
-import { apiClient } from '@/lib/api';
 import { getStatusColor, formatDate, formatSpeed, formatFuel, formatTemp } from '@/lib/utils';
-import { ArrowLeft, Truck, MapPin, Fuel, Thermometer, Gauge, Battery,
+import {
+  ArrowLeft, Truck, MapPin, Fuel, Thermometer, Gauge,
   Lock, Unlock, History, BarChart2, Info, Route, Calendar, Copy, Check,
-  Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+  Wifi, WifiOff, AlertTriangle, RefreshCw, Satellite,
+} from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
@@ -16,153 +17,81 @@ import { getSocket } from '@/lib/socket';
 import { useAuthStore } from '@/store/authStore';
 
 const TelemetryChart = dynamic(() => import('@/components/charts/TelemetryChart'), { ssr: false });
-const GpsHistoryMap  = dynamic(() => import('@/components/maps/GpsHistoryMap'),   {
+const GpsHistoryMap  = dynamic(() => import('@/components/maps/GpsHistoryMap'), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full bg-gray-100 rounded-xl text-gray-400">Loading map…</div>,
 });
 
 type Tab = 'overview' | 'history' | 'trips' | 'telemetry';
 
-// ─── Copy button — works on HTTP and HTTPS ────────────────────────────────────
+// ─── Copy-to-clipboard button ─────────────────────────────────────────────────
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    // Modern clipboard API (HTTPS / localhost)
+  const done = () => { setCopied(true); toast.success('Copied!'); setTimeout(() => setCopied(false), 2500); };
+  const handle = () => {
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(() => done()).catch(fallback);
-    } else {
-      fallback();
-    }
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else { fallback(); }
   };
-
   const fallback = () => {
-    // HTTP fallback — create a temporary textarea and execCommand
     const el = document.createElement('textarea');
-    el.value = text;
-    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
-    document.body.appendChild(el);
-    el.focus();
-    el.select();
-    try { document.execCommand('copy'); done(); }
-    catch { toast.error('Copy failed — select the token manually'); }
+    el.value = text; el.style.cssText = 'position:fixed;top:-9999px;opacity:0';
+    document.body.appendChild(el); el.focus(); el.select();
+    try { document.execCommand('copy'); done(); } catch { toast.error('Copy failed'); }
     document.body.removeChild(el);
   };
-
-  const done = () => {
-    setCopied(true);
-    toast.success('Device token copied!');
-    setTimeout(() => setCopied(false), 2500);
-  };
-
   return (
-    <button
-      onClick={handleCopy}
-      className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 hover:bg-blue-50 hover:border-blue-300 text-gray-600 hover:text-blue-700 border border-gray-300 transition shrink-0"
-      title="Copy device token"
-    >
+    <button onClick={handle}
+      className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 border border-gray-300 transition shrink-0">
       {copied ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
       {copied ? 'Copied!' : 'Copy'}
     </button>
   );
 }
 
-// ─── Plate-confirmation lock/unlock modal ─────────────────────────────────────
-function LockConfirmModal({
-  plate,
-  action,
-  onConfirm,
-  onCancel,
-}: {
-  plate: string;
-  action: 'lock' | 'unlock';
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
+// ─── Engine lock confirmation modal ───────────────────────────────────────────
+function LockConfirmModal({ plate, action, onConfirm, onCancel }:
+  { plate: string; action: 'lock'|'unlock'; onConfirm:()=>void; onCancel:()=>void }) {
   const [input, setInput] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const isLock   = action === 'lock';
-  const match    = input.trim().toUpperCase() === plate.toUpperCase();
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
+  const ref = useRef<HTMLInputElement>(null);
+  const isLock = action === 'lock';
+  const match  = input.trim().toUpperCase() === plate.toUpperCase();
+  useEffect(() => { ref.current?.focus(); }, []);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-
-        {/* Icon + title */}
         <div className="flex items-center gap-3">
-          <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center',
-            isLock ? 'bg-red-100' : 'bg-green-100')}>
-            {isLock
-              ? <Lock size={22} className="text-red-600" />
-              : <Unlock size={22} className="text-green-600" />}
+          <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center', isLock ? 'bg-red-100' : 'bg-green-100')}>
+            {isLock ? <Lock size={22} className="text-red-600" /> : <Unlock size={22} className="text-green-600" />}
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">
-              {isLock ? 'Lock Engine' : 'Unlock Engine'}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {isLock ? 'This will cut the ignition' : 'This will restore ignition'}
-            </p>
+            <h2 className="text-lg font-bold text-gray-900">{isLock ? 'Lock Engine' : 'Unlock Engine'}</h2>
+            <p className="text-sm text-gray-500">{isLock ? 'Cuts the ignition relay immediately' : 'Restores the ignition relay'}</p>
           </div>
         </div>
-
-        {/* Warning */}
-        <div className={cn('flex items-start gap-2 p-3 rounded-xl text-sm',
-          isLock ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800')}>
+        <div className={cn('flex items-start gap-2 p-3 rounded-xl text-sm', isLock ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800')}>
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <span>
-            {isLock
-              ? 'The vehicle engine will be cut immediately via the relay. Only lock a stationary vehicle.'
-              : 'The engine relay will be released. Make sure it is safe to do so.'}
-          </span>
+          <span>{isLock ? 'Engine will be cut immediately. Only lock a stationary vehicle.' : 'Ignition relay will be released. Confirm it is safe.'}</span>
         </div>
-
-        {/* Plate input */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-gray-700">
-            Type the plate number <span className="font-mono font-bold text-gray-900">{plate}</span> to confirm
+            Type plate <span className="font-mono font-bold">{plate}</span> to confirm
           </label>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
+          <input ref={ref} value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && match) onConfirm(); }}
             placeholder={plate}
-            className={cn(
-              'w-full px-4 py-2.5 border-2 rounded-xl font-mono text-sm uppercase tracking-widest outline-none transition',
-              input.length === 0
-                ? 'border-gray-300 focus:border-blue-400'
-                : match
-                  ? 'border-green-400 bg-green-50 text-green-800'
-                  : 'border-red-300 bg-red-50 text-red-700'
-            )}
-          />
-          {input.length > 0 && !match && (
-            <p className="text-xs text-red-500">Plate doesn't match — check and try again</p>
-          )}
+            className={cn('w-full px-4 py-2.5 border-2 rounded-xl font-mono text-sm uppercase tracking-widest outline-none transition',
+              input.length === 0 ? 'border-gray-300 focus:border-blue-400'
+              : match ? 'border-green-400 bg-green-50 text-green-800'
+              : 'border-red-300 bg-red-50 text-red-700')} />
+          {input.length > 0 && !match && <p className="text-xs text-red-500">Plate doesn't match</p>}
         </div>
-
-        {/* Buttons */}
         <div className="flex gap-3 pt-1">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!match}
-            className={cn(
-              'flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition',
-              isLock
-                ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-200'
-                : 'bg-green-600 hover:bg-green-700 disabled:bg-green-200',
-              'disabled:cursor-not-allowed'
-            )}
-          >
+          <button onClick={onCancel} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+          <button onClick={onConfirm} disabled={!match}
+            className={cn('flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition',
+              isLock ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-200' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-200',
+              'disabled:cursor-not-allowed')}>
             {isLock ? '🔒 Confirm Lock' : '🔓 Confirm Unlock'}
           </button>
         </div>
@@ -171,6 +100,84 @@ function LockConfirmModal({
   );
 }
 
+// ─── GPS Ping Status badge ────────────────────────────────────────────────────
+function GpsPingBadge({ vehicleId }: { vehicleId: string }) {
+  const [pinging, setPinging]   = useState(false);
+  const [result, setResult]     = useState<boolean | null>(null);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+
+  async function doPing() {
+    setPinging(true);
+    setResult(null);
+    try {
+      const data = await vehicleApi.gpsPing(vehicleId);
+      setResult(data.gpsOnline);
+      setCheckedAt(data.checkedAt);
+      if (data.gpsOnline) {
+        toast.success('GPS module is online ✅');
+      } else {
+        toast.error('GPS module did not respond — offline or out of range');
+      }
+    } catch {
+      setResult(false);
+      toast.error('Ping request failed');
+    } finally {
+      setPinging(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {result !== null && (
+        <span className={cn(
+          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold',
+          result ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        )}>
+          {result ? <Wifi size={12} /> : <WifiOff size={12} />}
+          {result ? 'GPS Online' : 'GPS Offline'}
+        </span>
+      )}
+      <button
+        onClick={doPing}
+        disabled={pinging}
+        className={cn(
+          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition',
+          'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed'
+        )}>
+        {pinging
+          ? <><RefreshCw size={12} className="animate-spin" /> Pinging…</>
+          : <><Satellite size={12} /> Ping GPS</>}
+      </button>
+      {checkedAt && <span className="text-xs text-gray-400">Checked {formatDate(checkedAt)}</span>}
+    </div>
+  );
+}
+
+// ─── Stat card ────────────────────────────────────────────────────────────────
+function Stat({ label, value, sub, icon, color = 'blue' }: {
+  label: string; value: string; sub?: string;
+  icon: React.ReactNode; color?: string;
+}) {
+  const bg: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-600',   green: 'bg-green-50 text-green-600',
+    yellow: 'bg-yellow-50 text-yellow-600', red: 'bg-red-50 text-red-600',
+    gray: 'bg-gray-100 text-gray-500',
+  };
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3">
+      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center shrink-0', bg[color] ?? bg.blue)}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-gray-500 font-medium truncate">{label}</p>
+        <p className="text-lg font-bold text-gray-900 leading-tight">{value}</p>
+        {sub && <p className="text-xs text-gray-400 truncate">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 export default function VehicleDetailPage({ params }: { params: { id: string } }) {
   const qc = useQueryClient();
   const { accessToken } = useAuthStore();
@@ -178,401 +185,452 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const [from, setFrom] = useState(format(subDays(new Date(), 1), 'yyyy-MM-dd'));
   const [to, setTo]     = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  // Live telemetry overlay (updated via Socket.IO)
+  // Live state from Socket.IO
   const [liveLoc, setLiveLoc]           = useState<any>(null);
   const [liveStatus, setLiveStatus]     = useState<string | null>(null);
   const [engineLocked, setEngineLocked] = useState<boolean | null>(null);
   const [wsConnected, setWsConnected]   = useState(false);
+  const [gpsModuleOnline, setGpsModuleOnline] = useState<boolean | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'lock'|'unlock'|null>(null);
 
-  // Lock confirmation modal
-  const [confirmAction, setConfirmAction] = useState<'lock' | 'unlock' | null>(null);
-
-  // ── Fetch vehicle ──────────────────────────────────────────────────────────
+  // DB vehicle fetch
   const { data: vehicle, isLoading } = useQuery({
     queryKey: ['vehicle', params.id],
     queryFn:  () => vehicleApi.get(params.id),
   });
 
-  // Sync lock state from DB on load
   useEffect(() => {
-    if (vehicle) setEngineLocked(vehicle.engineLocked);
+    if (vehicle) setEngineLocked(vehicle.engineLocked ?? false);
   }, [vehicle]);
 
-  // ── Socket.IO — live telemetry + lock state ────────────────────────────────
+  // GPS history
+  const { data: gpsData } = useQuery({
+    queryKey: ['gps-history', params.id, from, to],
+    queryFn:  () => vehicleApi.gpsHistory(params.id, { from, to }),
+    enabled:  tab === 'history',
+  });
+
+  // Telemetry chart data
+  const { data: telemetryData } = useQuery({
+    queryKey: ['telemetry', params.id, from, to],
+    queryFn:  () => telemetryApi.getHistory(params.id, { from, to }),
+    enabled:  tab === 'telemetry',
+  });
+
+  // Trips
+  const { data: tripsData } = useQuery({
+    queryKey: ['trips', params.id],
+    queryFn:  () => vehicleApi.gpsHistory(params.id, { from, to, limit: 100 }),
+    enabled:  false, // we'll use gpsHistory for now
+  });
+
+  // Socket.IO — live telemetry, lock state, online/offline
   useEffect(() => {
     if (!accessToken) return;
     const socket = getSocket(accessToken);
 
-    socket.on('connect', () => {
-      setWsConnected(true);
-      socket.emit('subscribe:vehicle', params.id);
-    });
-    socket.on('disconnect', () => setWsConnected(false));
+    socket.on('connect',    () => { setWsConnected(true);  socket.emit('subscribe:vehicle', params.id); });
+    socket.on('disconnect', () =>   setWsConnected(false));
 
-    // Live GPS/telemetry from ESP32
-    socket.on('telemetry:update', (payload: any) => {
-      if (payload.vehicleId !== params.id) return;
-      const d = payload.data;
+    socket.on('telemetry:update', (p: any) => {
+      if (p.vehicleId !== params.id) return;
+      const d = p.data;
       setLiveLoc({
-        latitude:        d.latitude,
-        longitude:       d.longitude,
-        speed:           d.speed,
-        heading:         d.heading,
-        engineOn:        d.engineOn,
-        fuelLevel:       d.fuelLevel,
-        engineTemp:      d.engineTemp,
-        distanceTodayKm: vehicle?.lastLocation?.distanceTodayKm ?? 0,
-        updatedAt:       payload.timestamp,
+        latitude: d.latitude, longitude: d.longitude, speed: d.speed,
+        heading: d.heading, engineOn: d.engineOn, fuelLevel: d.fuelLevel,
+        engineTemp: d.engineTemp, updatedAt: p.timestamp,
       });
-      setLiveStatus(d.engineOn
-        ? (d.speed > 2 ? 'ACTIVE' : 'IDLE')
-        : 'OFFLINE');
+      setLiveStatus(d.engineOn ? (d.speed > 2 ? 'ACTIVE' : 'IDLE') : 'OFFLINE');
     });
 
-    // Lock/unlock confirmation from backend
-    socket.on('vehicle:lock', (payload: any) => {
-      if (payload.vehicleId !== params.id) return;
-      setEngineLocked(payload.locked);
-      // Invalidate so DB state is refreshed
+    socket.on('vehicle:lock', (p: any) => {
+      if (p.vehicleId !== params.id) return;
+      setEngineLocked(p.locked);
       qc.invalidateQueries({ queryKey: ['vehicle', params.id] });
     });
+
+    socket.on('vehicles:offline', (p: any) => {
+      if (p.vehicleIds?.includes(params.id)) setLiveStatus('OFFLINE');
+    });
+
+    // GPS module connect/disconnect events
+    socket.on('gps:online',  (p: any) => { if (p.vehicleId === params.id) setGpsModuleOnline(true);  });
+    socket.on('gps:offline', (p: any) => { if (p.vehicleId === params.id) setGpsModuleOnline(false); });
 
     return () => {
       socket.off('telemetry:update');
       socket.off('vehicle:lock');
+      socket.off('vehicles:offline');
+      socket.off('gps:online');
+      socket.off('gps:offline');
       socket.emit('unsubscribe:vehicle', params.id);
     };
-  }, [accessToken, params.id, vehicle, qc]);
+  }, [accessToken, params.id, qc]);
 
-  // ── Telemetry history ──────────────────────────────────────────────────────
-  const { data: telemetry } = useQuery({
-    queryKey: ['telemetry', params.id],
-    queryFn:  () => telemetryApi.getHistory(params.id, { limit: 200 }),
-    refetchInterval: 15000,
-    enabled: tab === 'telemetry',
-  });
-
-  const { data: gpsHistory, isLoading: gpsLoading } = useQuery({
-    queryKey: ['gps-history', params.id, from, to],
-    queryFn:  () => apiClient.get(`/vehicles/${params.id}/gps-history`, {
-      params: { from: new Date(from).toISOString(), to: new Date(to + 'T23:59:59').toISOString(), limit: 3000 }
-    }).then(r => r.data),
-    enabled: tab === 'history',
-  });
-
-  const { data: trips } = useQuery({
-    queryKey: ['trips', params.id, from, to],
-    queryFn:  () => apiClient.get(`/vehicles/${params.id}/trips`, {
-      params: { from: new Date(from).toISOString(), to: new Date(to + 'T23:59:59').toISOString() }
-    }).then(r => r.data),
-    enabled: tab === 'trips',
-  });
-
-  // ── Lock / Unlock ──────────────────────────────────────────────────────────
+  // Lock mutation
   const lockMutation = useMutation({
-    mutationFn: (locked: boolean) => vehicleApi.lock(params.id, locked),
-    onMutate: (locked) => {
-      // Optimistic UI — flip immediately so user sees instant feedback
+    mutationFn: ({ locked }: { locked: boolean }) => vehicleApi.lock(params.id, locked),
+    onSuccess: (_, { locked }) => {
       setEngineLocked(locked);
-    },
-    onSuccess: (_, locked) => {
       qc.invalidateQueries({ queryKey: ['vehicle', params.id] });
-      toast.success(locked ? '🔒 Lock command sent to vehicle' : '🔓 Unlock command sent to vehicle');
+      toast.success(locked ? '🔒 Engine locked' : '🔓 Engine unlocked');
     },
-    onError: (_, locked) => {
-      // Revert optimistic update on error
-      setEngineLocked(!locked);
-      toast.error('Command failed — check server connection');
-    },
+    onError: () => toast.error('Lock command failed'),
   });
 
-  // ── Loading / not found ────────────────────────────────────────────────────
-  if (isLoading) return (
-    <div className="animate-pulse space-y-4">
-      <div className="h-8 bg-gray-200 rounded w-64" />
-      <div className="h-64 bg-gray-200 rounded-xl" />
-    </div>
-  );
-  if (!vehicle) return <div className="text-center py-16 text-gray-400">Vehicle not found</div>;
+  // Regenerate token
+  const regenMutation = useMutation({
+    mutationFn: () => vehicleApi.regenerateToken(params.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vehicle', params.id] });
+      toast.success('Device token regenerated');
+    },
+    onError: () => toast.error('Token regeneration failed'),
+  });
 
-  // Use live data if available, otherwise fall back to DB last location
+  if (isLoading) {
+    return (
+      <div className="space-y-5 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-64" />
+        <div className="h-40 bg-gray-200 rounded-xl" />
+        <div className="h-64 bg-gray-200 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (!vehicle) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <Truck size={40} className="mb-3 opacity-20" />
+        <p className="font-medium">Vehicle not found</p>
+        <Link href="/vehicles" className="mt-4 text-blue-600 text-sm hover:underline">← Back to vehicles</Link>
+      </div>
+    );
+  }
+
   const loc    = liveLoc ?? vehicle.lastLocation;
+  const status = liveStatus ?? vehicle.status;
   const locked = engineLocked ?? vehicle.engineLocked;
-  const status = liveStatus  ?? vehicle.status;
 
-  const TABS = [
-    { id: 'overview'  as Tab, label: 'Overview',    icon: <Info size={14} /> },
-    { id: 'history'   as Tab, label: 'GPS History', icon: <Route size={14} /> },
-    { id: 'trips'     as Tab, label: 'Trips',       icon: <History size={14} /> },
-    { id: 'telemetry' as Tab, label: 'Telemetry',   icon: <BarChart2 size={14} /> },
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview',  label: 'Overview',  icon: <Info size={14} /> },
+    { id: 'history',   label: 'GPS History', icon: <Route size={14} /> },
+    { id: 'telemetry', label: 'Telemetry', icon: <BarChart2 size={14} /> },
   ];
 
   return (
     <div className="space-y-5">
 
-      {/* ── Header ── */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <Link href="/vehicles" className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-500">
-          <ArrowLeft size={20} />
-        </Link>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-gray-900">{vehicle.licensePlate}</h1>
-            <span className={cn('px-3 py-1 rounded-full text-sm font-medium', getStatusColor(status))}>
-              {status}
-            </span>
-            {/* WebSocket connection indicator */}
-            <span className={cn('flex items-center gap-1 text-xs px-2 py-0.5 rounded-full',
-              wsConnected ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500')}>
-              {wsConnected
-                ? <><Wifi size={10} /> Live</>
-                : <><WifiOff size={10} /> Offline</>}
-            </span>
-            {liveLoc && (
-              <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full animate-pulse">
-                ● GPS active
-              </span>
-            )}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Link href="/vehicles"
+            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition text-gray-500">
+            <ArrowLeft size={16} />
+          </Link>
+          <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+            <Truck size={20} className="text-blue-600" />
           </div>
-          <p className="text-gray-500 text-sm truncate">
-            {vehicle.name} — {vehicle.manufacturer} {vehicle.model} {vehicle.year}
-          </p>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 leading-tight">{vehicle.name}</h1>
+            <p className="text-sm text-gray-500 font-mono">{vehicle.licensePlate}</p>
+          </div>
         </div>
 
-        {/* Lock / Unlock button — opens confirmation modal */}
-        <button
-          onClick={() => setConfirmAction(locked ? 'unlock' : 'lock')}
-          disabled={lockMutation.isPending}
-          className={cn(
-            'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 transition shadow-sm',
-            locked
-              ? 'bg-red-50 border-red-400 text-red-700 hover:bg-red-100 active:scale-95'
-              : 'bg-green-50 border-green-400 text-green-700 hover:bg-green-100 active:scale-95',
-            lockMutation.isPending && 'opacity-60 cursor-not-allowed'
-          )}>
-          {lockMutation.isPending ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-              Sending…
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* WebSocket connection indicator */}
+          <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
+            wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+            <span className={cn('w-1.5 h-1.5 rounded-full', wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400')} />
+            {wsConnected ? 'Live' : 'Connecting…'}
+          </span>
+
+          {/* Vehicle status badge */}
+          <span className={cn('px-2.5 py-1 rounded-full text-xs font-semibold', getStatusColor(status))}>
+            {status}
+          </span>
+
+          {/* GPS module live indicator (from MQTT connect/disconnect events) */}
+          {gpsModuleOnline !== null && (
+            <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold',
+              gpsModuleOnline ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700')}>
+              {gpsModuleOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
+              {gpsModuleOnline ? 'GPS Connected' : 'GPS Disconnected'}
             </span>
-          ) : locked ? (
-            <><Lock size={16} /> ENGINE LOCKED</>
-          ) : (
-            <><Unlock size={16} /> ENGINE UNLOCKED</>
           )}
-        </button>
+
+          {/* Engine lock button */}
+          <button
+            onClick={() => setConfirmAction(locked ? 'unlock' : 'lock')}
+            disabled={lockMutation.isPending}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition',
+              locked
+                ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100',
+              'disabled:opacity-50'
+            )}>
+            {locked ? <><Lock size={12} /> LOCKED</> : <><Unlock size={12} /> UNLOCKED</>}
+          </button>
+        </div>
       </div>
 
-      {/* Plate-confirmation modal */}
-      {confirmAction && (
-        <LockConfirmModal
-          plate={vehicle.licensePlate}
-          action={confirmAction}
-          onConfirm={() => {
-            lockMutation.mutate(confirmAction === 'lock');
-            setConfirmAction(null);
-          }}
-          onCancel={() => setConfirmAction(null)}
-        />
-      )}
-
-      {/* ── Live telemetry cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          { label: 'Speed',       value: formatSpeed(loc?.speed),    icon: <Gauge size={18} />,       color: 'text-blue-600',   bg: 'bg-blue-50' },
-          { label: 'Fuel',        value: formatFuel(loc?.fuelLevel),  icon: <Fuel size={18} />,        color: 'text-green-600',  bg: 'bg-green-50' },
-          { label: 'Engine Temp', value: formatTemp(loc?.engineTemp), icon: <Thermometer size={18} />, color: 'text-orange-600', bg: 'bg-orange-50' },
-          { label: 'Engine',      value: loc?.engineOn ? 'ON' : 'OFF',
-            icon: <Truck size={18} />,
-            color: loc?.engineOn ? 'text-green-600' : 'text-gray-500',
-            bg:    loc?.engineOn ? 'bg-green-50' : 'bg-gray-50' },
-          { label: 'Today km',    value: `${(loc?.distanceTodayKm ?? 0).toFixed(1)} km`,
-            icon: <Route size={18} />, color: 'text-purple-600', bg: 'bg-purple-50' },
-          { label: 'Relay',       value: locked ? 'LOCKED' : 'OPEN',
-            icon: locked ? <Lock size={18} /> : <Unlock size={18} />,
-            color: locked ? 'text-red-600' : 'text-green-600',
-            bg:    locked ? 'bg-red-50'    : 'bg-green-50' },
-        ].map(({ label, value, icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col items-center text-center shadow-sm">
-            <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center mb-2', bg, color)}>{icon}</div>
-            <p className="text-xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500">{label}</p>
-          </div>
-        ))}
+      {/* ── Live stats row ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Stat label="Speed"       value={formatSpeed(loc?.speed)}     icon={<Gauge size={18} />}       color="blue"   />
+        <Stat label="Fuel Level"  value={formatFuel(loc?.fuelLevel)}  icon={<Fuel size={18} />}        color="yellow" />
+        <Stat label="Engine Temp" value={formatTemp(loc?.engineTemp)} icon={<Thermometer size={18} />} color="red"    />
+        <Stat label="Today km"    value={`${(loc?.distanceTodayKm ?? 0).toFixed(1)} km`}
+          icon={<Route size={18} />} color="green"
+          sub={loc?.updatedAt ? `Updated ${formatDate(loc.updatedAt)}` : 'No data'} />
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {TABS.map(t => (
+      {/* ── Tabs ────────────────────────────────────────────────────────────── */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={cn(
-              'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition',
-              tab === t.id ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
+              'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px',
+              tab === t.id
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
             )}>
             {t.icon} {t.label}
           </button>
         ))}
       </div>
 
-      {/* ── Date range picker ── */}
-      {(tab === 'history' || tab === 'trips') && (
-        <div className="flex items-center gap-4 bg-white border border-gray-200 rounded-xl p-3 shadow-sm w-fit flex-wrap">
-          <Calendar size={16} className="text-gray-400" />
-          {[['From', from, setFrom], ['To', to, setTo]].map(([label, val, setter]: any) => (
-            <div key={label} className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600">{label}</label>
-              <input type="date" value={val} onChange={e => setter(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── OVERVIEW tab ── */}
+      {/* ── OVERVIEW TAB ────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-          {/* Vehicle Details */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-800 mb-3">Vehicle Details</h3>
-            <dl className="space-y-2 text-sm">
-              {[
-                ['Plate',         vehicle.licensePlate],
-                ['VIN',           vehicle.vin ?? 'N/A'],
-                ['Class',         vehicle.vehicleClass?.replace(/_/g,' ')],
-                ['Energy',        vehicle.energyType],
-                ['Fuel Capacity', vehicle.fuelCapacity ? `${vehicle.fuelCapacity} L` : 'N/A'],
-                ['Battery kWh',   vehicle.batteryCapacityKwh ?? 'N/A'],
-                ['Fleet',         vehicle.fleet?.name ?? 'Unassigned'],
-                ['Driver',        vehicle.currentDriver?.user
-                  ? `${vehicle.currentDriver.user.firstName} ${vehicle.currentDriver.user.lastName}`
-                  : 'Unassigned'],
-                ['Registered',    vehicle.createdAt ? formatDate(vehicle.createdAt) : 'N/A'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4">
-                  <dt className="text-gray-500 font-medium shrink-0">{k}</dt>
-                  <dd className="text-gray-900 font-mono text-right truncate max-w-48">{v}</dd>
-                </div>
-              ))}
+          {/* Left column — vehicle info */}
+          <div className="lg:col-span-1 space-y-4">
 
-              {/* Device Token — full value with copy button */}
-              <div className="flex justify-between gap-4 items-start pt-1 border-t border-gray-100 mt-1">
-                <dt className="text-gray-500 font-medium shrink-0">Device Token</dt>
-                <dd className="flex items-center gap-1 min-w-0">
-                  <span className="text-gray-900 font-mono text-xs truncate max-w-40 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded" title={vehicle.deviceToken}>
-                    {vehicle.deviceToken}
-                  </span>
-                  <CopyButton text={vehicle.deviceToken} />
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          {/* Compliance & Location */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-800 mb-3">Compliance & Location</h3>
-            <dl className="space-y-2 text-sm">
-              {[
-                ['Insurance Expiry',    vehicle.insuranceExpiry  ? formatDate(vehicle.insuranceExpiry)  : 'Not set'],
-                ['Road Tax Expiry',     vehicle.roadTaxExpiry    ? formatDate(vehicle.roadTaxExpiry)    : 'Not set'],
-                ['Inspection Expiry',   vehicle.inspectionExpiry ? formatDate(vehicle.inspectionExpiry) : 'Not set'],
-                ['Distance Today',      `${(loc?.distanceTodayKm ?? 0).toFixed(1)} km`],
-                ['Distance This Month', `${(loc?.distanceMonthKm ?? 0).toFixed(1)} km`],
-                ['Total Distance',      `${(loc?.totalDistanceKm ?? 0).toFixed(0)} km`],
-                ['Latitude',            loc?.latitude  != null ? loc.latitude.toFixed(6)  : 'No GPS'],
-                ['Longitude',           loc?.longitude != null ? loc.longitude.toFixed(6) : 'No GPS'],
-                ['Speed',               loc?.speed     != null ? `${loc.speed.toFixed(1)} km/h` : '—'],
-                ['Engine',              loc?.engineOn  ? 'ON' : 'OFF'],
-                ['Last Updated',        loc?.updatedAt ? formatDate(loc.updatedAt) : 'Never'],
-                ['Telemetry Records',   vehicle._count?.telemetry ?? 0],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4">
-                  <dt className="text-gray-500 font-medium shrink-0">{k}</dt>
-                  <dd className="text-gray-900 text-right">{v}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </div>
-      )}
-
-      {/* ── GPS HISTORY tab ── */}
-      {tab === 'history' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" style={{ height: '520px' }}>
-          {gpsLoading ? (
-            <div className="flex items-center justify-center h-full text-gray-400">
-              <div className="text-center">
-                <MapPin size={32} className="mx-auto mb-2 animate-pulse" />
-                <p>Loading GPS history…</p>
-              </div>
+            {/* GPS Ping */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Satellite size={15} className="text-blue-500" /> GPS Module Status
+              </h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Send a ping to check if the GPS module is currently online and responding.
+                If no response arrives within 8 seconds, the device is offline.
+              </p>
+              <GpsPingBadge vehicleId={params.id} />
             </div>
-          ) : (gpsHistory?.points?.length ?? 0) === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-400">
-              <div className="text-center">
-                <MapPin size={32} className="mx-auto mb-2" />
-                <p className="font-medium">No GPS data for this period</p>
-                <p className="text-sm mt-1">GPS points appear once the ESP32 starts sending telemetry</p>
-              </div>
-            </div>
-          ) : (
-            <GpsHistoryMap
-              points={gpsHistory.points}
-              vehiclePlate={vehicle.licensePlate}
-              vehicleName={vehicle.name}
-            />
-          )}
-        </div>
-      )}
 
-      {/* ── TRIPS tab ── */}
-      {tab === 'trips' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>{['Start','End','From','To','Distance','Max Speed','Engine Hrs'].map(h =>
-                <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(trips?.data ?? []).map((t: any) => (
-                <tr key={t.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-xs">{formatDate(t.startTime)}</td>
-                  <td className="px-4 py-2 text-xs">{t.endTime ? formatDate(t.endTime) : '—'}</td>
-                  <td className="px-4 py-2 text-xs text-gray-500 max-w-32 truncate">
-                    {t.startAddress ?? `${t.startLat?.toFixed(4)}, ${t.startLon?.toFixed(4)}`}
-                  </td>
-                  <td className="px-4 py-2 text-xs text-gray-500 max-w-32 truncate">
-                    {t.endAddress ?? `${t.endLat?.toFixed(4)}, ${t.endLon?.toFixed(4)}`}
-                  </td>
-                  <td className="px-4 py-2 text-sm font-bold">{t.distanceKm.toFixed(1)} km</td>
-                  <td className="px-4 py-2 text-sm text-red-600">{t.maxSpeedKph.toFixed(0)} km/h</td>
-                  <td className="px-4 py-2 text-sm">{t.engineHours.toFixed(2)} h</td>
-                </tr>
-              ))}
-              {!(trips?.data?.length) && (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-400 text-sm">
-                    No trips recorded for this period
-                  </td>
-                </tr>
+            {/* Last location */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <MapPin size={15} className="text-blue-500" /> Last Known Position
+              </h3>
+              {loc?.latitude ? (
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Latitude</span>
+                    <span className="font-mono text-gray-900">{loc.latitude.toFixed(6)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Longitude</span>
+                    <span className="font-mono text-gray-900">{loc.longitude.toFixed(6)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Speed</span>
+                    <span className="font-semibold">{formatSpeed(loc.speed)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Engine</span>
+                    <span className={loc.engineOn ? 'text-green-700 font-semibold' : 'text-gray-500'}>
+                      {loc.engineOn ? 'ON ✅' : 'OFF'}
+                    </span>
+                  </div>
+                  {loc.updatedAt && (
+                    <p className="text-xs text-gray-400 pt-1 border-t">Last update: {formatDate(loc.updatedAt)}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No GPS data received yet</p>
               )}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Device Token */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+              <h3 className="text-sm font-semibold text-gray-700">Device Token</h3>
+              <p className="text-xs text-gray-500">Used as MQTT username & password for this vehicle's GPS device.</p>
+              <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                <span className="font-mono text-xs text-gray-700 truncate flex-1">
+                  {vehicle.deviceToken?.substring(0, 16)}…
+                </span>
+                <CopyButton text={vehicle.deviceToken ?? ''} />
+              </div>
+              <button
+                onClick={() => { if (confirm('Regenerate device token? The old token will stop working immediately.')) regenMutation.mutate(); }}
+                disabled={regenMutation.isPending}
+                className="w-full mt-1 py-2 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition disabled:opacity-50">
+                {regenMutation.isPending ? 'Regenerating…' : '⟳ Regenerate Token'}
+              </button>
+            </div>
+          </div>
+
+          {/* Right column — vehicle details */}
+          <div className="lg:col-span-2 space-y-4">
+
+            {/* Basic info */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Vehicle Details</h3>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
+                {[
+                  ['Manufacturer',  vehicle.manufacturer],
+                  ['Model',         vehicle.model],
+                  ['Year',          vehicle.year],
+                  ['VIN',           vehicle.vin ?? '—'],
+                  ['Engine No.',    vehicle.engineNumber ?? '—'],
+                  ['Color',         vehicle.color ?? '—'],
+                  ['Vehicle Class', vehicle.vehicleClass?.replace(/_/g,' ')],
+                  ['Purpose',       vehicle.purpose?.replace(/_/g,' ')],
+                  ['Energy Type',   vehicle.energyType],
+                  ['Transmission',  vehicle.transmission?.replace(/_/g,' ')],
+                  ['Fleet',         vehicle.fleet?.name ?? 'Unassigned'],
+                  ['Odometer',      `${(vehicle.odometer ?? 0).toLocaleString()} km`],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="flex flex-col">
+                    <span className="text-xs text-gray-500">{label}</span>
+                    <span className="font-medium text-gray-900">{value ?? '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Compliance */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <Calendar size={15} className="text-blue-500" /> Compliance & Insurance
+              </h3>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
+                {[
+                  ['Insurance Expiry',   vehicle.insuranceExpiry],
+                  ['Road Tax Expiry',    vehicle.roadTaxExpiry],
+                  ['Inspection Expiry',  vehicle.inspectionExpiry],
+                  ['Insurance Company',  vehicle.insuranceCompany ?? '—'],
+                  ['Policy No.',         vehicle.insurancePolicyNo ?? '—'],
+                ].map(([label, value]) => {
+                  const isDate = value && value !== '—';
+                  const expired = isDate && new Date(value as string) < new Date();
+                  return (
+                    <div key={label as string} className="flex flex-col">
+                      <span className="text-xs text-gray-500">{label}</span>
+                      <span className={cn('font-medium', expired ? 'text-red-600' : 'text-gray-900')}>
+                        {isDate ? formatDate(value as string) : (value ?? '—')}
+                        {expired && <span className="ml-1 text-xs font-bold">⚠ EXPIRED</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* GPS Device info */}
+            {vehicle.gpsDevice && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <Satellite size={15} className="text-blue-500" /> GPS Device
+                </h3>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
+                  {[
+                    ['Device ID',     vehicle.gpsDevice.deviceId],
+                    ['IMEI',          vehicle.gpsDevice.imei ?? '—'],
+                    ['SIM Number',    vehicle.gpsDevice.simNumber ?? '—'],
+                    ['Provider',      vehicle.gpsDevice.networkProvider ?? '—'],
+                    ['Firmware',      vehicle.gpsDevice.firmwareVersion ?? '—'],
+                    ['Status',        vehicle.gpsDevice.status],
+                    ['Last Comm.',    vehicle.gpsDevice.lastCommunication ? formatDate(vehicle.gpsDevice.lastCommunication) : 'Never'],
+                  ].map(([label, value]) => (
+                    <div key={label as string} className="flex flex-col">
+                      <span className="text-xs text-gray-500">{label}</span>
+                      <span className="font-medium text-gray-900">{value ?? '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ── TELEMETRY chart tab ── */}
+      {/* ── GPS HISTORY TAB ─────────────────────────────────────────────────── */}
+      {tab === 'history' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">From</label>
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">To</label>
+              <input type="date" value={to} onChange={e => setTo(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <span className="text-sm text-gray-500">
+              {gpsData?.count ?? 0} GPS points
+            </span>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ height: 500 }}>
+            {gpsData?.points ? (
+              <GpsHistoryMap
+                points={gpsData.points}
+                vehiclePlate={vehicle.licensePlate}
+                vehicleName={vehicle.name}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400">
+                <RefreshCw size={20} className="animate-spin mr-2" /> Loading GPS history…
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TELEMETRY TAB ───────────────────────────────────────────────────── */}
       {tab === 'telemetry' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-800 mb-4">Speed / Fuel / Temperature (last 200 records)</h3>
-          <TelemetryChart data={telemetry?.data ?? []} />
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">From</label>
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">To</label>
+              <input type="date" value={to} onChange={e => setTo(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5" style={{ minHeight: 400 }}>
+            {telemetryData?.data?.length > 0 ? (
+              <TelemetryChart data={telemetryData.data} />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                <BarChart2 size={36} className="mb-3 opacity-20" />
+                <p>No telemetry data for this period</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
+      {/* ── Lock confirmation modal ──────────────────────────────────────────── */}
+      {confirmAction && (
+        <LockConfirmModal
+          plate={vehicle.licensePlate}
+          action={confirmAction}
+          onConfirm={() => {
+            lockMutation.mutate({ locked: confirmAction === 'lock' });
+            setConfirmAction(null);
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
     </div>
   );
 }

@@ -21,8 +21,8 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Prisma
-prisma/migrations/
+# Prisma — keep migrations, only ignore generated client
+# prisma/migrations/  ← DO NOT ignore migrations, they are needed for production deploys
 
 # Editor
 .vscode/

@@ -55,6 +55,8 @@ export const vehicleApi = {
   delete:          (id: string)      => apiClient.delete(`/vehicles/${id}`),
   regenerateToken: (id: string)      => apiClient.post(`/vehicles/${id}/regenerate-token`).then(r => r.data),
   lock:            (id: string, locked: boolean) => apiClient.patch(`/vehicles/${id}/lock`, { locked }).then(r => r.data),
+  gpsPing:         (id: string)      => apiClient.get(`/vehicles/${id}/gps-ping`).then(r => r.data),
+  gpsHistory:      (id: string, params?: object) => apiClient.get(`/vehicles/${id}/gps-history`, { params }).then(r => r.data),
 };
 
 // ─── Telemetry ────────────────────────────────────────────────────────────────

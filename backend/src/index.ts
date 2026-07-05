@@ -38,6 +38,41 @@ async function bootstrap() {
   // MQTT publisher client — used to send lock/unlock commands to devices
   initMqttClient();
 
+  // ── Offline detection job ──────────────────────────────────────────────────
+  // Every 60 seconds: mark vehicles OFFLINE if their last telemetry is > 3 minutes old
+  setInterval(async () => {
+    try {
+      const cutoff = new Date(Date.now() - 3 * 60 * 1000); // 3 minutes ago
+      const stale = await prisma.vehicle.findMany({
+        where: {
+          status: { in: ['ACTIVE', 'IDLE'] },
+          lastLocation: { updatedAt: { lt: cutoff } },
+        },
+        select: { id: true, licensePlate: true, organizationId: true },
+      });
+      if (stale.length > 0) {
+        await prisma.vehicle.updateMany({
+          where: { id: { in: stale.map(v => v.id) } },
+          data:  { status: 'OFFLINE' },
+        });
+        // Notify dashboard via Socket.IO
+        const io = (await import('./websocket/socketServer')).getSocketServer();
+        if (io) {
+          const orgGroups = stale.reduce((acc: Record<string, string[]>, v) => {
+            (acc[v.organizationId] ??= []).push(v.id);
+            return acc;
+          }, {});
+          for (const [orgId, ids] of Object.entries(orgGroups)) {
+            io.to(`org:${orgId}`).emit('vehicles:offline', { vehicleIds: ids, timestamp: new Date().toISOString() });
+          }
+        }
+        logger.info(`Marked ${stale.length} vehicle(s) OFFLINE: ${stale.map(v => v.licensePlate).join(', ')}`);
+      }
+    } catch (err) {
+      logger.error('Offline detection error', err);
+    }
+  }, 60_000);
+
   httpServer.listen(PORT, () => {
     logger.info(`ARTIC VMS backend running on port ${PORT}`);
     logger.info(`MQTT broker running on port ${MQTT_PORT}`);

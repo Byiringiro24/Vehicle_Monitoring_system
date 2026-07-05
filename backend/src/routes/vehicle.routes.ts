@@ -5,6 +5,7 @@ import { listVehicles, getVehicle, createVehicle, updateVehicle, deleteVehicle,
 import { prisma } from '../config/database';
 import { getSocketServer } from '../websocket/socketServer';
 import { publishCommand } from '../services/mqttClient';
+import { pingGpsDevice } from '../services/mqttBroker';
 
 const router = Router();
 router.use(authenticate);
@@ -15,6 +16,35 @@ router.post('/',      authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), create
 router.put('/:id',    authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), updateVehicle);
 router.delete('/:id', authorize('SUPER_ADMIN', 'ADMIN'), deleteVehicle);
 router.post('/:id/regenerate-token', authorize('SUPER_ADMIN', 'ADMIN'), regenerateToken);
+
+// ─── GPS Ping — check if GPS module is online ─────────────────────────────────
+router.get('/:id/gps-ping', async (req: any, res, next) => {
+  try {
+    const vehicle = await prisma.vehicle.findFirst({
+      where:  { id: req.params.id, organizationId: req.user.organizationId },
+      select: { id: true, licensePlate: true, gpsDevice: { select: { status: true, lastCommunication: true } } },
+    });
+    if (!vehicle) { res.status(404).json({ error: 'Vehicle not found' }); return; }
+
+    const responded = await pingGpsDevice(vehicle.id, 8000);
+
+    // Update gpsDevice lastCommunication if responded
+    if (responded) {
+      await prisma.gpsDevice.updateMany({
+        where: { vehicleId: vehicle.id },
+        data:  { lastCommunication: new Date(), status: 'ACTIVE' },
+      });
+    }
+
+    res.json({
+      vehicleId:   vehicle.id,
+      licensePlate: vehicle.licensePlate,
+      gpsOnline:   responded,
+      checkedAt:   new Date().toISOString(),
+      message:     responded ? 'GPS module is online and responding' : 'GPS module did not respond — device may be offline or out of range',
+    });
+  } catch (err) { next(err); }
+});
 
 // ─── GPS history for map replay ───────────────────────────────────────────────
 router.get('/:vehicleId/gps-history', getGpsHistory);
