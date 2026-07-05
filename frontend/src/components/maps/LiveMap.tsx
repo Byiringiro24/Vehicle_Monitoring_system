@@ -121,9 +121,12 @@ interface Props {
 export default function LiveMap({ locations, selectedId, onSelect, connectedDevices = new Set() }: Props) {
 
   // Resolve status: MQTT connection is ground truth, timestamp staleness is fallback
+  // GPS status is based on speed, NOT engine lock state
   function resolveStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
-    if (connectedDevices.has(loc.vehicleId)) return loc.engineOn ? 'ACTIVE' : 'IDLE';
-    return getLiveStatus(loc.updatedAt, loc.engineOn);
+    if (connectedDevices.has(loc.vehicleId)) {
+      return (loc.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE';
+    }
+    return getLiveStatus(loc.updatedAt, loc.speed);
   }
 
   // Only render vehicles with valid GPS coordinates

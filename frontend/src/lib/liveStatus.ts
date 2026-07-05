@@ -1,21 +1,30 @@
 /**
- * Live status utility — no Leaflet dependency, safe for SSR.
- * Status is computed purely from the last telemetry timestamp.
+ * Live GPS status utility — completely independent of engine lock state.
  *
- * ACTIVE  = telemetry received < 30s ago AND engineOn
- * IDLE    = telemetry received < 30s ago AND !engineOn
- * OFFLINE = no telemetry for > 30s
+ * GPS status is based ONLY on:
+ *   - Whether telemetry is being received (timestamp freshness)
+ *   - Speed (for ACTIVE vs IDLE)
+ *
+ * Engine lock (relay) does NOT affect GPS status.
+ * A locked vehicle still has GPS running if the SIM808 is powered.
+ *
+ * ACTIVE  = GPS packet received < 45s ago AND speed > 2 km/h
+ * IDLE    = GPS packet received < 45s ago AND speed ≤ 2 km/h
+ * OFFLINE = No GPS packet for > 45s (= 3× the 15s send interval)
  */
 
-export const STALE_MS = 30_000; // 30s = 2× the 15s ESP32 send interval
+export const STALE_MS = 45_000; // 45s — 3 × 15s ESP32 send interval
 
 export type LiveStatus = 'ACTIVE' | 'IDLE' | 'OFFLINE';
 
 export function getLiveStatus(
   updatedAt: string | null | undefined,
-  engineOn: boolean
+  speed?: number | null,
+  // engineOn kept for backwards compat but IGNORED for GPS status
+  _engineOn?: boolean,
 ): LiveStatus {
   if (!updatedAt) return 'OFFLINE';
   if (Date.now() - new Date(updatedAt).getTime() > STALE_MS) return 'OFFLINE';
-  return engineOn ? 'ACTIVE' : 'IDLE';
+  // GPS is active — determine moving vs stationary from speed
+  return (speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE';
 }

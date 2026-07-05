@@ -197,13 +197,14 @@ export default function LiveMapPage() {
   });
 
   // ── Compute live status using connectedDevices as ground truth ───────────────
-  // Priority: if device is in connectedDevices set → use engineOn to determine ACTIVE/IDLE
-  //           otherwise → use timestamp staleness (getLiveStatus)
+  // GPS status = ACTIVE (moving), IDLE (stationary), OFFLINE (no signal)
+  // Engine lock state has NO effect on GPS status
   function getStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
     if (connectedDevices.has(loc.vehicleId)) {
-      return loc.engineOn ? 'ACTIVE' : 'IDLE';
+      // Device is confirmed online — use speed for ACTIVE vs IDLE
+      return (loc.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE';
     }
-    return getLiveStatus(loc.updatedAt, loc.engineOn);
+    return getLiveStatus(loc.updatedAt, loc.speed);
   }
 
   // Build sorted, filtered list

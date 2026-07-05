@@ -267,7 +267,7 @@ export default function VehiclesPage() {
                       ) : <span className="text-gray-400 text-xs">Unassigned</span>}
                     </td>
 
-                    {/* Status — uses live online state when available */}
+                    {/* Status — uses live GPS state (speed-based, independent of engine lock) */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {onlineIds.has(v.id) && (
@@ -278,12 +278,12 @@ export default function VehiclesPage() {
                         )}
                         <span className={cn('text-xs px-2 py-1 rounded-full font-medium',
                           onlineIds.has(v.id)
-                            ? v.lastLocation?.engineOn
+                            ? (v.lastLocation?.speed ?? 0) > 2
                               ? 'bg-green-100 text-green-800'
                               : 'bg-yellow-100 text-yellow-800'
                             : getStatusColor(v.status))}>
                           {onlineIds.has(v.id)
-                            ? (v.lastLocation?.engineOn ? 'ACTIVE' : 'IDLE')
+                            ? ((v.lastLocation?.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE')
                             : v.status}
                         </span>
                       </div>

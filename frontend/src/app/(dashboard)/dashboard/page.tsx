@@ -162,9 +162,9 @@ export default function DashboardPage() {
 
   const t = data?.totals ?? {};
   const locationList = Object.values(locations);
-  const liveActive  = locationList.filter(l => getLiveStatus(l.updatedAt, l.engineOn) === 'ACTIVE').length;
-  const liveIdle    = locationList.filter(l => getLiveStatus(l.updatedAt, l.engineOn) === 'IDLE').length;
-  const liveOffline = locationList.filter(l => getLiveStatus(l.updatedAt, l.engineOn) === 'OFFLINE').length;
+  const liveActive  = locationList.filter(l => getLiveStatus(l.updatedAt, l.speed) === 'ACTIVE').length;
+  const liveIdle    = locationList.filter(l => getLiveStatus(l.updatedAt, l.speed) === 'IDLE').length;
+  const liveOffline = locationList.filter(l => getLiveStatus(l.updatedAt, l.speed) === 'OFFLINE').length;
 
   const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const activityData = (data?.activity ?? []).map((d: any) => ({

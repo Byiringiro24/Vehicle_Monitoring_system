@@ -182,14 +182,15 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const qc = useQueryClient();
   const { accessToken } = useAuthStore();
   const [tab, setTab]   = useState<Tab>('overview');
-  const [from, setFrom] = useState(format(subDays(new Date(), 1), 'yyyy-MM-dd'));
-  const [to, setTo]     = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [from, setFrom] = useState(format(subDays(new Date(), 1), "yyyy-MM-dd'T'HH:mm"));
+  const [to, setTo]     = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
   // Live state from Socket.IO
   const [liveLoc, setLiveLoc]           = useState<any>(null);
   const [liveStatus, setLiveStatus]     = useState<string | null>(null);
   const [engineLocked, setEngineLocked] = useState<boolean | null>(null);
   const [wsConnected, setWsConnected]   = useState(false);
+  const [wsInitialised, setWsInitialised] = useState(false);
   const [gpsModuleOnline, setGpsModuleOnline] = useState<boolean | null>(null);
   const [confirmAction, setConfirmAction] = useState<'lock'|'unlock'|null>(null);
 
@@ -203,10 +204,14 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     if (vehicle) setEngineLocked(vehicle.engineLocked ?? false);
   }, [vehicle]);
 
-  // GPS history
+  // GPS history — use full datetime (from/to include time)
   const { data: gpsData } = useQuery({
     queryKey: ['gps-history', params.id, from, to],
-    queryFn:  () => vehicleApi.gpsHistory(params.id, { from, to }),
+    queryFn:  () => vehicleApi.gpsHistory(params.id, {
+      from: new Date(from).toISOString(),
+      to:   new Date(to).toISOString(),
+      limit: 3000,
+    }),
     enabled:  tab === 'history',
   });
 
@@ -229,7 +234,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     if (!accessToken) return;
     const socket = getSocket(accessToken);
 
-    socket.on('connect',    () => { setWsConnected(true);  socket.emit('subscribe:vehicle', params.id); });
+    socket.on('connect',    () => { setWsConnected(true); setWsInitialised(true); socket.emit('subscribe:vehicle', params.id); });
     socket.on('disconnect', () =>   setWsConnected(false));
 
     socket.on('telemetry:update', (p: any) => {
@@ -240,7 +245,9 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         heading: d.heading, engineOn: d.engineOn, fuelLevel: d.fuelLevel,
         engineTemp: d.engineTemp, updatedAt: p.timestamp,
       });
-      setLiveStatus(d.engineOn ? (d.speed > 2 ? 'ACTIVE' : 'IDLE') : 'OFFLINE');
+      // GPS status based on speed, NOT engineOn
+      const spd = d.speed ?? 0;
+      setLiveStatus(spd > 2 ? 'ACTIVE' : 'IDLE');
     });
 
     socket.on('vehicle:lock', (p: any) => {
@@ -338,12 +345,14 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* WebSocket connection indicator */}
-          <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-            wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
-            <span className={cn('w-1.5 h-1.5 rounded-full', wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400')} />
-            {wsConnected ? 'Live' : 'Connecting…'}
-          </span>
+          {/* WebSocket connection indicator — only show after first connect attempt */}
+          {wsInitialised && (
+            <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
+              wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+              <span className={cn('w-1.5 h-1.5 rounded-full', wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400')} />
+              {wsConnected ? 'Live' : 'Offline'}
+            </span>
+          )}
 
           {/* Vehicle status badge */}
           <span className={cn('px-2.5 py-1 rounded-full text-xs font-semibold', getStatusColor(status))}>
@@ -560,18 +569,19 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       {/* ── GPS HISTORY TAB ─────────────────────────────────────────────────── */}
       {tab === 'history' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+            <Calendar size={15} className="text-gray-400 shrink-0" />
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">From</label>
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">From</label>
+              <input type="datetime-local" value={from} onChange={e => setFrom(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">To</label>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)}
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">To</label>
+              <input type="datetime-local" value={to} onChange={e => setTo(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 font-medium">
               {gpsData?.count ?? 0} GPS points
             </span>
           </div>
@@ -588,6 +598,11 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               </div>
             )}
           </div>
+          {gpsData?.count === 0 && (
+            <p className="text-center text-sm text-gray-400">
+              No GPS points found for this period. Try expanding the time range.
+            </p>
+          )}
         </div>
       )}
 
