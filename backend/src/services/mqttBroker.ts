@@ -3,44 +3,76 @@ import net from 'net';
 import { prisma } from '../config/database';
 import { processTelemetry } from './telemetry.service';
 import { getSocketServer } from '../websocket/socketServer';
+import { getMqttClient, onPong } from './mqttClient';
 import logger from '../utils/logger';
 
 // ─── In-memory store for pending GPS ping responses ───────────────────────────
-// Key: vehicleId, Value: resolve function from a waiting Promise
 const pendingPings = new Map<string, (responded: boolean) => void>();
 
+// Register a handler so mqttClient forwards pong messages here
+onPong(async (topic: string) => {
+  // topic = artic/<TOKEN>/pong
+  // find the vehicleId that has a pending ping for this token
+  const token = topic.split('/')[1];
+  if (!token) return;
+  try {
+    const vehicle = await prisma.vehicle.findFirst({
+      where:  { deviceToken: token },
+      select: { id: true },
+    });
+    if (!vehicle) return;
+    const resolve = pendingPings.get(vehicle.id);
+    if (resolve) {
+      pendingPings.delete(vehicle.id);
+      resolve(true);
+      logger.debug(`GPS pong resolved for vehicle ${vehicle.id}`);
+    }
+    // Update lastCommunication
+    await prisma.gpsDevice.updateMany({
+      where: { vehicleId: vehicle.id },
+      data:  { lastCommunication: new Date() },
+    }).catch(() => {});
+  } catch (err) {
+    logger.error('Pong handler error', err);
+  }
+});
+
 /** Called by a vehicle route to check if the GPS module is reachable.
- *  Publishes a ping, waits up to `timeoutMs` for a pong response. */
+ *  Publishes a ping via the backend's MQTT client (connects to mosquitto),
+ *  waits up to `timeoutMs` for a pong response on the /pong topic. */
 export async function pingGpsDevice(vehicleId: string, timeoutMs = 8000): Promise<boolean> {
-  // Look up the vehicle to get its deviceToken (needed for the topic)
   const vehicle = await prisma.vehicle.findUnique({
     where:  { id: vehicleId },
     select: { deviceToken: true },
   });
   if (!vehicle) return false;
 
+  const mqttClient = getMqttClient();
+  if (!mqttClient?.connected) {
+    logger.warn('Backend MQTT client not connected — cannot ping GPS device');
+    return false;
+  }
+
   return new Promise<boolean>((resolve) => {
-    // Register the waiter
     pendingPings.set(vehicleId, resolve);
 
-    // Publish ping to device via the broker's own publishCommand mechanism
-    // We import the broker publish here; since broker is module-level, export it
-    if (_broker) {
-      const pingTopic = `artic/${vehicle.deviceToken}/ping`;
-      _broker.publish(
-        { cmd: 'publish', qos: 0, dup: false, retain: false,
-          topic: pingTopic, payload: Buffer.from(JSON.stringify({ ts: Date.now() })) },
-        (err: Error | null) => { if (err) logger.warn(`Ping publish error: ${err.message}`); }
-      );
-      logger.debug(`GPS ping sent to vehicle ${vehicleId} on topic ${pingTopic}`);
-    } else {
-      // No broker running — immediately resolve false
-      pendingPings.delete(vehicleId);
-      resolve(false);
-      return;
-    }
+    const pingTopic = `artic/${vehicle.deviceToken}/ping`;
+    mqttClient.publish(
+      pingTopic,
+      JSON.stringify({ ts: Date.now() }),
+      { qos: 0, retain: false },
+      (err?: Error) => {
+        if (err) {
+          logger.warn(`GPS ping publish error: ${err.message}`);
+          pendingPings.delete(vehicleId);
+          resolve(false);
+        } else {
+          logger.debug(`GPS ping sent to vehicle ${vehicleId} on ${pingTopic}`);
+        }
+      }
+    );
 
-    // Timeout — if no pong arrives within timeoutMs, the GPS is offline
+    // Timeout — if no pong arrives, GPS is offline
     setTimeout(() => {
       if (pendingPings.has(vehicleId)) {
         pendingPings.delete(vehicleId);
@@ -50,7 +82,7 @@ export async function pingGpsDevice(vehicleId: string, timeoutMs = 8000): Promis
   });
 }
 
-// Module-level broker reference so pingGpsDevice can publish
+// Module-level broker reference (used for Aedes internal routing when running)
 let _broker: any = null;
 
 export function initMqttBroker(port: number) {
@@ -152,20 +184,8 @@ export function initMqttBroker(port: number) {
         await processTelemetry(vehicleId, payload);
         logger.debug(`Telemetry received from vehicle ${vehicleId}`);
       }
-      // ── GPS Pong (response to ping) ──────────────────────────────────────
-      else if (topic.endsWith('/pong')) {
-        logger.debug(`GPS pong received from vehicle ${vehicleId}`);
-        const resolve = pendingPings.get(vehicleId);
-        if (resolve) {
-          pendingPings.delete(vehicleId);
-          resolve(true);
-        }
-        // Update lastCommunication
-        await prisma.gpsDevice.updateMany({
-          where: { vehicleId },
-          data:  { lastCommunication: new Date() },
-        }).catch(() => {});
-      }
+      // ── GPS Pong handled by mqttClient subscriber ────────────────────────
+      // (pong responses come from mosquitto → mqttClient → onPong handler above)
     } catch (err) {
       logger.error('MQTT message processing error', err);
     }
