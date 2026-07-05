@@ -45,3 +45,35 @@ export async function getFleetLocations(req: AuthenticatedRequest, res: Response
     res.json(locations);
   } catch (err) { next(err); }
 }
+
+export async function deleteTelemetry(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const { vehicleId } = req.params;
+    const from = req.query.from ? new Date(req.query.from as string) : new Date(0);
+    const to   = req.query.to   ? new Date(req.query.to   as string) : new Date();
+
+    // Verify vehicle belongs to org
+    const vehicle = await prisma.vehicle.findFirst({
+      where: { id: vehicleId, organizationId: req.user!.organizationId },
+      select: { id: true, licensePlate: true },
+    });
+    if (!vehicle) throw new AppError(404, 'Vehicle not found');
+
+    const [telemetryDel, gpsDel] = await Promise.all([
+      prisma.telemetry.deleteMany({
+        where: { vehicleId, timestamp: { gte: from, lte: to } },
+      }),
+      prisma.gpsHistory.deleteMany({
+        where: { vehicleId, timestamp: { gte: from, lte: to } },
+      }),
+    ]);
+
+    res.json({
+      message:          `Deleted ${telemetryDel.count} telemetry records and ${gpsDel.count} GPS history points`,
+      telemetryDeleted: telemetryDel.count,
+      gpsDeleted:       gpsDel.count,
+      vehicleId,
+      from, to,
+    });
+  } catch (err) { next(err); }
+}

@@ -3,11 +3,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vehicleApi } from '@/lib/api';
 import { getStatusColor, formatDate } from '@/lib/utils';
-import { Plus, Search, Truck, Pencil, Trash2, Eye, Lock, Unlock, AlertTriangle } from 'lucide-react';
+import { getLiveStatus } from '@/lib/liveStatus';
+import { Plus, Search, Truck, Pencil, Trash2, Eye, Lock, Unlock, AlertTriangle, Wifi } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { VehicleModal } from '@/components/vehicles/VehicleModal';
 import { cn } from '@/lib/utils';
+import { getSocket } from '@/lib/socket';
+import { useAuthStore } from '@/store/authStore';
 
 // ─── Plate-confirmation lock/unlock modal (same as vehicle detail page) ───────
 function LockConfirmModal({
@@ -114,10 +117,13 @@ function LockConfirmModal({
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function VehiclesPage() {
   const qc = useQueryClient();
+  const { accessToken } = useAuthStore();
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showModal, setShowModal]       = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
+  // Track which vehicles are currently online (by vehicleId)
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
 
   // Lock confirmation state
   const [lockTarget, setLockTarget] = useState<{ id: string; plate: string; action: 'lock' | 'unlock' } | null>(null);
@@ -125,7 +131,36 @@ export default function VehiclesPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['vehicles', search, statusFilter],
     queryFn: () => vehicleApi.list({ search, status: statusFilter || undefined }),
+    refetchInterval: 30_000,
   });
+
+  // Socket.IO — track real-time GPS online/offline status
+  useEffect(() => {
+    if (!accessToken) return;
+    const socket = getSocket(accessToken);
+
+    socket.on('gps:online', (p: { vehicleId: string }) => {
+      setOnlineIds(prev => { const s = new Set(prev); s.add(p.vehicleId); return s; });
+      // Refresh the vehicle list so status badge updates
+      qc.invalidateQueries({ queryKey: ['vehicles'] });
+    });
+
+    socket.on('gps:offline', (p: { vehicleId: string }) => {
+      setOnlineIds(prev => { const s = new Set(prev); s.delete(p.vehicleId); return s; });
+      qc.invalidateQueries({ queryKey: ['vehicles'] });
+    });
+
+    socket.on('location:update', () => {
+      // Refresh periodically on new telemetry
+      qc.invalidateQueries({ queryKey: ['vehicles'] });
+    });
+
+    return () => {
+      socket.off('gps:online');
+      socket.off('gps:offline');
+      socket.off('location:update');
+    };
+  }, [accessToken, qc]);
 
   const deleteMutation = useMutation({
     mutationFn: vehicleApi.delete,
@@ -232,14 +267,29 @@ export default function VehiclesPage() {
                       ) : <span className="text-gray-400 text-xs">Unassigned</span>}
                     </td>
 
-                    {/* Status */}
+                    {/* Status — uses live online state when available */}
                     <td className="px-4 py-3">
-                      <span className={cn('text-xs px-2 py-1 rounded-full font-medium', getStatusColor(v.status))}>
-                        {v.status}
-                      </span>
-                      {v.lastLocation && (
+                      <div className="flex items-center gap-2">
+                        {onlineIds.has(v.id) && (
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                          </span>
+                        )}
+                        <span className={cn('text-xs px-2 py-1 rounded-full font-medium',
+                          onlineIds.has(v.id)
+                            ? v.lastLocation?.engineOn
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                            : getStatusColor(v.status))}>
+                          {onlineIds.has(v.id)
+                            ? (v.lastLocation?.engineOn ? 'ACTIVE' : 'IDLE')
+                            : v.status}
+                        </span>
+                      </div>
+                      {v.lastLocation?.speed != null && (
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {(v.lastLocation.speed ?? 0).toFixed(0)} km/h
+                          {(v.lastLocation.speed).toFixed(0)} km/h
                         </p>
                       )}
                     </td>

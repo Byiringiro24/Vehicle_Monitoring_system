@@ -61,9 +61,11 @@ export const vehicleApi = {
 
 // ─── Telemetry ────────────────────────────────────────────────────────────────
 export const telemetryApi = {
-  getHistory:   (vehicleId: string, params?: object) => apiClient.get(`/telemetry/${vehicleId}`, { params }).then(r => r.data),
-  getLatest:    (vehicleId: string) => apiClient.get(`/telemetry/${vehicleId}/latest`).then(r => r.data),
-  getLocations: () => apiClient.get('/telemetry/locations').then(r => r.data),
+  getHistory:      (vehicleId: string, params?: object) => apiClient.get(`/telemetry/${vehicleId}`, { params }).then(r => r.data),
+  getLatest:       (vehicleId: string) => apiClient.get(`/telemetry/${vehicleId}/latest`).then(r => r.data),
+  getLocations:    () => apiClient.get('/telemetry/locations').then(r => r.data),
+  deleteTelemetry: (vehicleId: string, params: { from: string; to: string }) =>
+    apiClient.delete(`/telemetry/${vehicleId}`, { params }).then(r => r.data),
 };
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────

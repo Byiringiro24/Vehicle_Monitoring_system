@@ -1,28 +1,28 @@
 /**
- * Backend MQTT client
- * Connects to mosquitto (port 1883) to:
- *  1. Publish lock/unlock commands to devices
- *  2. Publish ping requests to devices
- *  3. Subscribe to pong responses to resolve GPS ping promises
+ * Backend MQTT client — connects to mosquitto (port 1883)
+ *
+ * Responsibilities:
+ *  1. Subscribe to artic/+/telemetry — process all incoming GPS data
+ *  2. Subscribe to artic/+/pong     — resolve GPS ping promises
+ *  3. Publish lock/unlock/ping commands to devices
+ *  4. Track which devices are online (seen in last 60s) and emit gps:online/offline
  */
 import mqtt from 'mqtt';
+import { prisma } from '../config/database';
+import { processTelemetry } from './telemetry.service';
+import { getSocketServer } from '../websocket/socketServer';
 import logger from '../utils/logger';
 
 let client: mqtt.MqttClient | null = null;
 
-// Pending ping resolve functions: vehicleId → resolve(boolean)
-const pendingPings = new Map<string, (responded: boolean) => void>();
+// Track last-seen timestamp per deviceToken
+const lastSeen = new Map<string, number>();
+const OFFLINE_THRESHOLD_MS = 45_000; // mark offline if no message for 45s
 
-export function registerPingWaiter(vehicleId: string, resolve: (v: boolean) => void) {
-  pendingPings.set(vehicleId, resolve);
-}
-
-export function resolvePing(vehicleId: string, responded: boolean) {
-  const resolve = pendingPings.get(vehicleId);
-  if (resolve) {
-    pendingPings.delete(vehicleId);
-    resolve(responded);
-  }
+// pong handlers — mqttBroker registers one
+const pongHandlers: Array<(topic: string, msg: Buffer) => void> = [];
+export function onPong(handler: (topic: string, msg: Buffer) => void) {
+  pongHandlers.push(handler);
 }
 
 export function initMqttClient() {
@@ -31,40 +31,118 @@ export function initMqttClient() {
   const url  = `mqtt://${host}:${port}`;
 
   client = mqtt.connect(url, {
-    clientId:        'artic-backend-publisher',
+    clientId:        'artic-backend-bridge',
     reconnectPeriod: 5000,
     connectTimeout:  10000,
   });
 
   client.on('connect', () => {
     logger.info(`MQTT client connected to ${url}`);
-    // Subscribe to all pong topics so we receive GPS ping responses
+
+    // Subscribe to ALL telemetry — this is how we receive GPS from ESP32
+    client!.subscribe('artic/+/telemetry', { qos: 0 }, (err) => {
+      if (err) logger.warn(`Failed to subscribe to telemetry: ${err.message}`);
+      else     logger.info('MQTT client subscribed to artic/+/telemetry');
+    });
+
+    // Subscribe to all pong topics
     client!.subscribe('artic/+/pong', { qos: 0 }, (err) => {
-      if (err) logger.warn(`Failed to subscribe to pong topics: ${err.message}`);
+      if (err) logger.warn(`Failed to subscribe to pong: ${err.message}`);
       else     logger.info('MQTT client subscribed to artic/+/pong');
     });
   });
 
-  client.on('message', (topic: string, message: Buffer) => {
-    // artic/<TOKEN>/pong — resolve any pending GPS ping
+  client.on('message', async (topic: string, message: Buffer) => {
+    // artic/<TOKEN>/telemetry
+    if (topic.endsWith('/telemetry')) {
+      const token = topic.split('/')[1];
+      if (!token) return;
+
+      try {
+        const payload = JSON.parse(message.toString());
+
+        // Look up vehicle by deviceToken
+        const vehicle = await prisma.vehicle.findFirst({
+          where:  { deviceToken: token },
+          select: { id: true, organizationId: true, licensePlate: true },
+        });
+
+        if (!vehicle) {
+          logger.warn(`[MQTT] Unknown device token: ${token.slice(0, 8)}...`);
+          return;
+        }
+
+        // Track online status — emit gps:online on first message after being offline
+        const wasOnline = lastSeen.has(token) && (Date.now() - lastSeen.get(token)!) < OFFLINE_THRESHOLD_MS;
+        lastSeen.set(token, Date.now());
+
+        if (!wasOnline) {
+          // Device just came online — broadcast to dashboard
+          const io = getSocketServer();
+          if (io) {
+            io.to(`org:${vehicle.organizationId}`).emit('gps:online', {
+              vehicleId:    vehicle.id,
+              licensePlate: vehicle.licensePlate,
+              timestamp:    new Date().toISOString(),
+            });
+          }
+          logger.info(`[GPS] Device ONLINE: ${vehicle.licensePlate} (${vehicle.id})`);
+        }
+
+        // Process telemetry — saves to DB, updates lastLocation, emits location:update
+        await processTelemetry(vehicle.id, payload);
+
+      } catch (err) {
+        logger.error(`[MQTT] Telemetry processing error on ${topic}:`, err);
+      }
+      return;
+    }
+
+    // artic/<TOKEN>/pong
     if (topic.endsWith('/pong')) {
-      // Find which vehicle this pong belongs to by matching the token
-      // The pendingPings map is keyed by vehicleId — we need to look it up
-      // We'll broadcast to all pending pings and let mqttBroker handle resolution
-      logger.debug(`Backend MQTT client received pong on ${topic}: ${message.toString()}`);
-      // Emit to the pong handler in mqttBroker
-      pongHandlers.forEach((handler) => handler(topic, message));
+      logger.debug(`[MQTT] Pong on ${topic}`);
+      pongHandlers.forEach(h => h(topic, message));
+      return;
     }
   });
 
   client.on('error',   (err) => logger.warn(`MQTT client error: ${err.message}`));
   client.on('offline', () => logger.warn('MQTT client offline'));
-}
+  client.on('reconnect', () => logger.info('MQTT client reconnecting…'));
 
-// Registry of pong handlers — mqttBroker registers one
-const pongHandlers: Array<(topic: string, msg: Buffer) => void> = [];
-export function onPong(handler: (topic: string, msg: Buffer) => void) {
-  pongHandlers.push(handler);
+  // ── Offline detection — check every 30s if any device has gone silent ────────
+  setInterval(async () => {
+    const now = Date.now();
+    const io  = getSocketServer();
+
+    for (const [token, ts] of lastSeen.entries()) {
+      if (now - ts > OFFLINE_THRESHOLD_MS) {
+        lastSeen.delete(token);
+        try {
+          const vehicle = await prisma.vehicle.findFirst({
+            where:  { deviceToken: token },
+            select: { id: true, organizationId: true, licensePlate: true },
+          });
+          if (vehicle) {
+            // Update DB status
+            await prisma.vehicle.update({
+              where: { id: vehicle.id },
+              data:  { status: 'OFFLINE' },
+            }).catch(() => {});
+            // Broadcast to dashboard
+            if (io) {
+              io.to(`org:${vehicle.organizationId}`).emit('gps:offline', {
+                vehicleId:    vehicle.id,
+                licensePlate: vehicle.licensePlate,
+                timestamp:    new Date().toISOString(),
+              });
+            }
+            logger.info(`[GPS] Device OFFLINE: ${vehicle.licensePlate}`);
+          }
+        } catch {}
+      }
+    }
+  }, 30_000);
 }
 
 export function publishCommand(topic: string, payload: object) {
