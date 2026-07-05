@@ -13,23 +13,50 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
+// Vehicle is considered ACTIVE if telemetry arrived in the last 2 minutes
+function isRecentlyActive(updatedAt: string | null | undefined): boolean {
+  if (!updatedAt) return false;
+  return (Date.now() - new Date(updatedAt).getTime()) < 2 * 60 * 1000;
+}
+
+function resolveStatus(loc: LocationData): string {
+  if (!isRecentlyActive(loc.updatedAt)) return 'OFFLINE';
+  if (!loc.engineOn) return 'IDLE';
+  return 'ACTIVE';
+}
+
 function createVehicleIcon(status: string, selected: boolean, plate: string) {
   const colors: Record<string, string> = {
-    ACTIVE: '#22c55e', IDLE: '#f59e0b', OFFLINE: '#6b7280',
-    MAINTENANCE: '#f97316', DECOMMISSIONED: '#ef4444',
+    ACTIVE:         '#22c55e',
+    IDLE:           '#f59e0b',
+    OFFLINE:        '#6b7280',
+    MAINTENANCE:    '#f97316',
+    DECOMMISSIONED: '#ef4444',
+    OUT_OF_SERVICE: '#dc2626',
+    STOLEN:         '#7c3aed',
+    RENTED:         '#0ea5e9',
+    LEASED:         '#06b6d4',
+    AVAILABLE:      '#84cc16',
+    RESERVED:       '#a78bfa',
   };
-  const color = colors[status] ?? '#6b7280';
-  const size  = selected ? 40 : 32;
-  // Show plate number label on the marker
-  const shortPlate = plate.replace(/\s+/g, '').slice(-6);
+  const color   = colors[status] ?? '#6b7280';
+  const dotSize = selected ? 14 : 10;
+  const pulse   = status === 'ACTIVE';
+
   return L.divIcon({
-    html: `<div style="position:relative;display:inline-flex;flex-direction:column;align-items:center;gap:2px">
-      <div style="background:white;border:2px solid ${color};color:${color};font-size:9px;font-weight:bold;padding:1px 4px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${shortPlate}</div>
-      <div style="width:${selected ? 14 : 10}px;height:${selected ? 14 : 10}px;background:${color};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></div>
-    </div>`,
+    html: `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">
+      <div style="background:white;border:2px solid ${color};color:${color};font-size:9px;font-weight:bold;padding:1px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.25)">
+        ${plate.replace(/\s+/g, '').slice(-7)}
+      </div>
+      <div style="position:relative;width:${dotSize + 8}px;height:${dotSize + 8}px;display:flex;align-items:center;justify-content:center">
+        ${pulse ? `<div style="position:absolute;width:${dotSize + 8}px;height:${dotSize + 8}px;border-radius:50%;background:${color};opacity:.25;animation:ping 1.5s cubic-bezier(0,0,.2,1) infinite"></div>` : ''}
+        <div style="width:${dotSize}px;height:${dotSize}px;background:${color};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
+      </div>
+    </div>
+    <style>@keyframes ping{75%,100%{transform:scale(2);opacity:0}}</style>`,
     className: '',
-    iconSize:   [selected ? 60 : 50, selected ? 32 : 26],
-    iconAnchor: [selected ? 30 : 25, selected ? 32 : 26],
+    iconSize:   [56, selected ? 36 : 30],
+    iconAnchor: [28, selected ? 36 : 30],
   });
 }
 
@@ -42,6 +69,18 @@ function FlyToSelected({ locations, selectedId }: { locations: LocationData[]; s
       map.flyTo([loc.latitude, loc.longitude], 16, { duration: 1.5 });
     }
   }, [selectedId, locations, map]);
+  return null;
+}
+
+// Auto-fit all markers on first mount
+function FitBounds({ locations }: { locations: LocationData[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (locations.length === 0) return;
+    const bounds = L.latLngBounds(locations.map(l => [l.latitude, l.longitude]));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // only on mount
   return null;
 }
 
@@ -74,71 +113,106 @@ interface LiveMapProps {
 }
 
 export default function LiveMap({ locations, selectedId, onSelect }: LiveMapProps) {
-  const valid = locations.filter(l => l.latitude && l.longitude);
+  // Only show vehicles with valid GPS coordinates
+  const valid = locations.filter(l =>
+    l.latitude && l.longitude &&
+    Math.abs(l.latitude) > 0.001 && Math.abs(l.longitude) > 0.001
+  );
+
   const center: [number, number] = valid.length
     ? [valid[0].latitude, valid[0].longitude]
-    : [-1.9403, 29.8739]; // Rwanda center
+    : [-1.9403, 29.8739]; // Rwanda centre
+
+  const activeCount  = valid.filter(l => isRecentlyActive(l.updatedAt) && l.engineOn).length;
+  const idleCount    = valid.filter(l => isRecentlyActive(l.updatedAt) && !l.engineOn).length;
+  const offlineCount = valid.filter(l => !isRecentlyActive(l.updatedAt)).length;
 
   return (
-    <MapContainer center={center} zoom={12} style={{ width: '100%', height: '100%' }}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-      />
-      <FlyToSelected locations={valid} selectedId={selectedId} />
-      {valid.map((loc) => (
-        <Marker
-          key={loc.vehicleId}
-          position={[loc.latitude, loc.longitude]}
-          icon={createVehicleIcon(
-            loc.vehicle?.status ?? 'OFFLINE',
-            selectedId === loc.vehicleId,
-            loc.vehicle?.licensePlate ?? ''
-          )}
-          eventHandlers={{ click: () => onSelect(loc.vehicleId) }}>
-          <Popup maxWidth={260}>
-            <div className="min-w-[14rem] text-sm">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-bold text-gray-900 text-base">{loc.vehicle?.licensePlate}</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  loc.vehicle?.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-                  loc.vehicle?.status === 'IDLE'   ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-gray-100 text-gray-700'
-                }`}>{loc.vehicle?.status}</span>
-              </div>
-              <p className="text-gray-500 text-xs mb-3">{loc.vehicle?.name}</p>
-              {loc.address && (
-                <p className="text-gray-700 text-xs mb-2 flex items-start gap-1">
-                  <span>📍</span><span>{loc.address}</span>
-                </p>
-              )}
-              <div className="grid grid-cols-2 gap-1 text-xs">
-                <div className="bg-gray-50 rounded p-1.5">
-                  <p className="text-gray-500">Speed</p>
-                  <p className="font-semibold">{formatSpeed(loc.speed)}</p>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* Legend overlay */}
+      <div style={{
+        position: 'absolute', top: 10, right: 10, zIndex: 1000,
+        background: 'white', borderRadius: 8, padding: '8px 12px',
+        boxShadow: '0 2px 8px rgba(0,0,0,.15)', fontSize: 11,
+        display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140,
+      }}>
+        <div style={{ fontWeight: 700, marginBottom: 2, color: '#374151' }}>
+          {valid.length} vehicle{valid.length !== 1 ? 's' : ''} on map
+        </div>
+        {[
+          { color: '#22c55e', label: `Active (${activeCount})` },
+          { color: '#f59e0b', label: `Idle (${idleCount})` },
+          { color: '#6b7280', label: `Offline (${offlineCount})` },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, border: '1.5px solid white', boxShadow: '0 0 0 1px #ddd' }} />
+            <span style={{ color: '#6b7280' }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      <MapContainer center={center} zoom={12} style={{ width: '100%', height: '100%' }}>
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        />
+        <FitBounds locations={valid} />
+        <FlyToSelected locations={valid} selectedId={selectedId} />
+
+        {valid.map((loc) => {
+          const status = resolveStatus(loc);
+          const active = isRecentlyActive(loc.updatedAt);
+          return (
+            <Marker
+              key={loc.vehicleId}
+              position={[loc.latitude, loc.longitude]}
+              icon={createVehicleIcon(status, selectedId === loc.vehicleId, loc.vehicle?.licensePlate ?? '')}
+              eventHandlers={{ click: () => onSelect(loc.vehicleId) }}>
+
+              <Popup maxWidth={270}>
+                <div style={{ minWidth: 220, fontSize: 13 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>{loc.vehicle?.licensePlate}</span>
+                    <span style={{
+                      fontSize: 10, padding: '2px 7px', borderRadius: 999, fontWeight: 600,
+                      background: status === 'ACTIVE' ? '#dcfce7' : status === 'IDLE' ? '#fef9c3' : '#f3f4f6',
+                      color:      status === 'ACTIVE' ? '#166534' : status === 'IDLE' ? '#854d0e' : '#6b7280',
+                    }}>{status}</span>
+                  </div>
+                  <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 6 }}>{loc.vehicle?.name}</p>
+                  {!active && (
+                    <p style={{ color: '#ef4444', fontSize: 11, marginBottom: 6 }}>
+                      ⚠ GPS offline — last seen {formatDate(loc.updatedAt)}
+                    </p>
+                  )}
+                  {loc.address && (
+                    <p style={{ color: '#374151', fontSize: 11, marginBottom: 8 }}>📍 {loc.address}</p>
+                  )}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                    {[
+                      ['Speed',   formatSpeed(loc.speed)],
+                      ['Fuel',    formatFuel(loc.fuelLevel)],
+                      ['Engine',  loc.engineOn ? 'ON ✅' : 'OFF'],
+                      ['Updated', formatDate(loc.updatedAt)],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{ background: '#f9fafb', borderRadius: 6, padding: '5px 7px' }}>
+                        <div style={{ color: '#9ca3af', fontSize: 10 }}>{label}</div>
+                        <div style={{ fontWeight: 600, fontSize: 12 }}>{val}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="bg-gray-50 rounded p-1.5">
-                  <p className="text-gray-500">Fuel</p>
-                  <p className="font-semibold">{formatFuel(loc.fuelLevel)}</p>
-                </div>
-                <div className="bg-gray-50 rounded p-1.5">
-                  <p className="text-gray-500">Engine</p>
-                  <p className={`font-semibold ${loc.engineOn ? 'text-green-600' : 'text-gray-400'}`}>
-                    {loc.engineOn ? 'ON' : 'OFF'}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded p-1.5">
-                  <p className="text-gray-500">Updated</p>
-                  <p className="font-semibold text-xs">{formatDate(loc.updatedAt)}</p>
-                </div>
-              </div>
-            </div>
-          </Popup>
-          <Tooltip direction="top" offset={[0, -10]} opacity={0.9} permanent={false}>
-            <span className="text-xs font-bold">{loc.vehicle?.licensePlate}</span>
-          </Tooltip>
-        </Marker>
-      ))}
-    </MapContainer>
+              </Popup>
+
+              <Tooltip direction="top" offset={[0, -8]} opacity={0.9}>
+                <span style={{ fontSize: 11, fontWeight: 700 }}>
+                  {loc.vehicle?.licensePlate} · {status}
+                </span>
+              </Tooltip>
+            </Marker>
+          );
+        })}
+      </MapContainer>
+    </div>
   );
 }
