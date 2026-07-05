@@ -1,11 +1,16 @@
 'use client';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip } from 'react-leaflet';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatSpeed, formatFuel, formatDate } from '@/lib/utils';
+import { getLiveStatus } from '@/lib/liveStatus';
+import { reverseGeocode } from '@/lib/geocode';
 
-// Fix default icon
+// Re-export so pages can import getLiveStatus without touching Leaflet
+export { getLiveStatus } from '@/lib/liveStatus';
+
+// Fix default Leaflet icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -13,13 +18,22 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// ── Live status based ONLY on last telemetry timestamp ────────────────────────
-const STALE_MS = 30_000; // 30s — matches 2× the 15s ESP32 send interval
+// ── Address lookup component — shows inside Popup ─────────────────────────────
+function GeoAddress({ lat, lon }: { lat: number; lon: number }) {
+  const [address, setAddress] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    reverseGeocode(lat, lon).then(addr => {
+      if (!cancelled) { setAddress(addr); setLoading(false); }
+    });
+    return () => { cancelled = true; };
+  }, [lat, lon]);
 
-export function getLiveStatus(updatedAt: string | null | undefined, engineOn: boolean): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
-  if (!updatedAt) return 'OFFLINE';
-  if (Date.now() - new Date(updatedAt).getTime() > STALE_MS) return 'OFFLINE';
-  return engineOn ? 'ACTIVE' : 'IDLE';
+  if (loading) return <p style={{ color: '#9ca3af', fontSize: 10, margin: '4px 0' }}>📍 Looking up address…</p>;
+  if (!address) return <p style={{ color: '#9ca3af', fontSize: 10, margin: '4px 0' }}>📍 Address unavailable</p>;
+  return <p style={{ color: '#374151', fontSize: 11, margin: '4px 0', lineHeight: 1.4 }}>📍 {address}</p>;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -216,6 +230,9 @@ export default function LiveMap({ locations, selectedId, onSelect }: Props) {
                       }}>{status}</span>
                     </div>
                     <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 8 }}>{loc.vehicle?.name}</p>
+
+                    {/* Plain-text address — reverse geocoded */}
+                    <GeoAddress lat={pos[0]} lon={pos[1]} />
 
                     {/* Stats grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>

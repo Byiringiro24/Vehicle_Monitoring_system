@@ -9,8 +9,8 @@ import { formatDate, formatSpeed } from '@/lib/utils';
 import { Search, Truck, Lock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
-// getLiveStatus is a named export — import separately from the dynamic default
-import { getLiveStatus } from '@/components/maps/LiveMap';
+// getLiveStatus lives in lib/liveStatus — no Leaflet, safe for SSR
+import { getLiveStatus } from '@/lib/liveStatus';
 import type { LocationData } from '@/components/maps/LiveMap';
 
 const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
