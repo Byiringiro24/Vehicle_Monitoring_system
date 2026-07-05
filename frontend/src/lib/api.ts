@@ -106,12 +106,15 @@ export const geofenceApi = {
   update: (id: string, data: object) => apiClient.put(`/geofences/${id}`, data).then(r => r.data),
   delete: (id: string) => apiClient.delete(`/geofences/${id}`),
   events: (id: string) => apiClient.get(`/geofences/${id}/events`).then(r => r.data),
+  assignVehicles: (id: string, vehicleIds: string[]) =>
+    apiClient.patch(`/geofences/${id}/vehicles`, { vehicleIds }).then(r => r.data),
 };
 
 // ─── Reports ─────────────────────────────────────────────────────────────────
 export const reportApi = {
-  trips:        (params?: object) => apiClient.get('/reports/trips', { params }).then(r => r.data),
-  alertsSummary:(params?: object) => apiClient.get('/reports/alerts-summary', { params }).then(r => r.data),
+  trips:          (params?: object) => apiClient.get('/reports/trips', { params }).then(r => r.data),
+  alertsSummary:  (params?: object) => apiClient.get('/reports/alerts-summary', { params }).then(r => r.data),
+  dailyPayments:  (params?: object) => apiClient.get('/reports/daily-payments', { params }).then(r => r.data),
 };
 
 // ─── Financial ────────────────────────────────────────────────────────────────

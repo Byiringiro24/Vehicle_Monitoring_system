@@ -25,6 +25,11 @@ export async function checkGeofences(vehicleId: string, lat: number, lng: number
   });
 
   for (const geo of geofences) {
+    // Skip if this geofence has specific vehicles assigned and this vehicle isn't one of them
+    const geoAny = geo as any;
+    if (geoAny.vehicleIds && geoAny.vehicleIds.length > 0 && !geoAny.vehicleIds.includes(vehicleId)) {
+      continue;
+    }
     const coords = geo.coordinates as [number, number][];
     const inside = pointInPolygon(lat, lng, coords);
 

@@ -85,10 +85,10 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       },
     });
 
-    // 4. Update vehicle status
-    const newStatus = data.engineOn
-      ? (data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE')
-      : 'OFFLINE';
+    // 4. Update vehicle status based on GPS activity
+    // ACTIVE = moving (speed > 2 km/h), IDLE = stationary with GPS signal
+    // NEVER set to OFFLINE from telemetry — offline is detected by absence of telemetry
+    const newStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
     await prisma.vehicle.update({ where: { id: vehicleId }, data: { status: newStatus as any } });
   }
 
@@ -107,8 +107,9 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       io.to(`org:${vehicle.organizationId}`).emit('telemetry:update', {
         vehicleId, data: record, timestamp: new Date().toISOString(),
       });
-      // Emit location update for live map — only if we have GPS
+      // Emit location update for live map — send whenever we have GPS coords
       if (data.latitude !== undefined && data.longitude !== undefined && data.latitude && data.longitude) {
+        const liveStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
         io.to(`org:${vehicle.organizationId}`).emit('location:update', {
           vehicleId,
           latitude:    data.latitude,
@@ -123,7 +124,7 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
             id:           vehicleId,
             name:         vehicle.name,
             licensePlate: vehicle.licensePlate,
-            status:       data.engineOn ? (data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE') : 'OFFLINE',
+            status:       liveStatus,
             fleet:        vehicle.fleet,
           },
         });

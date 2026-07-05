@@ -1016,6 +1016,8 @@ model Geofence {
   alertOnEntry   Boolean      @default(true)
   alertOnExit    Boolean      @default(true)
   isActive       Boolean      @default(true)
+  // Store array of vehicleIds this geofence applies to (empty = all vehicles)
+  vehicleIds     String[]     @default([])
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
