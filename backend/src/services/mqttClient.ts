@@ -73,7 +73,7 @@ export function publishCommand(topic: string, payload: object) {
     return false;
   }
   const msg = JSON.stringify(payload);
-  client.publish(topic, msg, { qos: 1, retain: true }, (err?: Error) => {
+  client.publish(topic, msg, { qos: 1, retain: false }, (err?: Error) => {
     if (err) logger.error(`MQTT publish error: ${err.message}`);
     else     logger.info(`MQTT command sent → ${topic}: ${msg}`);
   });
