@@ -24,12 +24,14 @@ async function bootstrap() {
   const httpServer = createServer(app);
   initSocketServer(httpServer);
 
-  // MQTT broker — skip if port is already in use (e.g. mosquitto on Ubuntu)
+  // MQTT broker on port 1884 (Aedes) — ESP32 connects to mosquitto on 1883
+  // Backend bridges mosquitto↔Aedes via mqttClient subscription
+  const AEDES_PORT = parseInt(process.env.AEDES_PORT ?? '1884', 10);
   try {
-    initMqttBroker(MQTT_PORT);
+    initMqttBroker(AEDES_PORT);
   } catch (err: any) {
     if (err?.code === 'EADDRINUSE') {
-      logger.warn(`MQTT port ${MQTT_PORT} already in use — MQTT broker disabled. Set MQTT_PORT to a free port (e.g. 1884).`);
+      logger.warn(`Aedes port ${AEDES_PORT} already in use.`);
     } else {
       throw err;
     }

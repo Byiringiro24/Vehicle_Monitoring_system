@@ -52,26 +52,26 @@ export function TopBar() {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
+    <header className="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 shrink-0 z-10">
       <div>
-        <h2 className="text-sm font-semibold text-gray-700">{user?.organization?.name ?? 'ARTIC VMS'}</h2>
-        <p className="text-xs text-gray-400">Vehicle Monitoring System</p>
+        <h2 className="text-sm font-semibold text-white">{user?.organization?.name ?? 'ARTIC VMS'}</h2>
+        <p className="text-xs text-gray-500">Vehicle Management System</p>
       </div>
       <div className="flex items-center gap-2">
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition"
+          className="p-2 rounded-lg text-gray-500 hover:bg-gray-800 transition"
           aria-label="Toggle theme">
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
         {/* Notification bell */}
         <div className="relative" ref={bellRef}>
           <button
             onClick={() => { setShowNotifs(!showNotifs); if (!showNotifs) markAllRead(); }}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition relative"
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-800 transition relative"
             aria-label="Notifications">
-            <Bell size={18} />
+            <Bell size={16} />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1 font-bold">
                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -80,17 +80,14 @@ export function TopBar() {
           </button>
 
           {showNotifs && (
-            <div className="absolute right-0 top-10 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <p className="font-semibold text-sm text-gray-800">Notifications</p>
-                <button
-                  onClick={clearAll}
-                  title="Clear all"
-                  className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600">
+            <div className="absolute right-0 top-10 w-80 bg-gray-800 rounded-xl shadow-2xl border border-gray-700 z-50 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+                <p className="font-semibold text-sm text-white">Notifications</p>
+                <button onClick={clearAll} className="p-1 hover:bg-gray-700 rounded text-gray-400">
                   <X size={14} />
                 </button>
               </div>
-              <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+              <div className="max-h-72 overflow-y-auto divide-y divide-gray-700">
                 {notifications.length ? notifications.map(n => (
                   <div key={n.id} className={cn('px-4 py-3 text-sm', getSeverityColor(n.severity))}>
                     <p className="font-medium">{n.title}</p>
@@ -98,7 +95,7 @@ export function TopBar() {
                     <p className="text-xs opacity-50 mt-0.5">{formatDate(n.timestamp)}</p>
                   </div>
                 )) : (
-                  <div className="py-8 text-center text-gray-400 text-sm">
+                  <div className="py-8 text-center text-gray-500 text-sm">
                     <Bell size={24} className="mx-auto mb-2 opacity-20" />
                     No notifications
                   </div>
@@ -111,8 +108,8 @@ export function TopBar() {
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">
-          <LogOut size={16} /> Logout
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition">
+          <LogOut size={15} /> Logout
         </button>
       </div>
     </header>
