@@ -30,7 +30,7 @@ export async function pingGpsDevice(vehicleId: string, timeoutMs = 8000): Promis
       _broker.publish(
         { cmd: 'publish', qos: 0, dup: false, retain: false,
           topic: pingTopic, payload: Buffer.from(JSON.stringify({ ts: Date.now() })) },
-        (err) => { if (err) logger.warn(`Ping publish error: ${err.message}`); }
+        (err: Error | null) => { if (err) logger.warn(`Ping publish error: ${err.message}`); }
       );
       logger.debug(`GPS ping sent to vehicle ${vehicleId} on topic ${pingTopic}`);
     } else {
