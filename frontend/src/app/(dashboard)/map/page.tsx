@@ -91,11 +91,13 @@ export default function LiveMapPage() {
 
   // Live location map: vehicleId → LocationData
   const [locations, setLocations] = useState<Record<string, LocationData>>({});
+  // Ground truth: which vehicle IDs have an active MQTT connection right now
+  const [connectedDevices, setConnectedDevices] = useState<Set<string>>(new Set());
 
-  // Re-render every 10s so status badges update even when no new telemetry
-  const [tick, setTick] = useState(0);
+  // Re-render every 5s so status badges refresh automatically
+  const [, setTick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 10_000);
+    const t = setInterval(() => setTick(n => n + 1), 5_000);
     return () => clearInterval(t);
   }, []);
 
@@ -129,7 +131,7 @@ export default function LiveMapPage() {
     setLocations(prev => ({ ...map, ...prev }));  // keep live updates on top
   }, [initialLocations]);
 
-  // Socket.IO — live GPS updates + offline detection
+  // Socket.IO — live GPS updates + device online/offline
   useEffect(() => {
     if (!accessToken) return;
     const socket = getSocket(accessToken);
@@ -137,7 +139,7 @@ export default function LiveMapPage() {
     socket.on('connect',    () => setWsConnected(true));
     socket.on('disconnect', () => setWsConnected(false));
 
-    // ── Live position from ESP32 → update marker immediately (watchPosition style)
+    // ── Live GPS position — update marker position immediately
     socket.on('location:update', (payload: LocationData) => {
       setLocations(prev => ({
         ...prev,
@@ -149,23 +151,38 @@ export default function LiveMapPage() {
       }));
     });
 
-    // ── Offline detection job (runs every 60s on backend)
-    socket.on('vehicles:offline', (payload: { vehicleIds: string[] }) => {
-      // Don't change the position, just let getLiveStatus() compute OFFLINE from stale timestamp
-      // The updatedAt timestamp is already old, so no action needed
-    });
-
-    // ── GPS device connected/disconnected from MQTT
-    socket.on('gps:online',  (p: { vehicleId: string }) => {
+    // ── ESP32 connected to MQTT broker — device is ONLINE
+    socket.on('gps:online', (p: { vehicleId: string }) => {
+      setConnectedDevices(prev => { const s = new Set(prev); s.add(p.vehicleId); return s; });
+      // Also refresh updatedAt so status flips to non-OFFLINE
       setLocations(prev => prev[p.vehicleId]
         ? { ...prev, [p.vehicleId]: { ...prev[p.vehicleId], updatedAt: new Date().toISOString() } }
         : prev);
     });
 
+    // ── ESP32 disconnected from MQTT broker — device is OFFLINE
+    socket.on('gps:offline', (p: { vehicleId: string }) => {
+      setConnectedDevices(prev => {
+        const next = new Set(prev);
+        next.delete(p.vehicleId);
+        return next;
+      });
+    });
+
+    // ── Backend offline detection (stale vehicles)
+    socket.on('vehicles:offline', (p: { vehicleIds: string[] }) => {
+      setConnectedDevices(prev => {
+        const next = new Set(prev);
+        for (const id of p.vehicleIds) next.delete(id);
+        return next;
+      });
+    });
+
     return () => {
       socket.off('location:update');
-      socket.off('vehicles:offline');
       socket.off('gps:online');
+      socket.off('gps:offline');
+      socket.off('vehicles:offline');
     };
   }, [accessToken]);
 
@@ -179,6 +196,16 @@ export default function LiveMapPage() {
     onError: () => toast.error('Command failed — check device connection'),
   });
 
+  // ── Compute live status using connectedDevices as ground truth ───────────────
+  // Priority: if device is in connectedDevices set → use engineOn to determine ACTIVE/IDLE
+  //           otherwise → use timestamp staleness (getLiveStatus)
+  function getStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
+    if (connectedDevices.has(loc.vehicleId)) {
+      return loc.engineOn ? 'ACTIVE' : 'IDLE';
+    }
+    return getLiveStatus(loc.updatedAt, loc.engineOn);
+  }
+
   // Build sorted, filtered list
   const locationList = Object.values(locations);
   const filtered = locationList.filter(l =>
@@ -189,15 +216,13 @@ export default function LiveMapPage() {
 
   // Sort: ACTIVE → IDLE → OFFLINE
   const statusOrder = { ACTIVE: 0, IDLE: 1, OFFLINE: 2 };
-  const sorted = [...filtered].sort((a, b) => {
-    const sa = getLiveStatus(a.updatedAt, a.engineOn);
-    const sb = getLiveStatus(b.updatedAt, b.engineOn);
-    return (statusOrder[sa] ?? 2) - (statusOrder[sb] ?? 2);
-  });
+  const sorted = [...filtered].sort((a, b) =>
+    (statusOrder[getStatus(a)] ?? 2) - (statusOrder[getStatus(b)] ?? 2)
+  );
 
-  const activeCount  = locationList.filter(l => getLiveStatus(l.updatedAt, l.engineOn) === 'ACTIVE').length;
-  const idleCount    = locationList.filter(l => getLiveStatus(l.updatedAt, l.engineOn) === 'IDLE').length;
-  const offlineCount = locationList.filter(l => getLiveStatus(l.updatedAt, l.engineOn) === 'OFFLINE').length;
+  const activeCount  = locationList.filter(l => getStatus(l) === 'ACTIVE').length;
+  const idleCount    = locationList.filter(l => getStatus(l) === 'IDLE').length;
+  const offlineCount = locationList.filter(l => getStatus(l) === 'OFFLINE').length;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] -m-6 overflow-hidden">
@@ -252,7 +277,7 @@ export default function LiveMapPage() {
           )}
 
           {sorted.map(loc => {
-            const status   = getLiveStatus(loc.updatedAt, loc.engineOn);
+            const status   = getStatus(loc);
             const isActive = status === 'ACTIVE';
             const isIdle   = status === 'IDLE';
             const hasGps   = !!(loc.latitude && loc.longitude && Math.abs(loc.latitude) > 0.001);
@@ -348,6 +373,7 @@ export default function LiveMapPage() {
           locations={sorted}
           selectedId={selectedId}
           onSelect={setSelectedId}
+          connectedDevices={connectedDevices}
         />
       </div>
 

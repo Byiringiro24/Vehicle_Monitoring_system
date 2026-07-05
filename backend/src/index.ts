@@ -38,6 +38,33 @@ async function bootstrap() {
   // MQTT publisher client — used to send lock/unlock commands to devices
   initMqttClient();
 
+  // ── Auto-ping job — ping all vehicles every 15 seconds ────────────────────
+  // This keeps the gps:online/gps:offline events accurate and auto-resolves
+  // GPS status without requiring manual button clicks
+  setInterval(async () => {
+    try {
+      const { getMqttClient } = await import('./services/mqttClient');
+      const mqttClient = getMqttClient();
+      if (!mqttClient?.connected) return;
+
+      // Get all vehicles with device tokens
+      const vehicles = await prisma.vehicle.findMany({
+        select: { id: true, deviceToken: true, organizationId: true },
+      });
+
+      for (const vehicle of vehicles) {
+        const pingTopic = `artic/${vehicle.deviceToken}/ping`;
+        mqttClient.publish(pingTopic, JSON.stringify({ ts: Date.now(), auto: true }), { qos: 0 });
+      }
+
+      if (vehicles.length > 0) {
+        logger.debug(`Auto-pinged ${vehicles.length} device(s)`);
+      }
+    } catch (err) {
+      logger.error('Auto-ping error', err);
+    }
+  }, 15_000);
+
   // ── Offline detection job ──────────────────────────────────────────────────
   // Every 60 seconds: mark vehicles OFFLINE if their last telemetry is > 3 minutes old
   setInterval(async () => {
