@@ -25,7 +25,9 @@ onPong(async (topic: string) => {
     if (resolve) {
       pendingPings.delete(vehicle.id);
       resolve(true);
-      logger.debug(`GPS pong resolved for vehicle ${vehicle.id}`);
+      logger.info(`[PING] GPS pong received — vehicle ${vehicle.id} is ONLINE`);
+    } else {
+      logger.info(`[PING] GPS pong received for vehicle ${vehicle.id} but no pending ping (may have timed out)`);
     }
     // Update lastCommunication
     await prisma.gpsDevice.updateMany({
@@ -57,17 +59,19 @@ export async function pingGpsDevice(vehicleId: string, timeoutMs = 8000): Promis
     pendingPings.set(vehicleId, resolve);
 
     const pingTopic = `artic/${vehicle.deviceToken}/ping`;
+    logger.info(`[PING] Sending GPS ping to ${pingTopic} (vehicleId: ${vehicleId})`);
+
     mqttClient.publish(
       pingTopic,
       JSON.stringify({ ts: Date.now() }),
       { qos: 0, retain: false },
       (err?: Error) => {
         if (err) {
-          logger.warn(`GPS ping publish error: ${err.message}`);
+          logger.warn(`[PING] Publish error: ${err.message}`);
           pendingPings.delete(vehicleId);
           resolve(false);
         } else {
-          logger.debug(`GPS ping sent to vehicle ${vehicleId} on ${pingTopic}`);
+          logger.info(`[PING] Published successfully — waiting up to ${timeoutMs}ms for pong`);
         }
       }
     );
