@@ -151,6 +151,15 @@ export default function LiveMapPage() {
       }));
     });
 
+    // ── Heartbeat — device is online but may not have GPS fix
+    // Updates the updatedAt so status stays ONLINE even when stationary
+    socket.on('device:heartbeat', (p: { vehicleId: string; updatedAt: string }) => {
+      setLocations(prev => {
+        if (!prev[p.vehicleId]) return prev;
+        return { ...prev, [p.vehicleId]: { ...prev[p.vehicleId], updatedAt: p.updatedAt } };
+      });
+    });
+
     // ── ESP32 connected to MQTT broker — device is ONLINE
     socket.on('gps:online', (p: { vehicleId: string }) => {
       setConnectedDevices(prev => { const s = new Set(prev); s.add(p.vehicleId); return s; });
@@ -180,6 +189,7 @@ export default function LiveMapPage() {
 
     return () => {
       socket.off('location:update');
+      socket.off('device:heartbeat');
       socket.off('gps:online');
       socket.off('gps:offline');
       socket.off('vehicles:offline');

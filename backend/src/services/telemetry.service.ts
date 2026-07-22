@@ -103,11 +103,25 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       },
     });
     if (vehicle) {
+      const now = new Date().toISOString();
+
       // Emit raw telemetry for charts
       io.to(`org:${vehicle.organizationId}`).emit('telemetry:update', {
-        vehicleId, data: record, timestamp: new Date().toISOString(),
+        vehicleId, data: record, timestamp: now,
       });
-      // Emit location update for live map — send whenever we have GPS coords
+
+      // Always emit a heartbeat so the frontend knows device is online
+      // (even when there's no GPS fix — device is still connected)
+      io.to(`org:${vehicle.organizationId}`).emit('device:heartbeat', {
+        vehicleId,
+        updatedAt: now,
+        engineOn:  data.engineOn ?? false,
+        engineLocked: (data as any).engineLocked ?? false,
+        gpsModuleOn: (data as any).gpsModuleOn ?? false,
+        signalQuality: (data as any).signalQuality ?? 0,
+      });
+
+      // Emit location update for live map — only when we have valid GPS coords
       if (data.latitude !== undefined && data.longitude !== undefined && data.latitude && data.longitude) {
         const liveStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
         io.to(`org:${vehicle.organizationId}`).emit('location:update', {
@@ -119,7 +133,7 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
           fuelLevel:   data.fuelLevel,
           engineTemp:  data.engineTemp,
           engineOn:    data.engineOn ?? false,
-          updatedAt:   new Date().toISOString(),
+          updatedAt:   now,
           vehicle: {
             id:           vehicleId,
             name:         vehicle.name,

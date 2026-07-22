@@ -142,6 +142,14 @@ export const contractApi = {
   markPaymentPaid: (paymentId: string, data: object) => apiClient.patch(`/contracts/payments/${paymentId}/mark-paid`, data).then(r => r.data),
 };
 
+// ─── Device remote commands ───────────────────────────────────────────────────
+export const deviceApi = {
+  sendCommand: (vehicleId: string, command: string, params?: object) =>
+    apiClient.post(`/devices/${vehicleId}/command`, { command, ...params }).then(r => r.data),
+  updateSim: (vehicleId: string, simNumber: string) =>
+    apiClient.patch(`/devices/${vehicleId}/sim`, { simNumber }).then(r => r.data),
+};
+
 // ─── Expenses ────────────────────────────────────────────────────────────────
 export const expenseApi = {
   list:    (params?: object) => apiClient.get('/expenses', { params }).then(r => r.data),

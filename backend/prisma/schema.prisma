@@ -390,6 +390,7 @@ model Vehicle {
 
   // GPS / Device Auth (deviceToken = MQTT password for this vehicle)
   deviceToken     String         @unique @default(uuid())
+  simNumber       String?        // SIM card number installed in GPS device
 
   // Ownership
   ownerName       String?

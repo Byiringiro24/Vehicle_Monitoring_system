@@ -17,7 +17,7 @@ let client: mqtt.MqttClient | null = null;
 
 // Track last-seen timestamp per deviceToken
 const lastSeen = new Map<string, number>();
-const OFFLINE_THRESHOLD_MS = 45_000; // mark offline if no message for 45s
+const OFFLINE_THRESHOLD_MS = 10_000; // mark offline if no message for 10s (5× the 2s send interval)
 
 // pong handlers — mqttBroker registers one
 const pongHandlers: Array<(topic: string, msg: Buffer) => void> = [];
@@ -110,7 +110,7 @@ export function initMqttClient() {
   client.on('offline', () => logger.warn('MQTT client offline'));
   client.on('reconnect', () => logger.info('MQTT client reconnecting…'));
 
-  // ── Offline detection — check every 30s if any device has gone silent ────────
+  // ── Offline detection — check every 5s if any device has gone silent ────────
   setInterval(async () => {
     const now = Date.now();
     const io  = getSocketServer();
@@ -142,7 +142,7 @@ export function initMqttClient() {
         } catch {}
       }
     }
-  }, 30_000);
+  }, 5_000);
 }
 
 export function publishCommand(topic: string, payload: object) {

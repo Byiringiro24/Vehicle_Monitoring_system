@@ -20,6 +20,7 @@ import organizationRoutes from './routes/organization.routes';
 import financialRoutes    from './routes/financial.routes';
 import contractRoutes     from './routes/contracts.routes';
 import expenseRoutes      from './routes/expenses.routes';
+import deviceRoutes       from './routes/device.routes';
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use(`${api}/dashboard`,     apiLimiter,  dashboardRoutes);
 app.use(`${api}/financial`,     apiLimiter,  financialRoutes);
 app.use(`${api}/contracts`,     apiLimiter,  contractRoutes);
 app.use(`${api}/expenses`,      apiLimiter,  expenseRoutes);
+app.use(`${api}/devices`,       apiLimiter,  deviceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

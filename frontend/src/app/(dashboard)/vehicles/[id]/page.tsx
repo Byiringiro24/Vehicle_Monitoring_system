@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { format, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
+import { deviceApi } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuthStore } from '@/store/authStore';
 
@@ -153,6 +154,105 @@ function GpsPingBadge({ vehicleId }: { vehicleId: string }) {
   );
 }
 
+// ─── Device SIM Card ──────────────────────────────────────────────────────────
+function DeviceSimCard({ vehicleId, current, onSave, saving }:
+  { vehicleId: string; current?: string; onSave: (n: string) => void; saving: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue]     = useState(current ?? '');
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+        📶 SIM Card Number
+      </h3>
+      {editing ? (
+        <div className="flex gap-2">
+          <input value={value} onChange={e => setValue(e.target.value)}
+            placeholder="+250780000000"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          <button onClick={() => { onSave(value); setEditing(false); }} disabled={saving}
+            className="px-3 py-2 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700 disabled:opacity-50">
+            {saving ? '…' : 'Save'}
+          </button>
+          <button onClick={() => setEditing(false)}
+            className="px-3 py-2 border border-gray-300 text-xs rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-mono text-gray-700">{current || 'Not set'}</span>
+          <button onClick={() => { setValue(current ?? ''); setEditing(true); }}
+            className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+            {current ? 'Edit' : 'Add'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Remote Device Commands ───────────────────────────────────────────────────
+function DeviceCommands({ vehicleId: _id, onCommand, pending }:
+  { vehicleId: string; onCommand: (cmd: string, p?: object) => void; pending: boolean }) {
+  const [ussd, setUssd] = useState('');
+  const [showUssd, setShowUssd] = useState(false);
+
+  const buttons = [
+    { label: 'Check Internet',  cmd: 'check_internet', icon: '🌐', color: 'bg-blue-50 text-blue-700 border-blue-200',   desc: 'Check signal & data' },
+    { label: 'Ping Device',     cmd: 'ping',            icon: '📡', color: 'bg-green-50 text-green-700 border-green-200', desc: 'Confirm online' },
+    { label: 'Restart GSM',     cmd: 'restart',         icon: '🔄', color: 'bg-orange-50 text-orange-700 border-orange-200', desc: 'Reboot SIM808' },
+    { label: 'Check Balance',   cmd: 'ussd', icon: '💳', color: 'bg-purple-50 text-purple-700 border-purple-200', desc: 'Run USSD code', ussd: true },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+        ⚡ Remote Device Commands
+      </h3>
+      <p className="text-xs text-gray-400">Commands are sent directly to the GPS module via MQTT.</p>
+      <div className="grid grid-cols-2 gap-2">
+        {buttons.map(b => (
+          <button key={b.cmd}
+            disabled={pending}
+            onClick={() => {
+              if (b.ussd) { setShowUssd(true); return; }
+              onCommand(b.cmd);
+            }}
+            className={cn('flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl border text-xs font-semibold transition hover:opacity-80 disabled:opacity-50', b.color)}>
+            <span className="text-base">{b.icon}</span>
+            <span>{b.label}</span>
+            <span className="font-normal opacity-60 text-[10px]">{b.desc}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* USSD input */}
+      {showUssd && (
+        <div className="space-y-2 pt-2 border-t border-gray-100">
+          <label className="text-xs font-medium text-gray-700">USSD Code (e.g. *175# to buy data)</label>
+          <div className="flex gap-2">
+            <input value={ussd} onChange={e => setUssd(e.target.value)}
+              placeholder="*175#"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-brand-500" />
+            <button onClick={() => { onCommand('ussd', { code: ussd }); setShowUssd(false); setUssd(''); }}
+              disabled={!ussd || pending}
+              className="px-3 py-2 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50">
+              Send
+            </button>
+            <button onClick={() => setShowUssd(false)}
+              className="px-3 py-2 border border-gray-300 text-xs rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400">
+            Common codes: *175# (buy Airtel data), *131# (check MTN balance)
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Stat card ────────────────────────────────────────────────────────────────
 function Stat({ label, value, sub, icon, color = 'blue' }: {
   label: string; value: string; sub?: string;
@@ -264,6 +364,14 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     socket.on('gps:online',  (p: any) => { if (p.vehicleId === params.id) setGpsModuleOnline(true);  });
     socket.on('gps:offline', (p: any) => { if (p.vehicleId === params.id) setGpsModuleOnline(false); });
 
+    // Heartbeat — device online but may have no GPS fix — update last seen time
+    socket.on('device:heartbeat', (p: any) => {
+      if (p.vehicleId !== params.id) return;
+      setLiveStatus(prev => prev === 'OFFLINE' ? 'IDLE' : prev);
+      // Update liveLoc updatedAt so "Last update" shows current time
+      setLiveLoc((prev: any) => prev ? { ...prev, updatedAt: p.updatedAt } : { updatedAt: p.updatedAt });
+    });
+
     return () => {
       socket.off('telemetry:update');
       socket.off('vehicle:lock');
@@ -283,6 +391,24 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       toast.success(locked ? '🔒 Engine locked' : '🔓 Engine unlocked');
     },
     onError: () => toast.error('Lock command failed'),
+  });
+
+  // Device command mutation
+  const cmdMutation = useMutation({
+    mutationFn: ({ command, params: p }: { command: string; params?: object }) =>
+      deviceApi.sendCommand(params.id, command, p),
+    onSuccess: (_, { command }) => toast.success(`Command "${command}" sent to device`),
+    onError: () => toast.error('Command failed — check device connection'),
+  });
+
+  // SIM update mutation
+  const simMutation = useMutation({
+    mutationFn: (simNumber: string) => deviceApi.updateSim(params.id, simNumber),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vehicle', params.id] });
+      toast.success('SIM number updated');
+    },
+    onError: () => toast.error('Failed to update SIM number'),
   });
 
   // Regenerate token
@@ -479,6 +605,21 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                 {regenMutation.isPending ? 'Regenerating…' : '⟳ Regenerate Token'}
               </button>
             </div>
+
+            {/* SIM Card Number */}
+            <DeviceSimCard
+              vehicleId={params.id}
+              current={(vehicle as any).simNumber}
+              onSave={(n) => simMutation.mutate(n)}
+              saving={simMutation.isPending}
+            />
+
+            {/* Remote Device Commands */}
+            <DeviceCommands
+              vehicleId={params.id}
+              onCommand={(cmd, p) => cmdMutation.mutate({ command: cmd, params: p })}
+              pending={cmdMutation.isPending}
+            />
           </div>
 
           {/* Right column — vehicle details */}
