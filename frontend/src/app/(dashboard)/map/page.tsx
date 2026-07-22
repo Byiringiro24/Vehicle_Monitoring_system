@@ -5,13 +5,24 @@ import { telemetryApi, vehicleApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { getSocket } from '@/lib/socket';
 import { cn } from '@/lib/utils';
-import { formatDate, formatSpeed } from '@/lib/utils';
+import { formatSpeed } from '@/lib/utils';
 import { Search, Truck, Lock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
 // getLiveStatus lives in lib/liveStatus — no Leaflet, safe for SSR
-import { getLiveStatus } from '@/lib/liveStatus';
+import { getLiveStatus, STALE_MS } from '@/lib/liveStatus';
 import type { LocationData } from '@/components/maps/LiveMap';
+
+// ─── Relative time helper ─────────────────────────────────────────────────────
+function timeAgo(dateStr: string | undefined | null): string {
+  if (!dateStr) return 'Never';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 5)    return 'Just now';
+  if (diff < 60)   return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
 
 const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
   ssr: false,
@@ -94,10 +105,10 @@ export default function LiveMapPage() {
   // Ground truth: which vehicle IDs have an active MQTT connection right now
   const [connectedDevices, setConnectedDevices] = useState<Set<string>>(new Set());
 
-  // Re-render every 5s so status badges refresh automatically
+  // Re-render every 2s so relative timestamps ("5s ago") stay fresh
   const [, setTick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 5_000);
+    const t = setInterval(() => setTick(n => n + 1), 2_000);
     return () => clearInterval(t);
   }, []);
 
@@ -109,16 +120,17 @@ export default function LiveMapPage() {
   });
 
   // Seed state from REST response — only fill in vehicles not already tracked by socket
+  // Also seed connectedDevices if the REST data is fresh (within STALE_MS)
   useEffect(() => {
     if (!initialLocations) return;
+
+    const freshIds: string[] = [];
+
     setLocations(prev => {
       const next = { ...prev };
       for (const loc of initialLocations) {
         if (!loc.vehicleId) continue;
         const existing = prev[loc.vehicleId];
-        // Only update from REST if:
-        // 1. We don't have this vehicle yet, OR
-        // 2. REST data is newer than what we have (GPS has coordinates)
         const restTime    = loc.updatedAt ? new Date(loc.updatedAt).getTime() : 0;
         const existingTime = existing?.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
         if (!existing || restTime > existingTime) {
@@ -136,9 +148,23 @@ export default function LiveMapPage() {
             vehicle:    loc.vehicle,
           };
         }
+        // Seed connectedDevices if this vehicle's last update is within 15s
+        // (slightly wider than STALE_MS to account for REST latency)
+        if (loc.updatedAt && Date.now() - new Date(loc.updatedAt).getTime() < STALE_MS + 5_000) {
+          freshIds.push(loc.vehicleId);
+        }
       }
       return next;
     });
+
+    // Seed connected devices from fresh REST data (user opened page after device already connected)
+    if (freshIds.length > 0) {
+      setConnectedDevices(prev => {
+        const next = new Set(prev);
+        for (const id of freshIds) next.add(id);
+        return next;
+      });
+    }
   }, [initialLocations]);
 
   // Socket.IO — live GPS updates + device online/offline
@@ -355,10 +381,10 @@ export default function LiveMapPage() {
                         {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
                       </p>
                     )}
-                    {/* Time since last update — updates every 5s via tick */}
+                    {/* Time since last update — updates every 2s via tick */}
                     {loc.updatedAt && (
                       <p className="text-[9px] text-gray-400 leading-tight">
-                        🕐 {formatDate(loc.updatedAt)}
+                        🕐 {timeAgo(loc.updatedAt)}
                       </p>
                     )}
                   </div>

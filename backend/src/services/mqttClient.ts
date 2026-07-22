@@ -10,14 +10,14 @@
 import mqtt from 'mqtt';
 import { prisma } from '../config/database';
 import { processTelemetry } from './telemetry.service';
-import { getSocketServer } from '../websocket/socketServer';
+import { getSocketServer, markVehicleSeen, markVehicleOffline } from '../websocket/socketServer';
 import logger from '../utils/logger';
 
 let client: mqtt.MqttClient | null = null;
 
-// Track last-seen timestamp per deviceToken
+// Track last-seen timestamp per deviceToken (for offline detection loop)
 const lastSeen = new Map<string, number>();
-const OFFLINE_THRESHOLD_MS = 10_000; // mark offline if no message for 10s (5× the 2s send interval)
+const OFFLINE_THRESHOLD_MS = 10_000; // mark offline if no message for 10s
 
 // pong handlers — mqttBroker registers one
 const pongHandlers: Array<(topic: string, msg: Buffer) => void> = [];
@@ -88,6 +88,8 @@ export function initMqttClient() {
           }
           logger.info(`[GPS] Device ONLINE: ${vehicle.licensePlate} (${vehicle.id})`);
         }
+        // Always mark vehicle as seen in the shared map (for request:status queries)
+        markVehicleSeen(vehicle.id);
 
         // ── SIM number verification ───────────────────────────────────────────
         // If the vehicle has a registered SIM number, verify it matches
@@ -157,6 +159,8 @@ export function initMqttClient() {
               where: { id: vehicle.id },
               data:  { status: 'OFFLINE' },
             }).catch(() => {});
+            // Remove from shared online tracker
+            markVehicleOffline(vehicle.id);
             // Broadcast to dashboard
             if (io) {
               io.to(`org:${vehicle.organizationId}`).emit('gps:offline', {

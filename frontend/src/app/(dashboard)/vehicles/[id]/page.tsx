@@ -427,7 +427,16 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   });
 
   useEffect(() => {
-    if (vehicle) setEngineLocked(vehicle.engineLocked ?? false);
+    if (vehicle) {
+      setEngineLocked(vehicle.engineLocked ?? false);
+      // Seed connectedNow from REST data if lastLocation is fresh (device was recently online)
+      const lastUpd = vehicle.lastLocation?.updatedAt;
+      if (lastUpd && Date.now() - new Date(lastUpd).getTime() < 15_000) {
+        setConnectedNow(true);
+        setLiveStatus(prev => prev === 'OFFLINE' || prev === null ? 
+          ((vehicle.lastLocation?.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE') : prev);
+      }
+    }
   }, [vehicle]);
 
   // GPS history — use full datetime (from/to include time)
@@ -453,7 +462,13 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     if (!accessToken) return;
     const socket = getSocket(accessToken);
 
-    socket.on('connect',    () => { setWsConnected(true); setWsInitialised(true); socket.emit('subscribe:vehicle', params.id); });
+    socket.on('connect',    () => { 
+      setWsConnected(true); 
+      setWsInitialised(true); 
+      socket.emit('subscribe:vehicle', params.id);
+      // Request current online status when we (re)connect
+      socket.emit('request:status', params.id);
+    });
     socket.on('disconnect', () =>   setWsConnected(false));
 
     socket.on('telemetry:update', (p: any) => {

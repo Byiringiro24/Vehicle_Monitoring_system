@@ -3,11 +3,21 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { jwtConfig } from '../config/jwt';
 import { JwtPayload } from '../types';
+import { prisma } from '../config/database';
 import logger from '../utils/logger';
 
 let io: SocketIOServer | null = null;
 
 export function getSocketServer(): SocketIOServer | null { return io; }
+
+// Exported so mqttClient can share its lastSeen state
+const lastSeenByVehicleId = new Map<string, number>();
+export function markVehicleSeen(vehicleId: string) { lastSeenByVehicleId.set(vehicleId, Date.now()); }
+export function markVehicleOffline(vehicleId: string) { lastSeenByVehicleId.delete(vehicleId); }
+export function isVehicleOnline(vehicleId: string, thresholdMs = 15_000): boolean {
+  const ts = lastSeenByVehicleId.get(vehicleId);
+  return ts !== undefined && Date.now() - ts < thresholdMs;
+}
 
 export function initSocketServer(httpServer: HttpServer) {
   io = new SocketIOServer(httpServer, {
@@ -44,6 +54,30 @@ export function initSocketServer(httpServer: HttpServer) {
     socket.on('unsubscribe:vehicle', (vehicleId: string) => {
       socket.leave(`vehicle:${vehicleId}`);
     });
+
+    // Frontend reconnected and is asking: is this device currently online?
+    // We reply immediately with the live status from our in-memory tracker
+    socket.on('request:status', async (vehicleId: string) => {
+      try {
+        const online = isVehicleOnline(vehicleId);
+        if (online) {
+          // Fetch last known location to send back
+          const last = await prisma.lastLocation.findUnique({ where: { vehicleId } });
+          socket.emit('gps:online', {
+            vehicleId,
+            timestamp: new Date().toISOString(),
+            ...(last ? { speed: last.speed, updatedAt: last.updatedAt?.toISOString() } : {}),
+          });
+          socket.emit('device:heartbeat', {
+            vehicleId,
+            updatedAt: last?.updatedAt?.toISOString() ?? new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        logger.warn(`request:status error: ${err}`);
+      }
+    });
+
     socket.on('disconnect', () => logger.info(`WS disconnected: ${user.email}`));
   });
 
