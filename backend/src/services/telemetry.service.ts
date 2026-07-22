@@ -90,6 +90,15 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
     // NEVER set to OFFLINE from telemetry — offline is detected by absence of telemetry
     const newStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
     await prisma.vehicle.update({ where: { id: vehicleId }, data: { status: newStatus as any } });
+
+    // 4b. If device reported a SIM number, store it on the gpsDevice for verification
+    const simNumber = (data as any).simNumber;
+    if (simNumber && typeof simNumber === 'string') {
+      await prisma.gpsDevice.updateMany({
+        where: { vehicleId },
+        data:  { simNumber: simNumber.trim() },
+      }).catch(() => {}); // non-fatal
+    }
   }
 
   // 5. Broadcast to dashboard — include location so map updates instantly

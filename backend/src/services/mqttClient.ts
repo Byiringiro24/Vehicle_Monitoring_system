@@ -89,6 +89,34 @@ export function initMqttClient() {
           logger.info(`[GPS] Device ONLINE: ${vehicle.licensePlate} (${vehicle.id})`);
         }
 
+        // ── SIM number verification ───────────────────────────────────────────
+        // If the vehicle has a registered SIM number, verify it matches
+        // what the device is reporting. Mismatch = possible device swap/theft.
+        const reportedSim = payload.simNumber as string | undefined;
+        if (reportedSim && vehicle) {
+          const dbSim = (vehicle as any).simNumber;
+          if (dbSim && dbSim.replace(/\s/g,'') !== reportedSim.replace(/\s/g,'')) {
+            logger.warn(`[SIM MISMATCH] Vehicle ${vehicle.licensePlate}: DB="${dbSim}" Device="${reportedSim}"`);
+            const io = getSocketServer();
+            if (io) {
+              io.to(`org:${vehicle.organizationId}`).emit('sim:mismatch', {
+                vehicleId:    vehicle.id,
+                licensePlate: vehicle.licensePlate,
+                registered:   dbSim,
+                reported:     reportedSim,
+                timestamp:    new Date().toISOString(),
+              });
+            }
+          } else if (!dbSim && reportedSim) {
+            // Auto-register SIM number if none set yet
+            await (prisma.vehicle as any).update({
+              where: { id: vehicle.id },
+              data:  { simNumber: reportedSim },
+            }).catch(() => {});
+            logger.info(`[SIM] Auto-registered ${reportedSim} for ${vehicle.licensePlate}`);
+          }
+        }
+
         // Process telemetry — saves to DB, updates lastLocation, emits location:update
         await processTelemetry(vehicle.id, payload);
 

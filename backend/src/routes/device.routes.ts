@@ -47,21 +47,46 @@ router.post('/:vehicleId/command', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANA
   }
 );
 
-// ─── Update SIM card number for a vehicle ─────────────────────────────────────
+// ─── Update SIM card number for a vehicle (with verification) ────────────────
+// The ESP32 sends simNumber in its telemetry payload.
+// When user sets the SIM on the website, we check if it matches what the device reported.
 router.patch('/:vehicleId/sim', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'),
   async (req: any, res, next) => {
     try {
       const { simNumber } = req.body;
+      if (!simNumber) throw new AppError(400, 'simNumber is required');
+
       const vehicle = await prisma.vehicle.findFirst({
         where: { id: req.params.vehicleId, organizationId: req.user.organizationId },
+        include: { gpsDevice: { select: { simNumber: true } } },
       });
       if (!vehicle) throw new AppError(404, 'Vehicle not found');
 
-      const updated = await (prisma.vehicle as any).update({
+      // Check if the device has reported a SIM number via telemetry
+      // It's stored on the gpsDevice record when the device sends it
+      const deviceReportedSim = (vehicle as any).gpsDevice?.simNumber ?? null;
+
+      let verified = false;
+      let message  = '';
+
+      if (!deviceReportedSim) {
+        // Device hasn't reported its SIM yet — save without verification
+        message  = 'SIM number saved. Device has not reported its SIM yet — will verify on next connection.';
+        verified = false;
+      } else if (deviceReportedSim.replace(/\s+/g,'') === simNumber.replace(/\s+/g,'')) {
+        message  = `✅ SIM number verified! Matches the SIM reported by the GPS device for ${vehicle.licensePlate}.`;
+        verified = true;
+      } else {
+        message  = `⚠ Warning: The number you entered (${simNumber}) does not match what the GPS device reported (${deviceReportedSim}). Please double-check.`;
+        verified = false;
+      }
+
+      await (prisma.vehicle as any).update({
         where: { id: req.params.vehicleId },
-        data:  { simNumber: simNumber ?? null },
+        data:  { simNumber: simNumber.trim() },
       });
-      res.json({ id: updated.id, licensePlate: updated.licensePlate, simNumber: updated.simNumber ?? null });
+
+      res.json({ success: true, simNumber: simNumber.trim(), verified, message });
     } catch (err) { next(err); }
   }
 );
