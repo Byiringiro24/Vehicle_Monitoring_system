@@ -108,27 +108,37 @@ export default function LiveMapPage() {
     refetchInterval: 30_000,   // refresh every 30s as fallback
   });
 
-  // Seed state from REST response
+  // Seed state from REST response — only fill in vehicles not already tracked by socket
   useEffect(() => {
     if (!initialLocations) return;
-    const map: Record<string, LocationData> = {};
-    for (const loc of initialLocations) {
-      if (!loc.vehicleId) continue;
-      map[loc.vehicleId] = {
-        vehicleId:  loc.vehicleId,
-        latitude:   loc.latitude  ?? 0,
-        longitude:  loc.longitude ?? 0,
-        speed:      loc.speed     ?? 0,
-        heading:    loc.heading   ?? 0,
-        fuelLevel:  loc.fuelLevel,
-        engineTemp: loc.engineTemp,
-        engineOn:   loc.engineOn  ?? false,
-        accuracy:   null,
-        updatedAt:  loc.updatedAt,
-        vehicle:    loc.vehicle,
-      };
-    }
-    setLocations(prev => ({ ...map, ...prev }));  // keep live updates on top
+    setLocations(prev => {
+      const next = { ...prev };
+      for (const loc of initialLocations) {
+        if (!loc.vehicleId) continue;
+        const existing = prev[loc.vehicleId];
+        // Only update from REST if:
+        // 1. We don't have this vehicle yet, OR
+        // 2. REST data is newer than what we have (GPS has coordinates)
+        const restTime    = loc.updatedAt ? new Date(loc.updatedAt).getTime() : 0;
+        const existingTime = existing?.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+        if (!existing || restTime > existingTime) {
+          next[loc.vehicleId] = {
+            vehicleId:  loc.vehicleId,
+            latitude:   loc.latitude  ?? 0,
+            longitude:  loc.longitude ?? 0,
+            speed:      loc.speed     ?? 0,
+            heading:    loc.heading   ?? 0,
+            fuelLevel:  loc.fuelLevel,
+            engineTemp: loc.engineTemp,
+            engineOn:   loc.engineOn  ?? false,
+            accuracy:   null,
+            updatedAt:  loc.updatedAt,
+            vehicle:    loc.vehicle,
+          };
+        }
+      }
+      return next;
+    });
   }, [initialLocations]);
 
   // Socket.IO — live GPS updates + device online/offline
@@ -339,9 +349,16 @@ export default function LiveMapPage() {
                         <span className="text-[10px] text-gray-400">No GPS fix</span>
                       )}
                     </div>
+                    {/* Show exact coordinates */}
+                    {hasGps && (
+                      <p className="text-[9px] text-gray-400 leading-tight">
+                        {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
+                      </p>
+                    )}
+                    {/* Time since last update — updates every 5s via tick */}
                     {loc.updatedAt && (
-                      <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">
-                        {formatDate(loc.updatedAt)}
+                      <p className="text-[9px] text-gray-400 leading-tight">
+                        🕐 {formatDate(loc.updatedAt)}
                       </p>
                     )}
                   </div>
@@ -372,7 +389,7 @@ export default function LiveMapPage() {
             <span>{locationList.length} vehicle{locationList.length !== 1 ? 's' : ''} total</span>
             <span className="flex items-center gap-1">
               <RefreshCw size={9} className={wsConnected ? 'animate-spin' : ''} />
-              Updates every 15s
+              Updates every 2s
             </span>
           </div>
         </div>

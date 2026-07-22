@@ -6,7 +6,7 @@ import { getStatusColor, formatDate, formatSpeed, formatFuel, formatTemp } from 
 import {
   ArrowLeft, Truck, MapPin, Fuel, Thermometer, Gauge,
   Lock, Unlock, History, BarChart2, Info, Route, Calendar, Copy, Check,
-  Wifi, WifiOff, AlertTriangle, RefreshCw, Satellite,
+  Wifi, WifiOff, AlertTriangle, RefreshCw, Satellite, Terminal,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,18 @@ const GpsHistoryMap  = dynamic(() => import('@/components/maps/GpsHistoryMap'), 
   loading: () => <div className="flex items-center justify-center h-full bg-gray-100 rounded-xl text-gray-400">Loading map…</div>,
 });
 
-type Tab = 'overview' | 'history' | 'trips' | 'telemetry';
+type Tab = 'overview' | 'history' | 'trips' | 'telemetry' | 'commands';
+
+// ─── Relative time helper ─────────────────────────────────────────────────────
+function timeAgo(dateStr: string | undefined | null): string {
+  if (!dateStr) return 'Never';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 5)   return 'Just now';
+  if (diff < 60)  return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
 
 // ─── Copy-to-clipboard button ─────────────────────────────────────────────────
 function CopyButton({ text }: { text: string }) {
@@ -198,10 +209,10 @@ function DeviceCommands({ vehicleId: _id, onCommand, pending }:
   const [showUssd, setShowUssd] = useState(false);
 
   const buttons = [
-    { label: 'Check Internet',  cmd: 'check_internet', icon: '🌐', color: 'bg-blue-50 text-blue-700 border-blue-200',   desc: 'Check signal & data' },
-    { label: 'Ping Device',     cmd: 'ping',            icon: '📡', color: 'bg-green-50 text-green-700 border-green-200', desc: 'Confirm online' },
+    { label: 'Check Internet',  cmd: 'check_internet', icon: '🌐', color: 'bg-blue-50 text-blue-700 border-blue-200',       desc: 'Check signal & data' },
+    { label: 'Ping Device',     cmd: 'ping',            icon: '📡', color: 'bg-green-50 text-green-700 border-green-200',   desc: 'Confirm online' },
     { label: 'Restart GSM',     cmd: 'restart',         icon: '🔄', color: 'bg-orange-50 text-orange-700 border-orange-200', desc: 'Reboot SIM808' },
-    { label: 'Check Balance',   cmd: 'ussd', icon: '💳', color: 'bg-purple-50 text-purple-700 border-purple-200', desc: 'Run USSD code', ussd: true },
+    { label: 'Check Balance',   cmd: 'ussd',            icon: '💳', color: 'bg-purple-50 text-purple-700 border-purple-200', desc: 'Run USSD code', ussd: true },
   ];
 
   return (
@@ -209,7 +220,6 @@ function DeviceCommands({ vehicleId: _id, onCommand, pending }:
       <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
         ⚡ Remote Device Commands
       </h3>
-      <p className="text-xs text-gray-400">Commands are sent directly to the GPS module via MQTT.</p>
       <div className="grid grid-cols-2 gap-2">
         {buttons.map(b => (
           <button key={b.cmd}
@@ -256,10 +266,10 @@ function DeviceCommands({ vehicleId: _id, onCommand, pending }:
 // ─── Data Plan Tracker ────────────────────────────────────────────────────────
 function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
   { vehicleId: string; vehicle: any; onSave: (d: any) => void; saving: boolean }) {
-  const [open, setOpen]       = useState(false);
-  const [type, setType]       = useState<'DAILY'|'WEEKLY'|'MONTHLY'>(vehicle?.dataPlanType ?? 'MONTHLY');
+  const [open, setOpen]         = useState(false);
+  const [type, setType]         = useState<'DAILY'|'WEEKLY'|'MONTHLY'>(vehicle?.dataPlanType ?? 'MONTHLY');
   const [boughtAt, setBoughtAt] = useState('');
-  const [expiry, setExpiry]   = useState('');
+  const [expiry, setExpiry]     = useState('');
 
   // Auto-calculate expiry from bought date + type
   const calcExpiry = (bought: string, planType: string) => {
@@ -356,14 +366,17 @@ function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
     </div>
   );
 }
+
 function Stat({ label, value, sub, icon, color = 'blue' }: {
   label: string; value: string; sub?: string;
   icon: React.ReactNode; color?: string;
 }) {
   const bg: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-600',   green: 'bg-green-50 text-green-600',
-    yellow: 'bg-yellow-50 text-yellow-600', red: 'bg-red-50 text-red-600',
-    gray: 'bg-gray-100 text-gray-500',
+    blue:   'bg-blue-50 text-blue-600',
+    green:  'bg-green-50 text-green-600',
+    yellow: 'bg-yellow-50 text-yellow-600',
+    red:    'bg-red-50 text-red-600',
+    gray:   'bg-gray-100 text-gray-500',
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3">
@@ -388,13 +401,24 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const [to, setTo]     = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
   // Live state from Socket.IO
-  const [liveLoc, setLiveLoc]           = useState<any>(null);
-  const [liveStatus, setLiveStatus]     = useState<string | null>(null);
-  const [engineLocked, setEngineLocked] = useState<boolean | null>(null);
-  const [wsConnected, setWsConnected]   = useState(false);
-  const [wsInitialised, setWsInitialised] = useState(false);
+  const [liveLoc, setLiveLoc]               = useState<any>(null);
+  const [liveStatus, setLiveStatus]         = useState<string | null>(null);
+  const [engineLocked, setEngineLocked]     = useState<boolean | null>(null);
+  const [wsConnected, setWsConnected]       = useState(false);
+  const [wsInitialised, setWsInitialised]   = useState(false);
   const [gpsModuleOnline, setGpsModuleOnline] = useState<boolean | null>(null);
-  const [confirmAction, setConfirmAction] = useState<'lock'|'unlock'|null>(null);
+  const [confirmAction, setConfirmAction]   = useState<'lock'|'unlock'|null>(null);
+  const [connectedNow, setConnectedNow]     = useState(false); // true when gps:online fired for this vehicle
+
+  // Log of command responses from the ESP32 device
+  const [cmdLog, setCmdLog] = useState<Array<{ ts: string; summary: string; raw: Record<string, any> }>>([]);
+
+  // Ticker to refresh relative timestamps every 2s
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 2000);
+    return () => clearInterval(timer);
+  }, []);
 
   // DB vehicle fetch
   const { data: vehicle, isLoading } = useQuery({
@@ -424,13 +448,6 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     enabled:  tab === 'telemetry',
   });
 
-  // Trips
-  const { data: tripsData } = useQuery({
-    queryKey: ['trips', params.id],
-    queryFn:  () => vehicleApi.gpsHistory(params.id, { from, to, limit: 100 }),
-    enabled:  false, // we'll use gpsHistory for now
-  });
-
   // Socket.IO — live telemetry, lock state, online/offline
   useEffect(() => {
     if (!accessToken) return;
@@ -450,6 +467,18 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       // GPS status based on speed, NOT engineOn
       const spd = d.speed ?? 0;
       setLiveStatus(spd > 2 ? 'ACTIVE' : 'IDLE');
+
+      // Capture command responses (ack, pong, ussd_response, internet_status, restarting)
+      if (d.ack || d.pong || d.cmd || d.ussd_response || d.event) {
+        const summary = d.ack ? `Engine ${d.ack === 'lock' ? '🔒 LOCKED' : '🔓 UNLOCKED'}`
+          : d.pong ? `📡 Pong — GPS: ${d.gpsModuleOn ? 'ON' : 'OFF'}, Locked: ${d.locked}`
+          : d.cmd === 'internet_status' ? `🌐 Signal: ${d.signal}/31 (${d.signalPct}%) GPRS: ${d.gprsOk ? '✅' : '❌'} GPS: ${d.gpsOn ? 'ON' : 'OFF'}`
+          : d.cmd === 'ussd_response' ? `💬 USSD ${d.code}: ${d.ussd_response}`
+          : d.event === 'restarting' ? '🔄 Device restarting...'
+          : d.event === 'device_connected' ? '✅ Device connected'
+          : JSON.stringify(d).slice(0, 80);
+        setCmdLog(prev => [{ ts: p.timestamp ?? new Date().toISOString(), summary, raw: d }, ...prev.slice(0, 49)]);
+      }
     });
 
     socket.on('vehicle:lock', (p: any) => {
@@ -459,16 +488,31 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     });
 
     socket.on('vehicles:offline', (p: any) => {
-      if (p.vehicleIds?.includes(params.id)) setLiveStatus('OFFLINE');
+      if (p.vehicleIds?.includes(params.id)) {
+        setLiveStatus('OFFLINE');
+        setConnectedNow(false);
+      }
     });
 
     // GPS module connect/disconnect events
-    socket.on('gps:online',  (p: any) => { if (p.vehicleId === params.id) setGpsModuleOnline(true);  });
-    socket.on('gps:offline', (p: any) => { if (p.vehicleId === params.id) setGpsModuleOnline(false); });
+    socket.on('gps:online',  (p: any) => {
+      if (p.vehicleId === params.id) {
+        setGpsModuleOnline(true);
+        setConnectedNow(true);
+        setLiveStatus(prev => prev === 'OFFLINE' ? 'IDLE' : prev);
+      }
+    });
+    socket.on('gps:offline', (p: any) => {
+      if (p.vehicleId === params.id) {
+        setGpsModuleOnline(false);
+        setConnectedNow(false);
+      }
+    });
 
     // Heartbeat — device online but may have no GPS fix — update last seen time
     socket.on('device:heartbeat', (p: any) => {
       if (p.vehicleId !== params.id) return;
+      setConnectedNow(true);
       setLiveStatus(prev => prev === 'OFFLINE' ? 'IDLE' : prev);
       // Update liveLoc updatedAt so "Last update" shows current time
       setLiveLoc((prev: any) => prev ? { ...prev, updatedAt: p.updatedAt } : { updatedAt: p.updatedAt });
@@ -480,6 +524,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       socket.off('vehicles:offline');
       socket.off('gps:online');
       socket.off('gps:offline');
+      socket.off('device:heartbeat');
       socket.emit('unsubscribe:vehicle', params.id);
     };
   }, [accessToken, params.id, qc]);
@@ -554,13 +599,32 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   }
 
   const loc    = liveLoc ?? vehicle.lastLocation;
-  const status = liveStatus ?? vehicle.status;
   const locked = engineLocked ?? vehicle.engineLocked;
 
+  // ── Status resolution: connectedNow is ground truth ─────────────────────────
+  // If we received a gps:online / device:heartbeat for this vehicle, it's confirmed online.
+  // Use speed to distinguish ACTIVE vs IDLE.
+  // Fall back to DB status only when we have no live signal at all.
+  function getStatus(): string {
+    if (connectedNow) {
+      return (loc?.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE';
+    }
+    // If liveStatus was set by telemetry:update (ACTIVE/IDLE), trust it
+    if (liveStatus && liveStatus !== 'OFFLINE') return liveStatus;
+    // If updatedAt is within 10 seconds, device is likely still alive
+    if (loc?.updatedAt) {
+      const age = Date.now() - new Date(loc.updatedAt).getTime();
+      if (age < 10_000) return (loc?.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE';
+    }
+    return liveStatus ?? vehicle.status ?? 'OFFLINE';
+  }
+  const status = getStatus();
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview',  label: 'Overview',  icon: <Info size={14} /> },
+    { id: 'overview',  label: 'Overview',    icon: <Info size={14} /> },
     { id: 'history',   label: 'GPS History', icon: <Route size={14} /> },
-    { id: 'telemetry', label: 'Telemetry', icon: <BarChart2 size={14} /> },
+    { id: 'telemetry', label: 'Telemetry',   icon: <BarChart2 size={14} /> },
+    { id: 'commands',  label: 'Device Commands', icon: <Terminal size={14} /> },
   ];
 
   return (
@@ -629,7 +693,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         <Stat label="Engine Temp" value={formatTemp(loc?.engineTemp)} icon={<Thermometer size={18} />} color="red"    />
         <Stat label="Today km"    value={`${(loc?.distanceTodayKm ?? 0).toFixed(1)} km`}
           icon={<Route size={18} />} color="green"
-          sub={loc?.updatedAt ? `Updated ${formatDate(loc.updatedAt)}` : 'No data'} />
+          sub={loc?.updatedAt ? `Last seen ${timeAgo(loc.updatedAt)}` : 'No data'} />
       </div>
 
       {/* ── Tabs ────────────────────────────────────────────────────────────── */}
@@ -692,7 +756,9 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                     </span>
                   </div>
                   {loc.updatedAt && (
-                    <p className="text-xs text-gray-400 pt-1 border-t">Last update: {formatDate(loc.updatedAt)}</p>
+                    <p className="text-xs text-gray-400 pt-1 border-t">
+                      Last update: {timeAgo(loc.updatedAt)}
+                    </p>
                   )}
                 </div>
               ) : (
@@ -724,21 +790,6 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               current={(vehicle as any).simNumber}
               onSave={(n) => simMutation.mutate(n)}
               saving={simMutation.isPending}
-            />
-
-            {/* Data Plan Tracker */}
-            <DataPlanCard
-              vehicleId={params.id}
-              vehicle={vehicle}
-              onSave={(d) => dataPlanMutation.mutate(d)}
-              saving={dataPlanMutation.isPending}
-            />
-
-            {/* Remote Device Commands */}
-            <DeviceCommands
-              vehicleId={params.id}
-              onCommand={(cmd, p) => cmdMutation.mutate({ command: cmd, params: p })}
-              pending={cmdMutation.isPending}
             />
           </div>
 
@@ -889,6 +940,48 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                 <BarChart2 size={36} className="mb-3 opacity-20" />
                 <p>No telemetry data for this period</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── COMMANDS TAB ────────────────────────────────────────────────────── */}
+      {tab === 'commands' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="space-y-4">
+            <DeviceCommands
+              vehicleId={params.id}
+              onCommand={(cmd, p) => cmdMutation.mutate({ command: cmd, params: p })}
+              pending={cmdMutation.isPending}
+            />
+            <DataPlanCard
+              vehicleId={params.id}
+              vehicle={vehicle}
+              onSave={(d) => dataPlanMutation.mutate(d)}
+              saving={dataPlanMutation.isPending}
+            />
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              📨 Device Responses <span className="text-xs font-normal text-gray-400">({cmdLog.length})</span>
+            </h3>
+            {cmdLog.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-8">No responses yet. Send a command to see results here.</p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {cmdLog.map((entry, i) => (
+                  <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-gray-800">{entry.summary}</p>
+                      <p className="text-[10px] text-gray-400">{formatDate(entry.ts)}</p>
+                    </div>
+                    <details>
+                      <summary className="text-[10px] text-gray-400 cursor-pointer">Raw data</summary>
+                      <pre className="text-[9px] text-gray-600 mt-1 bg-white rounded p-2 overflow-x-auto">{JSON.stringify(entry.raw, null, 2)}</pre>
+                    </details>
+                  </div>
+                ))}
               </div>
             )}
           </div>
