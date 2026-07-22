@@ -125,15 +125,52 @@ export async function updateVehicle(req: AuthenticatedRequest, res: Response, ne
       where: { id: req.params.id, organizationId: req.user!.organizationId },
     });
     if (!existing) throw new AppError(404, 'Vehicle not found');
-    const { purchaseDate, insuranceExpiry, roadTaxExpiry, inspectionExpiry, ...rest } = req.body;
+
+    const {
+      purchaseDate, insuranceExpiry, roadTaxExpiry, inspectionExpiry,
+      transportPermitExpiry, batteryWarranty, warrantyExpiry, nextServiceDate,
+      year, fuelCapacity, purchasePrice, currentValue, horsepower, engineCc,
+      batteryCapacityKwh, chargingSpeedKw, batteryReplaceCost, batteryHealth,
+      avgConsumption, minFuelAlert, insurancePremium, oilChangeKmInterval,
+      lastServiceOdometer, odometer, engineHours,
+      // Strip read-only / system fields
+      id: _id, organizationId: _org, deviceToken: _dt, createdAt: _ca, updatedAt: _ua,
+      status: _st, engineLocked: _el, lastLocation: _ll, gpsDevice: _gd,
+      currentDriver: _cd, fleet: _fleet, _count: _cnt,
+      ...rest
+    } = req.body;
+
     const vehicle = await prisma.vehicle.update({
       where: { id: req.params.id },
       data: {
         ...rest,
-        ...(purchaseDate     && { purchaseDate:     new Date(purchaseDate)     }),
-        ...(insuranceExpiry  && { insuranceExpiry:  new Date(insuranceExpiry)  }),
-        ...(roadTaxExpiry    && { roadTaxExpiry:    new Date(roadTaxExpiry)    }),
-        ...(inspectionExpiry && { inspectionExpiry: new Date(inspectionExpiry) }),
+        // Numeric coercions
+        ...(year                !== undefined && year !== '' && { year:                parseInt(year, 10) }),
+        ...(fuelCapacity        !== undefined && fuelCapacity !== '' && { fuelCapacity:        parseFloat(fuelCapacity) }),
+        ...(purchasePrice       !== undefined && purchasePrice !== '' && { purchasePrice:       parseFloat(purchasePrice) }),
+        ...(currentValue        !== undefined && currentValue !== '' && { currentValue:        parseFloat(currentValue) }),
+        ...(horsepower          !== undefined && horsepower !== '' && { horsepower:          parseInt(horsepower, 10) }),
+        ...(engineCc            !== undefined && engineCc !== '' && { engineCc:            parseFloat(engineCc) }),
+        ...(batteryCapacityKwh  !== undefined && batteryCapacityKwh !== '' && { batteryCapacityKwh:  parseFloat(batteryCapacityKwh) }),
+        ...(chargingSpeedKw     !== undefined && chargingSpeedKw !== '' && { chargingSpeedKw:     parseFloat(chargingSpeedKw) }),
+        ...(batteryReplaceCost  !== undefined && batteryReplaceCost !== '' && { batteryReplaceCost:  parseFloat(batteryReplaceCost) }),
+        ...(batteryHealth       !== undefined && batteryHealth !== '' && { batteryHealth:       parseFloat(batteryHealth) }),
+        ...(avgConsumption      !== undefined && avgConsumption !== '' && { avgConsumption:      parseFloat(avgConsumption) }),
+        ...(minFuelAlert        !== undefined && minFuelAlert !== '' && { minFuelAlert:        parseFloat(minFuelAlert) }),
+        ...(insurancePremium    !== undefined && insurancePremium !== '' && { insurancePremium:    parseFloat(insurancePremium) }),
+        ...(oilChangeKmInterval !== undefined && oilChangeKmInterval !== '' && { oilChangeKmInterval: parseFloat(oilChangeKmInterval) }),
+        ...(lastServiceOdometer !== undefined && lastServiceOdometer !== '' && { lastServiceOdometer: parseFloat(lastServiceOdometer) }),
+        ...(odometer            !== undefined && odometer !== '' && { odometer:            parseFloat(odometer) }),
+        ...(engineHours         !== undefined && engineHours !== '' && { engineHours:         parseFloat(engineHours) }),
+        // Date coercions
+        ...(purchaseDate          && { purchaseDate:          new Date(purchaseDate) }),
+        ...(insuranceExpiry       && { insuranceExpiry:       new Date(insuranceExpiry) }),
+        ...(roadTaxExpiry         && { roadTaxExpiry:         new Date(roadTaxExpiry) }),
+        ...(inspectionExpiry      && { inspectionExpiry:      new Date(inspectionExpiry) }),
+        ...(transportPermitExpiry && { transportPermitExpiry: new Date(transportPermitExpiry) }),
+        ...(batteryWarranty       && { batteryWarranty:       new Date(batteryWarranty) }),
+        ...(warrantyExpiry        && { warrantyExpiry:        new Date(warrantyExpiry) }),
+        ...(nextServiceDate       && { nextServiceDate:       new Date(nextServiceDate) }),
       },
       include: { fleet: { select: { id: true, name: true } } },
     });

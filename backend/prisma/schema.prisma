@@ -392,6 +392,12 @@ model Vehicle {
   deviceToken     String         @unique @default(uuid())
   simNumber       String?        // SIM card number installed in GPS device
 
+  // Data plan tracking for the GPS SIM card
+  dataPlanType      String?   // "DAILY" | "WEEKLY" | "MONTHLY"
+  dataPlanExpiry    DateTime? // when the current data plan expires
+  dataPlanBoughtAt  DateTime? // when it was purchased
+  dataPlanAlertSent Boolean   @default(false)
+
   // Ownership
   ownerName       String?
   ownerCompany    String?

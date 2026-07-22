@@ -102,6 +102,75 @@ async function bootstrap() {
     }
   }, 60_000);
 
+  // ── Data plan expiry alert job — runs every hour ──────────────────────────
+  // Sends alerts when a vehicle's SIM data plan is about to expire:
+  //   Monthly plan → alert 3 days before
+  //   Weekly plan  → alert 1 day before
+  //   Daily plan   → alert 3 hours before
+  setInterval(async () => {
+    try {
+      const vehicles = await (prisma.vehicle as any).findMany({
+        where: {
+          dataPlanExpiry:    { not: null },
+          dataPlanAlertSent: false,
+        },
+        select: {
+          id: true, licensePlate: true, name: true,
+          organizationId: true, dataPlanType: true, dataPlanExpiry: true,
+        },
+      });
+
+      const now = Date.now();
+      const io  = (await import('./websocket/socketServer')).getSocketServer();
+
+      for (const v of vehicles) {
+        const expiryMs  = new Date(v.dataPlanExpiry).getTime();
+        const remaining = expiryMs - now;
+        if (remaining <= 0) continue;
+
+        const alertThreshold =
+          v.dataPlanType === 'MONTHLY' ? 3 * 24 * 60 * 60 * 1000  // 3 days
+          : v.dataPlanType === 'WEEKLY' ?     24 * 60 * 60 * 1000  // 1 day
+          : v.dataPlanType === 'DAILY'  ?      3 * 60 * 60 * 1000  // 3 hours
+          : null;
+
+        if (alertThreshold && remaining <= alertThreshold) {
+          // Create alert
+          await prisma.alert.create({
+            data: {
+              vehicleId: v.id,
+              type:      'CUSTOM' as any,
+              severity:  'HIGH',
+              title:     `Data Plan Expiring: ${v.licensePlate}`,
+              message:   `${v.name} (${v.licensePlate}) ${v.dataPlanType} data plan expires in ${Math.round(remaining / 3600000)}h`,
+              metadata:  { dataPlanType: v.dataPlanType, expiry: v.dataPlanExpiry },
+            },
+          });
+
+          // Mark as alerted so we don't spam
+          await (prisma.vehicle as any).update({
+            where: { id: v.id },
+            data:  { dataPlanAlertSent: true },
+          });
+
+          // Notify dashboard
+          if (io) {
+            io.to(`org:${v.organizationId}`).emit('alert:new', {
+              title:   `Data Plan Expiring: ${v.licensePlate}`,
+              message: `${v.dataPlanType} plan expires soon`,
+              severity: 'HIGH',
+              vehicle: { name: v.name },
+            });
+          }
+
+          logger.info(`[DATA PLAN] Alert sent for ${v.licensePlate} — ${v.dataPlanType} expires soon`);
+        }
+      }
+    } catch (err) {
+      logger.error('Data plan alert job error', err);
+    }
+  }, 60 * 60 * 1000); // run every hour
+
   httpServer.listen(PORT, () => {
     logger.info(`ARTIC VMS backend running on port ${PORT}`);
     logger.info(`MQTT broker running on port ${MQTT_PORT}`);

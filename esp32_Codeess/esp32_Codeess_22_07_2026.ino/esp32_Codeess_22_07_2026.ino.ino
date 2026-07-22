@@ -1,0 +1,391 @@
+/*
+ * ============================================================
+ *  ARTIC VMS — ESP32 + SIM808 GPS Tracker  v3.0
+ *  Sends GPS every 2 seconds. Online even when stationary.
+ *  Supports remote commands from dashboard.
+ *
+ *  CHANGE ONLY:
+ *    1. DEVICE_TOKEN  → Dashboard → Vehicles → Overview → Copy
+ *    2. APN           → "internet" for Airtel/MTN Rwanda
+ *    3. MQTT_HOST     → your server IP
+ *
+ *  WIRING:
+ *    ESP32 GPIO16 (RX2) ← SIM808 TX
+ *    ESP32 GPIO17 (TX2) → SIM808 RX
+ *    ESP32 GND          — SIM808 GND
+ *    SIM808 VCC         → 4.0–4.2V supply (min 2A, NOT from ESP32)
+ *    ESP32 GPIO26       → Relay IN
+ *    ESP32 5V (VIN)     → Relay VCC
+ *    ESP32 GND          — Relay GND
+ *    Relay COM          — one side of ignition wire
+ *    Relay NC           — other side of ignition wire
+ *
+ *  RELAY LOGIC (active LOW):
+ *    GPIO26 HIGH = relay OFF = engine RUNS  (boot default)
+ *    GPIO26 LOW  = relay ON  = engine CUT   (locked)
+ *
+ *  LIBRARIES (Tools → Manage Libraries):
+ *    TinyGSM       by Volodymyr Shymanskyy  v0.12.0+
+ *    PubSubClient  by Nick O'Leary          v2.8
+ *    ArduinoJson   by Benoit Blanchon        v7.x
+ *
+ *  BOARD: esp32 → ESP32 Dev Module | Baud: 115200
+ * ============================================================
+ */
+
+#define TINY_GSM_MODEM_SIM808
+#include <TinyGsmClient.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
+// ============================================================
+//  !! CHANGE THESE THREE LINES !!
+// ============================================================
+const char DEVICE_TOKEN[] = "5466f18d-ffd6-4267-ad81-93583d1bbaa4";
+const char APN[]          = "internet";
+const char MQTT_HOST[]    = "172.209.217.176";
+// ============================================================
+
+const char APN_USER[]  = "";
+const char APN_PASS[]  = "";
+const int  MQTT_PORT   = 1883;
+
+#define RXD2        16
+#define TXD2        17
+#define RELAY_PIN   26
+
+// Send GPS every 2 seconds
+const unsigned long TELEMETRY_MS  = 2000;
+const unsigned long RECONNECT_MS  = 3000;
+const unsigned long KEEPALIVE_MS  = 30000;
+const unsigned long GPS_CHECK_MS  = 60000;
+
+char TOPIC_TELEMETRY[128];
+char TOPIC_PONG[128];
+char TOPIC_PING[128];
+char TOPIC_COMMAND[128];
+
+HardwareSerial SerialAT(2);
+TinyGsm        modem(SerialAT);
+TinyGsmClient  gsm(modem);
+PubSubClient   mqtt(gsm);
+
+unsigned long lastTelemetryAt = 0;
+unsigned long lastReconnectAt = 0;
+unsigned long lastKeepAliveAt = 0;
+unsigned long lastGpsCheckAt  = 0;
+bool engineLocked = false;
+bool gpsModuleOn  = false;
+
+// ─── AT helper ───────────────────────────────────────────────────────────────
+bool sendAT(const char* cmd, const char* expected, unsigned long ms = 2000) {
+  while (SerialAT.available()) SerialAT.read();
+  SerialAT.println(cmd);
+  String r = "";
+  unsigned long dl = millis() + ms;
+  while (millis() < dl) {
+    while (SerialAT.available()) r += (char)SerialAT.read();
+    if (r.indexOf(expected) != -1) return true;
+    delay(20);
+  }
+  return false;
+}
+
+// ─── GPS health check ─────────────────────────────────────────────────────────
+void checkGps() {
+  SerialAT.println("AT+CGNSPWR?");
+  String r = "";
+  unsigned long dl = millis() + 2000;
+  while (millis() < dl) {
+    while (SerialAT.available()) r += (char)SerialAT.read();
+    delay(20);
+  }
+  if (r.indexOf("+CGNSPWR: 1") != -1 || r.indexOf("+CGNSPWR:1") != -1) {
+    if (!gpsModuleOn) Serial.println("[GPS] Module ON");
+    gpsModuleOn = true;
+  } else {
+    Serial.println("[GPS] OFF — restarting...");
+    gpsModuleOn = false;
+    if (sendAT("AT+CGNSPWR=1", "OK", 3000)) {
+      gpsModuleOn = true;
+      Serial.println("[GPS] Restarted OK");
+    }
+  }
+}
+
+// ─── MQTT Message Callback ────────────────────────────────────────────────────
+void onMessage(char* topic, byte* payload, unsigned int len) {
+  String t = String(topic);
+  String p = "";
+  for (unsigned int i = 0; i < len; i++) p += (char)payload[i];
+  Serial.println("[MQTT<-] " + t + " : " + p);
+
+  // ── Ping → respond with pong ──────────────────────────────────────────────
+  if (t == String(TOPIC_PING)) {
+    JsonDocument pong;
+    pong["pong"]        = true;
+    pong["gpsModuleOn"] = gpsModuleOn;
+    pong["locked"]      = engineLocked;
+    pong["ts"]          = millis();
+    char buf[128];
+    serializeJson(pong, buf);
+    mqtt.publish(TOPIC_PONG, buf, false);
+    Serial.println("[MQTT] Pong sent");
+    return;
+  }
+
+  // ── Command ───────────────────────────────────────────────────────────────
+  if (t == String(TOPIC_COMMAND)) {
+    JsonDocument doc;
+    if (deserializeJson(doc, p) != DeserializationError::Ok) return;
+    const char* cmd = doc["command"];
+    if (!cmd) return;
+
+    // Lock engine
+    if (strcmp(cmd, "lock") == 0) {
+      engineLocked = true;
+      digitalWrite(RELAY_PIN, LOW);    // LOW = relay ON = engine CUT
+      Serial.println("[RELAY] LOCKED");
+      JsonDocument ack;
+      ack["ack"] = "lock"; ack["engineLocked"] = true;
+      char buf[64]; serializeJson(ack, buf);
+      mqtt.publish(TOPIC_TELEMETRY, buf, false);
+
+    // Unlock engine
+    } else if (strcmp(cmd, "unlock") == 0) {
+      engineLocked = false;
+      digitalWrite(RELAY_PIN, HIGH);   // HIGH = relay OFF = engine RUNS
+      Serial.println("[RELAY] UNLOCKED");
+      JsonDocument ack;
+      ack["ack"] = "unlock"; ack["engineLocked"] = false;
+      char buf[64]; serializeJson(ack, buf);
+      mqtt.publish(TOPIC_TELEMETRY, buf, false);
+
+    // Check internet / signal
+    } else if (strcmp(cmd, "check_internet") == 0) {
+      int csq = modem.getSignalQuality();
+      JsonDocument resp;
+      resp["signal"]  = csq;
+      resp["gprsOk"]  = modem.isGprsConnected();
+      resp["gpsOn"]   = gpsModuleOn;
+      resp["locked"]  = engineLocked;
+      char buf[128]; serializeJson(resp, buf);
+      mqtt.publish(TOPIC_TELEMETRY, buf, false);
+      Serial.print("[CMD] Signal="); Serial.print(csq);
+      Serial.println(modem.isGprsConnected() ? " GPRS=OK" : " GPRS=OFF");
+
+    // Restart SIM808 module
+    } else if (strcmp(cmd, "restart") == 0) {
+      Serial.println("[CMD] Restarting SIM808...");
+      mqtt.publish(TOPIC_TELEMETRY, "{\"event\":\"restarting\"}", false);
+      delay(500);
+      modem.restart();
+      delay(3000);
+      checkGps();
+      connectGPRS();
+      connectMQTT();
+      Serial.println("[CMD] Restart complete");
+
+    // Send USSD code (e.g. *175# to buy data)
+    } else if (strcmp(cmd, "ussd") == 0) {
+      const char* code = doc["code"];
+      if (code) {
+        Serial.print("[USSD] Sending: "); Serial.println(code);
+        String result = modem.sendUSSD(code);
+        JsonDocument resp;
+        resp["ussd_response"] = result;
+        char buf[256]; serializeJson(resp, buf);
+        mqtt.publish(TOPIC_TELEMETRY, buf, false);
+        Serial.println("[USSD] Response: " + result);
+      }
+    }
+  }
+}
+
+// ─── Publish GPS Telemetry ────────────────────────────────────────────────────
+// Called every 2 seconds — sends coordinates even when stationary.
+// GPS status (ACTIVE/IDLE) is based on speed, not engine lock.
+// Backend marks OFFLINE only if no message for 10+ seconds.
+void publishGPS() {
+  if (millis() - lastTelemetryAt < TELEMETRY_MS) return;
+  lastTelemetryAt = millis();
+
+  float lat = 0, lon = 0, spd = 0, alt = 0, acc = 0;
+  int   vsat = 0, usat = 0;
+  bool  fix  = modem.getGPS(&lat, &lon, &spd, &alt, &vsat, &usat, &acc);
+
+  JsonDocument doc;
+  doc["online"]        = true;
+  doc["deviceOnline"]  = true;
+  doc["engineOn"]      = !engineLocked;
+  doc["ignition"]      = !engineLocked;
+  doc["engineLocked"]  = engineLocked;
+  doc["gpsModuleOn"]   = gpsModuleOn;
+  doc["signalQuality"] = modem.getSignalQuality();
+
+  if (fix && lat != 0.0f && lon != 0.0f) {
+    doc["latitude"]   = serialized(String(lat, 6));
+    doc["longitude"]  = serialized(String(lon, 6));
+    doc["speed"]      = serialized(String(spd, 2));
+    doc["altitude"]   = serialized(String(alt, 2));
+    doc["accuracy"]   = serialized(String(acc, 2));
+    doc["heading"]    = nullptr;
+    doc["satellites"] = usat;
+    Serial.print("[GPS] ");
+    Serial.print(lat, 6); Serial.print(", ");
+    Serial.print(lon, 6); Serial.print("  ");
+    Serial.print(spd, 1); Serial.print("km/h  Sats:");
+    Serial.println(usat);
+  } else {
+    // No GPS fix — still send heartbeat so backend knows device is ONLINE
+    doc["latitude"]  = nullptr; doc["longitude"] = nullptr;
+    doc["speed"]     = nullptr; doc["altitude"]  = nullptr;
+    doc["accuracy"]  = nullptr; doc["heading"]   = nullptr;
+    doc["noFix"]     = true;
+    // Only print every 10 messages to avoid flooding serial
+    static int noFixCount = 0;
+    if (++noFixCount % 10 == 1) Serial.println("[GPS] No fix — sending heartbeat");
+  }
+
+  doc["fuelLevel"] = nullptr; doc["fuelUsed"]       = nullptr;
+  doc["engineTemp"]= nullptr; doc["rpm"]            = nullptr;
+  doc["batteryVoltage"] = nullptr; doc["batteryLevelPct"] = nullptr;
+
+  char json[512];
+  serializeJson(doc, json);
+  bool ok = mqtt.publish(TOPIC_TELEMETRY, json, false);
+  if (!ok) Serial.println("[MQTT] Publish FAILED — will reconnect");
+}
+
+// ─── MQTT Connect ─────────────────────────────────────────────────────────────
+bool connectMQTT() {
+  Serial.print("[MQTT] Connecting ");
+  Serial.print(MQTT_HOST); Serial.print(":"); Serial.print(MQTT_PORT);
+  Serial.print(" ...");
+  String cid = "ESP32_" + String(DEVICE_TOKEN).substring(0, 8);
+  if (mqtt.connect(cid.c_str(), DEVICE_TOKEN, DEVICE_TOKEN)) {
+    Serial.println(" OK");
+    mqtt.subscribe(TOPIC_PING,    1);
+    mqtt.subscribe(TOPIC_COMMAND, 1);
+    Serial.println("[MQTT] Subscribed to ping + command");
+    JsonDocument a; a["online"] = true; a["event"] = "device_connected";
+    char buf[64]; serializeJson(a, buf);
+    mqtt.publish(TOPIC_TELEMETRY, buf, false);
+    return true;
+  }
+  Serial.print(" FAIL rc="); Serial.println(mqtt.state());
+  // rc=-2 = TCP timeout → check Azure NSG port 1883
+  // rc= 4 = bad token   → copy correct token from dashboard
+  // rc= 5 = unauthorized → token not in database
+  return false;
+}
+
+// ─── GPRS Connect ─────────────────────────────────────────────────────────────
+bool connectGPRS() {
+  Serial.print("[GPRS] APN '"); Serial.print(APN); Serial.print("'...");
+  if (modem.gprsConnect(APN, APN_USER, APN_PASS)) {
+    Serial.print(" OK  IP:");
+    Serial.println(modem.localIP());
+    return true;
+  }
+  Serial.println(" FAIL");
+  return false;
+}
+
+// ─── Setup ────────────────────────────────────────────────────────────────────
+void setup() {
+  Serial.begin(115200);
+  delay(300);
+
+  snprintf(TOPIC_TELEMETRY, 128, "artic/%s/telemetry", DEVICE_TOKEN);
+  snprintf(TOPIC_PONG,      128, "artic/%s/pong",      DEVICE_TOKEN);
+  snprintf(TOPIC_PING,      128, "artic/%s/ping",      DEVICE_TOKEN);
+  snprintf(TOPIC_COMMAND,   128, "artic/%s/command",   DEVICE_TOKEN);
+
+  // Relay — default UNLOCKED on boot
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);
+
+  Serial.println("\n======================");
+  Serial.println("  ARTIC VMS  v3.0");
+  Serial.print  ("  Server : "); Serial.println(MQTT_HOST);
+  Serial.print  ("  Token  : "); Serial.println(String(DEVICE_TOKEN).substring(0,8)+"...");
+  Serial.print  ("  Send every : "); Serial.print(TELEMETRY_MS); Serial.println("ms");
+  Serial.println("======================\n");
+
+  SerialAT.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  delay(2000);
+
+  Serial.println("[MODEM] Restarting...");
+  modem.restart();
+  delay(3000);
+
+  Serial.println("[MODEM] " + modem.getModemInfo());
+  Serial.print  ("[MODEM] Signal: "); Serial.println(modem.getSignalQuality());
+
+  sendAT("AT+CSCLK=0", "OK", 2000);  // disable auto-sleep
+  sendAT("AT+CFUN=1",  "OK", 3000);  // full functionality
+
+  Serial.println("[GPS] Powering on...");
+  sendAT("AT+CGNSPWR=1", "OK", 3000);
+  delay(1000);
+  checkGps();
+  modem.enableGPS();
+
+  while (!connectGPRS()) {
+    Serial.println("[GPRS] Retry in 5s...");
+    delay(5000);
+  }
+
+  mqtt.setServer(MQTT_HOST, MQTT_PORT);
+  mqtt.setCallback(onMessage);
+  mqtt.setKeepAlive(60);
+  mqtt.setSocketTimeout(15);
+  mqtt.setBufferSize(512);
+  connectMQTT();
+}
+
+// ─── Main Loop ────────────────────────────────────────────────────────────────
+void loop() {
+  unsigned long now = millis();
+
+  // Keep GPRS alive
+  if (!modem.isGprsConnected()) {
+    Serial.println("[GPRS] Lost — reconnecting...");
+    modem.gprsDisconnect();
+    delay(500);
+    connectGPRS();
+  }
+
+  // Keep MQTT alive
+  if (!mqtt.connected()) {
+    if (now - lastReconnectAt > RECONNECT_MS) {
+      lastReconnectAt = now;
+      connectMQTT();
+    }
+  } else {
+    mqtt.loop();  // receive ping/command from dashboard
+  }
+
+  // AT keep-alive (prevents SIM808 sleep every 30s)
+  if (now - lastKeepAliveAt > KEEPALIVE_MS) {
+    lastKeepAliveAt = now;
+    if (!sendAT("AT", "OK", 1500)) {
+      Serial.println("[MODEM] Not responding — GPS may have turned off");
+      gpsModuleOn = false;
+    }
+  }
+
+  // GPS health check every 60s
+  if (now - lastGpsCheckAt > GPS_CHECK_MS) {
+    lastGpsCheckAt = now;
+    checkGps();
+  }
+
+  // Send GPS every 2 seconds (always, even when stationary)
+  if (mqtt.connected()) {
+    publishGPS();
+  }
+
+  delay(20);  // small delay to prevent watchdog issues
+}

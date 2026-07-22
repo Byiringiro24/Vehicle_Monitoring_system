@@ -148,6 +148,8 @@ export const deviceApi = {
     apiClient.post(`/devices/${vehicleId}/command`, { command, ...params }).then(r => r.data),
   updateSim: (vehicleId: string, simNumber: string) =>
     apiClient.patch(`/devices/${vehicleId}/sim`, { simNumber }).then(r => r.data),
+  updateDataPlan: (vehicleId: string, data: { dataPlanType: string; dataPlanBoughtAt?: string; dataPlanExpiry?: string }) =>
+    apiClient.patch(`/devices/${vehicleId}/data-plan`, data).then(r => r.data),
 };
 
 // ─── Expenses ────────────────────────────────────────────────────────────────

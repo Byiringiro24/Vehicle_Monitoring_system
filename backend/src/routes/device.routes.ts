@@ -66,4 +66,38 @@ router.patch('/:vehicleId/sim', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER
   }
 );
 
+// ─── Update data plan (internet purchase tracking) ────────────────────────────
+router.patch('/:vehicleId/data-plan', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'),
+  async (req: any, res, next) => {
+    try {
+      const { dataPlanType, dataPlanBoughtAt, dataPlanExpiry } = req.body;
+      if (!dataPlanType) throw new AppError(400, 'dataPlanType is required (DAILY/WEEKLY/MONTHLY)');
+
+      const vehicle = await prisma.vehicle.findFirst({
+        where: { id: req.params.vehicleId, organizationId: req.user.organizationId },
+      });
+      if (!vehicle) throw new AppError(404, 'Vehicle not found');
+
+      const updated = await (prisma.vehicle as any).update({
+        where: { id: req.params.vehicleId },
+        data:  {
+          dataPlanType,
+          dataPlanBoughtAt: dataPlanBoughtAt ? new Date(dataPlanBoughtAt) : new Date(),
+          dataPlanExpiry:   dataPlanExpiry   ? new Date(dataPlanExpiry)   : null,
+          dataPlanAlertSent: false, // reset alert flag when plan is renewed
+        },
+      });
+
+      res.json({
+        success: true,
+        vehicleId:     updated.id,
+        dataPlanType:  updated.dataPlanType,
+        dataPlanBoughtAt: updated.dataPlanBoughtAt,
+        dataPlanExpiry:   updated.dataPlanExpiry,
+        message: `${dataPlanType} data plan recorded successfully`,
+      });
+    } catch (err) { next(err); }
+  }
+);
+
 export default router;

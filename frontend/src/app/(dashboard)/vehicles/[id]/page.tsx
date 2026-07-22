@@ -253,7 +253,109 @@ function DeviceCommands({ vehicleId: _id, onCommand, pending }:
   );
 }
 
-// ─── Stat card ────────────────────────────────────────────────────────────────
+// ─── Data Plan Tracker ────────────────────────────────────────────────────────
+function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
+  { vehicleId: string; vehicle: any; onSave: (d: any) => void; saving: boolean }) {
+  const [open, setOpen]       = useState(false);
+  const [type, setType]       = useState<'DAILY'|'WEEKLY'|'MONTHLY'>(vehicle?.dataPlanType ?? 'MONTHLY');
+  const [boughtAt, setBoughtAt] = useState('');
+  const [expiry, setExpiry]   = useState('');
+
+  // Auto-calculate expiry from bought date + type
+  const calcExpiry = (bought: string, planType: string) => {
+    if (!bought) return '';
+    const d = new Date(bought);
+    if (planType === 'DAILY')   d.setDate(d.getDate() + 1);
+    if (planType === 'WEEKLY')  d.setDate(d.getDate() + 7);
+    if (planType === 'MONTHLY') d.setMonth(d.getMonth() + 1);
+    return d.toISOString().slice(0, 16);
+  };
+
+  const current = vehicle?.dataPlanExpiry;
+  const now     = Date.now();
+  const expMs   = current ? new Date(current).getTime() - now : null;
+  const expired = expMs !== null && expMs < 0;
+  const urgent  = expMs !== null && expMs > 0 && expMs < 3 * 86400_000;
+
+  return (
+    <div className={cn('bg-white rounded-xl border p-4 space-y-3',
+      expired ? 'border-red-300 bg-red-50' : urgent ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200')}>
+      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+        📶 SIM Data Plan
+      </h3>
+
+      {/* Current status */}
+      {current ? (
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Plan type</span>
+            <span className="font-semibold">{vehicle.dataPlanType}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Expires</span>
+            <span className={cn('font-semibold', expired ? 'text-red-600' : urgent ? 'text-yellow-700' : 'text-green-700')}>
+              {formatDate(current)}
+              {expired && ' ⚠ EXPIRED'}
+              {urgent && !expired && ' ⚠ Expires soon'}
+            </span>
+          </div>
+          {vehicle.dataPlanBoughtAt && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Purchased</span>
+              <span>{formatDate(vehicle.dataPlanBoughtAt)}</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400">No data plan recorded yet</p>
+      )}
+
+      {/* Record new purchase */}
+      {open ? (
+        <div className="space-y-2 pt-2 border-t border-gray-100">
+          <div className="grid grid-cols-3 gap-1">
+            {(['DAILY','WEEKLY','MONTHLY'] as const).map(t => (
+              <button key={t} onClick={() => { setType(t); if (boughtAt) setExpiry(calcExpiry(boughtAt, t)); }}
+                className={cn('py-1.5 rounded-lg text-xs font-semibold border transition',
+                  type === t ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 font-medium">Date & time purchased</label>
+            <input type="datetime-local" value={boughtAt}
+              onChange={e => { setBoughtAt(e.target.value); setExpiry(calcExpiry(e.target.value, type)); }}
+              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 font-medium">Expiry (auto-calculated)</label>
+            <input type="datetime-local" value={expiry}
+              onChange={e => setExpiry(e.target.value)}
+              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <p className="text-[10px] text-gray-400">
+            Alert: Monthly = 3 days before · Weekly = 1 day before · Daily = 3 hours before
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => { onSave({ dataPlanType: type, dataPlanBoughtAt: boughtAt, dataPlanExpiry: expiry }); setOpen(false); }}
+              disabled={!boughtAt || !expiry || saving}
+              className="flex-1 py-2 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700 disabled:opacity-50 font-semibold">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => setOpen(false)}
+              className="px-3 py-2 border border-gray-300 text-xs rounded-lg hover:bg-gray-50">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setOpen(true)}
+          className="w-full py-2 border border-brand-200 text-brand-700 text-xs rounded-lg hover:bg-brand-50 font-semibold transition">
+          📥 Record New Purchase
+        </button>
+      )}
+    </div>
+  );
+}
 function Stat({ label, value, sub, icon, color = 'blue' }: {
   label: string; value: string; sub?: string;
   icon: React.ReactNode; color?: string;
@@ -409,6 +511,16 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       toast.success('SIM number updated');
     },
     onError: () => toast.error('Failed to update SIM number'),
+  });
+
+  // Data plan mutation
+  const dataPlanMutation = useMutation({
+    mutationFn: (data: any) => deviceApi.updateDataPlan(params.id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vehicle', params.id] });
+      toast.success('Data plan recorded');
+    },
+    onError: () => toast.error('Failed to save data plan'),
   });
 
   // Regenerate token
@@ -612,6 +724,14 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               current={(vehicle as any).simNumber}
               onSave={(n) => simMutation.mutate(n)}
               saving={simMutation.isPending}
+            />
+
+            {/* Data Plan Tracker */}
+            <DataPlanCard
+              vehicleId={params.id}
+              vehicle={vehicle}
+              onSave={(d) => dataPlanMutation.mutate(d)}
+              saving={dataPlanMutation.isPending}
             />
 
             {/* Remote Device Commands */}
