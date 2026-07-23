@@ -146,10 +146,15 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
     mutationFn: (data: VehicleForm) => isEdit ? vehicleApi.update(vehicle.id, data) : vehicleApi.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vehicles'] });
-      toast.success(isEdit ? 'Vehicle updated' : 'Vehicle created');
+      // Also invalidate the single vehicle detail query so the detail page refreshes
+      if (isEdit) qc.invalidateQueries({ queryKey: ['vehicle', vehicle.id] });
+      toast.success(isEdit ? 'Vehicle updated ✅' : 'Vehicle created ✅');
       onClose();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error ?? 'Failed'),
+    onError: (err: any) => {
+      const msg = err.response?.data?.error ?? err.response?.data?.message ?? err.message ?? 'Failed to save';
+      toast.error(msg);
+    },
   });
 
   const currentStepIdx = STEPS.findIndex(s => s.id === step);

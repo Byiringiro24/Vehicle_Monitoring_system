@@ -482,18 +482,32 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       // GPS status based on speed, NOT engineOn
       const spd = d.speed ?? 0;
       setLiveStatus(spd > 2 ? 'ACTIVE' : 'IDLE');
+    });
 
-      // Capture command responses (ack, pong, ussd_response, internet_status, restarting)
-      if (d.ack || d.pong || d.cmd || d.ussd_response || d.event) {
-        const summary = d.ack ? `Engine ${d.ack === 'lock' ? '🔒 LOCKED' : '🔓 UNLOCKED'}`
-          : d.pong ? `📡 Pong — GPS: ${d.gpsModuleOn ? 'ON' : 'OFF'}, Locked: ${d.locked}`
-          : d.cmd === 'internet_status' ? `🌐 Signal: ${d.signal}/31 (${d.signalPct}%) GPRS: ${d.gprsOk ? '✅' : '❌'} GPS: ${d.gpsOn ? 'ON' : 'OFF'}`
-          : d.cmd === 'ussd_response' ? `💬 USSD ${d.code}: ${d.ussd_response}`
-          : d.event === 'restarting' ? '🔄 Device restarting...'
-          : d.event === 'device_connected' ? '✅ Device connected'
-          : JSON.stringify(d).slice(0, 80);
-        setCmdLog(prev => [{ ts: p.timestamp ?? new Date().toISOString(), summary, raw: d }, ...prev.slice(0, 49)]);
-      }
+    // ── Command responses from ESP32 device ───────────────────────────────────
+    // Fired by the backend when the ESP32 publishes a command-response payload
+    // to the telemetry topic (ack, pong, internet_status, ussd_response, restart)
+    socket.on('device:response', (p: any) => {
+      if (p.vehicleId !== params.id) return;
+      const d = p.payload;
+      let summary = '';
+
+      if (d.ack === 'lock')   summary = '🔒 Engine LOCKED — relay confirmed';
+      else if (d.ack === 'unlock') summary = '🔓 Engine UNLOCKED — relay released';
+      else if (d.pong)        summary = `📡 Pong received — GPS: ${d.gpsModuleOn ? 'ON ✅' : 'OFF ❌'} | Relay: ${d.locked ? 'LOCKED 🔒' : 'UNLOCKED 🔓'} | SIM: ${d.simNumber ?? '—'}`;
+      else if (d.cmd === 'internet_status') summary = `🌐 Signal: ${d.signal}/31 (${d.signalPct}%) | GPRS: ${d.gprsOk ? 'OK ✅' : 'OFFLINE ❌'} | GPS: ${d.gpsOn ? 'ON' : 'OFF'} | IP: ${d.ip ?? '—'}`;
+      else if (d.cmd === 'ussd_response') summary = `💬 USSD [${d.code}] → ${d.ussd_response || '(no response)'}`;
+      else if (d.cmd === 'restarting') summary = '🔄 Device is restarting SIM808…';
+      else if (d.event === 'device_connected') summary = '✅ Device connected to server';
+      else summary = JSON.stringify(d).slice(0, 120);
+
+      setCmdLog(prev => [
+        { ts: p.timestamp ?? new Date().toISOString(), summary, raw: d },
+        ...prev.slice(0, 49),
+      ]);
+      // Show toast for important responses
+      if (d.cmd === 'ussd_response') toast.success(`USSD: ${(d.ussd_response ?? '').slice(0, 60)}`);
+      if (d.cmd === 'internet_status' && !d.gprsOk) toast.error('Device has no internet connection');
     });
 
     socket.on('vehicle:lock', (p: any) => {
@@ -535,6 +549,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
 
     return () => {
       socket.off('telemetry:update');
+      socket.off('device:response');
       socket.off('vehicle:lock');
       socket.off('vehicles:offline');
       socket.off('gps:online');
@@ -977,28 +992,112 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               saving={dataPlanMutation.isPending}
             />
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              📨 Device Responses <span className="text-xs font-normal text-gray-400">({cmdLog.length})</span>
-            </h3>
-            {cmdLog.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-8">No responses yet. Send a command to see results here.</p>
-            ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {cmdLog.map((entry, i) => (
-                  <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-gray-800">{entry.summary}</p>
-                      <p className="text-[10px] text-gray-400">{formatDate(entry.ts)}</p>
-                    </div>
-                    <details>
-                      <summary className="text-[10px] text-gray-400 cursor-pointer">Raw data</summary>
-                      <pre className="text-[9px] text-gray-600 mt-1 bg-white rounded p-2 overflow-x-auto">{JSON.stringify(entry.raw, null, 2)}</pre>
-                    </details>
-                  </div>
-                ))}
+
+          {/* ── Response log panel ─────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-gray-200 flex flex-col" style={{ minHeight: 480 }}>
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-800">📨 Device Responses</span>
+                {cmdLog.length > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {cmdLog.length}
+                  </span>
+                )}
+              </div>
+              {cmdLog.length > 0 && (
+                <button
+                  onClick={() => setCmdLog([])}
+                  className="text-[10px] text-gray-400 hover:text-red-500 transition px-2 py-1 rounded">
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Waiting indicator when command is pending */}
+            {cmdMutation.isPending && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-100">
+                <RefreshCw size={12} className="animate-spin text-blue-500" />
+                <span className="text-xs text-blue-700 font-medium">Waiting for device response…</span>
               </div>
             )}
+
+            {/* Log entries */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {cmdLog.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 py-16 space-y-2">
+                  <Terminal size={32} className="opacity-20" />
+                  <p className="text-xs font-medium text-center">No responses yet</p>
+                  <p className="text-[11px] text-center leading-relaxed text-gray-400 max-w-48">
+                    Send a command from the panel on the left. Results will appear here in real-time.
+                  </p>
+                </div>
+              ) : (
+                cmdLog.map((entry, i) => {
+                  const isUssd    = entry.raw?.cmd === 'ussd_response';
+                  const isInternet = entry.raw?.cmd === 'internet_status';
+                  const isLock    = !!entry.raw?.ack;
+                  const isPong    = !!entry.raw?.pong;
+                  const isRestart = entry.raw?.cmd === 'restarting';
+
+                  const borderColor = isUssd ? 'border-l-purple-400' : isInternet ? 'border-l-blue-400'
+                    : isLock ? 'border-l-orange-400' : isPong ? 'border-l-green-400'
+                    : isRestart ? 'border-l-yellow-400' : 'border-l-gray-300';
+
+                  return (
+                    <div key={i} className={`bg-gray-50 rounded-lg p-3 border-l-4 ${borderColor} space-y-1.5`}>
+                      {/* Timestamp */}
+                      <p className="text-[10px] text-gray-400">{timeAgo(entry.ts)}</p>
+
+                      {/* Main message */}
+                      <p className="text-xs font-semibold text-gray-800 leading-relaxed">{entry.summary}</p>
+
+                      {/* USSD: show full response in a box */}
+                      {isUssd && entry.raw?.ussd_response && (
+                        <div className="mt-1 bg-white rounded-lg border border-purple-200 p-2.5">
+                          <p className="text-[10px] text-purple-600 font-semibold mb-1">USSD Response:</p>
+                          <pre className="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
+                            {entry.raw.ussd_response}
+                          </pre>
+                          <p className="text-[10px] text-gray-400 mt-1">Code: {entry.raw.code}</p>
+                        </div>
+                      )}
+
+                      {/* Internet status: show signal bar */}
+                      {isInternet && (
+                        <div className="mt-1 grid grid-cols-2 gap-2">
+                          <div className="bg-white rounded-lg border border-blue-200 p-2 text-center">
+                            <p className="text-[10px] text-gray-500 mb-0.5">Signal</p>
+                            <p className="text-sm font-bold text-blue-700">{entry.raw.signal}/31</p>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                              <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${entry.raw.signalPct ?? 0}%` }} />
+                            </div>
+                            <p className="text-[9px] text-gray-400 mt-0.5">{entry.raw.signalPct ?? 0}%</p>
+                          </div>
+                          <div className="bg-white rounded-lg border border-blue-200 p-2 text-center">
+                            <p className="text-[10px] text-gray-500 mb-0.5">GPRS</p>
+                            <p className={`text-sm font-bold ${entry.raw.gprsOk ? 'text-green-600' : 'text-red-600'}`}>
+                              {entry.raw.gprsOk ? '✅ OK' : '❌ OFF'}
+                            </p>
+                            {entry.raw.ip && <p className="text-[9px] text-gray-400 mt-1 font-mono">{entry.raw.ip}</p>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Raw data toggle */}
+                      <details className="mt-1">
+                        <summary className="text-[10px] text-gray-400 cursor-pointer hover:text-gray-600">
+                          Raw data ▾
+                        </summary>
+                        <pre className="text-[9px] text-gray-500 mt-1 bg-white rounded border p-2 overflow-x-auto">
+                          {JSON.stringify(entry.raw, null, 2)}
+                        </pre>
+                      </details>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}

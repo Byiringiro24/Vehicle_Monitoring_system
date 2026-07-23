@@ -114,6 +114,26 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
     if (vehicle) {
       const now = new Date().toISOString();
 
+      // ── Device command responses — broadcast as a dedicated event ─────────
+      // These are special payloads published by the ESP32 in response to commands.
+      // They are NOT standard telemetry and are NOT stored in DB fields.
+      // We detect them here before touching the DB record and emit device:response.
+      const rawPayload = data as any;
+      const isCommandResponse =
+        rawPayload.ack ||
+        rawPayload.pong ||
+        (rawPayload.cmd && ['internet_status', 'ussd_response', 'restarting'].includes(rawPayload.cmd)) ||
+        rawPayload.event === 'device_connected';
+
+      if (isCommandResponse) {
+        io.to(`org:${vehicle.organizationId}`).emit('device:response', {
+          vehicleId,
+          timestamp: now,
+          payload: rawPayload,
+        });
+        logger.info(`[CMD-RESPONSE] Vehicle ${vehicleId}: cmd=${rawPayload.cmd ?? rawPayload.ack ?? rawPayload.event}`);
+      }
+
       // Emit raw telemetry for charts
       io.to(`org:${vehicle.organizationId}`).emit('telemetry:update', {
         vehicleId, data: record, timestamp: now,
@@ -131,26 +151,38 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       });
 
       // Emit location update for live map — only when we have valid GPS coords
+      // Apply a minimum movement threshold to filter GPS jitter:
+      // Only broadcast new position if moved >10m from last known, OR if first position
       if (data.latitude !== undefined && data.longitude !== undefined && data.latitude && data.longitude) {
         const liveStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
-        io.to(`org:${vehicle.organizationId}`).emit('location:update', {
-          vehicleId,
-          latitude:    data.latitude,
-          longitude:   data.longitude,
-          speed:       data.speed   ?? 0,
-          heading:     data.heading ?? 0,
-          fuelLevel:   data.fuelLevel,
-          engineTemp:  data.engineTemp,
-          engineOn:    data.engineOn ?? false,
-          updatedAt:   now,
-          vehicle: {
-            id:           vehicleId,
-            name:         vehicle.name,
-            licensePlate: vehicle.licensePlate,
-            status:       liveStatus,
-            fleet:        vehicle.fleet,
-          },
-        });
+        
+        // Check distance from last known position to avoid jitter noise
+        const lastLoc = await prisma.lastLocation.findUnique({ where: { vehicleId } });
+        const distM = lastLoc?.latitude && lastLoc?.longitude
+          ? haversineKm(lastLoc.latitude, lastLoc.longitude, data.latitude, data.longitude) * 1000
+          : 999; // first position — always emit
+
+        // Emit if: moved >10m (real movement), OR speed >2 (definitely moving), OR no previous position
+        if (distM > 10 || (data.speed ?? 0) > 2 || distM === 999) {
+          io.to(`org:${vehicle.organizationId}`).emit('location:update', {
+            vehicleId,
+            latitude:    data.latitude,
+            longitude:   data.longitude,
+            speed:       data.speed   ?? 0,
+            heading:     data.heading ?? 0,
+            fuelLevel:   data.fuelLevel,
+            engineTemp:  data.engineTemp,
+            engineOn:    data.engineOn ?? false,
+            updatedAt:   now,
+            vehicle: {
+              id:           vehicleId,
+              name:         vehicle.name,
+              licensePlate: vehicle.licensePlate,
+              status:       liveStatus,
+              fleet:        vehicle.fleet,
+            },
+          });
+        }
       }
     }
   }

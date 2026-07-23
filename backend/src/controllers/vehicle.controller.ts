@@ -144,6 +144,8 @@ export async function updateVehicle(req: AuthenticatedRequest, res: Response, ne
       where: { id: req.params.id },
       data: {
         ...rest,
+        // fleetId empty string → null (disconnect from fleet)
+        ...(rest.fleetId === '' ? { fleetId: null } : {}),
         // Numeric coercions
         ...(year                !== undefined && year !== '' && { year:                parseInt(year, 10) }),
         ...(fuelCapacity        !== undefined && fuelCapacity !== '' && { fuelCapacity:        parseFloat(fuelCapacity) }),
