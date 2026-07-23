@@ -27,6 +27,9 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
     },
   });
 
+  // Capture the PREVIOUS lastLocation BEFORE any upsert — used for jitter filtering
+  let prevLocation: { latitude: number | null; longitude: number | null } | null = null;
+
   if (data.latitude !== undefined && data.longitude !== undefined) {
     const lat = data.latitude;
     const lon = data.longitude;
@@ -44,15 +47,17 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       },
     });
 
-    // 3. Update last location + distance accumulators
+    // 3. Read previous position BEFORE updating (for movement detection and distance calc)
     const existing = await prisma.lastLocation.findUnique({ where: { vehicleId } });
+    prevLocation = existing ? { latitude: existing.latitude, longitude: existing.longitude } : null;
+
     let distanceDelta = 0;
     if (existing?.latitude && existing?.longitude) {
       distanceDelta = haversineKm(existing.latitude, existing.longitude, lat, lon);
     }
 
-    const now      = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
+    const now2     = new Date();
+    const todayStr = now2.toISOString().slice(0, 10);
     const lastStr  = existing?.updatedAt?.toISOString().slice(0, 10);
     const sameDay  = todayStr === lastStr;
 
@@ -152,17 +157,16 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
 
       // Emit location update for live map — only when we have valid GPS coords
       // Apply a minimum movement threshold to filter GPS jitter:
-      // Only broadcast new position if moved >10m from last known, OR if first position
+      // Only broadcast new position if moved >10m from last known, OR speed >2, OR first position
       if (data.latitude !== undefined && data.longitude !== undefined && data.latitude && data.longitude) {
         const liveStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
-        
-        // Check distance from last known position to avoid jitter noise
-        const lastLoc = await prisma.lastLocation.findUnique({ where: { vehicleId } });
-        const distM = lastLoc?.latitude && lastLoc?.longitude
-          ? haversineKm(lastLoc.latitude, lastLoc.longitude, data.latitude, data.longitude) * 1000
+
+        // Use the PREVIOUS lastLocation (captured before the upsert) to measure movement
+        const distM = prevLocation?.latitude && prevLocation?.longitude
+          ? haversineKm(prevLocation.latitude, prevLocation.longitude, data.latitude, data.longitude) * 1000
           : 999; // first position — always emit
 
-        // Emit if: moved >10m (real movement), OR speed >2 (definitely moving), OR no previous position
+        // Emit if: moved >10m (real movement), OR speed >2 (definitely moving), OR first position
         if (distM > 10 || (data.speed ?? 0) > 2 || distM === 999) {
           io.to(`org:${vehicle.organizationId}`).emit('location:update', {
             vehicleId,

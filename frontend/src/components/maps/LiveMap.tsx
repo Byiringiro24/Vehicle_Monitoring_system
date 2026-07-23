@@ -166,7 +166,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
           <div key={label} style={{ color, fontWeight: 600 }}>{label}</div>
         ))}
         <div style={{ color: '#9ca3af', fontSize: 9, borderTop: '1px solid #f3f4f6', paddingTop: 4, marginTop: 2 }}>
-          Live · auto-updates every 15s
+          Live · updates every 2s
         </div>
       </div>
 
