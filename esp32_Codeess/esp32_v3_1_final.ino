@@ -54,7 +54,7 @@ const char DEVICE_TOKEN[] = "5466f18d-ffd6-4267-ad81-93583d1bbaa4";
 
 // 2. SIM card phone number in this GPS device (for verification)
 //    Format: +250780123456  or  0780123456
-const char SIM_NUMBER[]   = "+250780000000";
+const char SIM_NUMBER[]   = "+250733768958";
 
 // 3. SIM card APN
 const char APN[]          = "internet";

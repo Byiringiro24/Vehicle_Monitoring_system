@@ -97,6 +97,7 @@ function FitBounds({ locations }: { locations: LocationData[] }) {
 // ── Public types ──────────────────────────────────────────────────────────────
 export interface VehicleInfo {
   id: string; name: string; licensePlate: string; status: string;
+  engineLocked?: boolean;
   fleet?: { name: string; color: string } | null;
 }
 

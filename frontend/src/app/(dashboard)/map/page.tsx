@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { getSocket } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 import { formatSpeed, formatDate } from '@/lib/utils';
-import { Search, Truck, Lock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Search, Truck, Lock, Unlock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
 import { getLiveStatus, STALE_MS, SPEED_THRESHOLD } from '@/lib/liveStatus';
@@ -93,6 +93,8 @@ export default function LiveMapPage() {
   const [locations, setLocations] = useState<Record<string, LocationData>>({});
   // Ground truth: which vehicle IDs have an active MQTT connection right now
   const [connectedDevices, setConnectedDevices] = useState<Set<string>>(new Set());
+  // Engine lock state per vehicle (updated from socket vehicle:lock events)
+  const [lockedVehicles, setLockedVehicles] = useState<Record<string, boolean>>({});
 
   // Re-render every 2s so relative timestamps ("5s ago") stay fresh
   const [, setTick] = useState(0);
@@ -154,6 +156,17 @@ export default function LiveMapPage() {
         return next;
       });
     }
+
+    // Seed engineLocked state from REST
+    setLockedVehicles(prev => {
+      const next = { ...prev };
+      for (const loc of initialLocations) {
+        if (loc.vehicleId && loc.vehicle?.engineLocked !== undefined) {
+          next[loc.vehicleId] = loc.vehicle.engineLocked;
+        }
+      }
+      return next;
+    });
   }, [initialLocations]);
 
   // Socket.IO — live GPS updates + device online/offline
@@ -222,19 +235,26 @@ export default function LiveMapPage() {
       });
     });
 
+    // ── Engine lock/unlock — update lock state in real time
+    socket.on('vehicle:lock', (p: { vehicleId: string; locked: boolean }) => {
+      setLockedVehicles(prev => ({ ...prev, [p.vehicleId]: p.locked }));
+    });
+
     return () => {
       socket.off('location:update');
       socket.off('device:heartbeat');
       socket.off('gps:online');
       socket.off('gps:offline');
       socket.off('vehicles:offline');
+      socket.off('vehicle:lock');
     };
   }, [accessToken]);
 
   // Lock mutation
   const lockMutation = useMutation({
     mutationFn: ({ id, locked }: { id: string; locked: boolean }) => vehicleApi.lock(id, locked),
-    onSuccess: (_, { locked }) => {
+    onSuccess: (_, { id, locked }) => {
+      setLockedVehicles(prev => ({ ...prev, [id]: locked }));
       qc.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success(locked ? '🔒 Lock command sent to device' : '🔓 Unlock command sent to device');
     },
@@ -344,84 +364,102 @@ export default function LiveMapPage() {
           )}
 
           {sorted.map(loc => {
-            const status   = getStatus(loc);
-            const isActive = status === 'ACTIVE';
-            const isIdle   = status === 'IDLE';
-            const hasGps   = !!(loc.latitude && loc.longitude && Math.abs(loc.latitude) > 0.001);
+            const status    = getStatus(loc);
+            const isOnline  = status !== 'OFFLINE';
+            const isActive  = status === 'ACTIVE';
+            const isIdle    = status === 'IDLE';
+            const hasGps    = !!(loc.latitude && loc.longitude && Math.abs(loc.latitude) > 0.001);
             const isSelected = selectedId === loc.vehicleId;
-
-            const dotColor = isActive ? 'bg-green-500' : isIdle ? 'bg-yellow-400' : 'bg-gray-400';
-            const badgeBg  = isActive ? 'bg-green-100 text-green-800' : isIdle ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-500';
+            const isLocked  = lockedVehicles[loc.vehicleId] ?? false;
 
             return (
               <div
                 key={loc.vehicleId}
                 onClick={() => setSelectedId(isSelected ? null : loc.vehicleId)}
                 className={cn(
-                  'px-4 py-3 cursor-pointer border-b border-gray-50 hover:bg-blue-50/50 transition-all select-none',
+                  'px-3 py-3 cursor-pointer border-b border-gray-100 hover:bg-blue-50/40 transition-all select-none',
                   isSelected ? 'bg-blue-50 border-l-[3px] border-l-blue-500' : 'border-l-[3px] border-l-transparent'
                 )}>
-                <div className="flex items-center gap-2.5">
 
-                  {/* Live status dot */}
-                  <div className="relative shrink-0">
-                    <div className={cn('w-2.5 h-2.5 rounded-full', dotColor)} />
-                    {isActive && (
-                      <div className={cn('absolute inset-0 rounded-full animate-ping opacity-60', dotColor)} />
+                {/* Row 1: plate + GPS status badges */}
+                <div className="flex items-center justify-between gap-1 mb-1.5">
+                  <p className="font-bold text-xs text-gray-900 font-mono truncate">
+                    {loc.vehicle?.licensePlate ?? 'Unknown'}
+                  </p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* ONLINE / OFFLINE badge */}
+                    <span className={cn(
+                      'text-[9px] font-bold px-1.5 py-0.5 rounded-full border',
+                      isOnline
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : 'bg-gray-100 text-gray-500 border-gray-200'
+                    )}>
+                      {isOnline ? '🟢 ONLINE' : '🔴 OFFLINE'}
+                    </span>
+                    {/* IDLE / ACTIVE badge — only when online */}
+                    {isOnline && (
+                      <span className={cn(
+                        'text-[9px] font-bold px-1.5 py-0.5 rounded-full border',
+                        isActive
+                          ? 'bg-green-100 text-green-800 border-green-300'
+                          : 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                      )}>
+                        {isActive ? '🚗 ACTIVE' : '⏸ IDLE'}
+                      </span>
                     )}
                   </div>
+                </div>
 
+                {/* Row 2: vehicle name */}
+                <p className="text-[10px] text-gray-500 truncate leading-tight mb-1">
+                  {loc.vehicle?.name ?? '—'}
+                </p>
+
+                {/* Row 3: GPS data + lock state */}
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className="font-bold text-xs text-gray-900 font-mono truncate">
-                        {loc.vehicle?.licensePlate ?? 'Unknown'}
-                      </p>
-                      <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0', badgeBg)}>
-                        {status}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-gray-500 truncate leading-tight">
-                      {loc.vehicle?.name ?? '—'}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      {hasGps ? (
-                        <>
-                          <span className="text-[10px] text-blue-600 font-medium">📍 {formatSpeed(loc.speed)}</span>
+                    {hasGps ? (
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-blue-600 font-medium">
+                          📍 {formatSpeed(loc.speed)}
                           {loc.accuracy && loc.accuracy > 0 && (
-                            <span className="text-[9px] text-gray-400">±{loc.accuracy.toFixed(0)}m</span>
+                            <span className="text-gray-400 ml-1">±{loc.accuracy.toFixed(0)}m</span>
                           )}
-                        </>
-                      ) : (
-                        <span className="text-[10px] text-gray-400">No GPS fix</span>
-                      )}
-                    </div>
-                    {/* Show exact coordinates */}
-                    {hasGps && (
-                      <p className="text-[9px] text-gray-400 leading-tight">
-                        {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
-                      </p>
+                        </p>
+                        <p className="text-[9px] text-gray-400 font-mono">
+                          {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-gray-400">No GPS fix</p>
                     )}
-                    {/* Exact date/time of last update */}
                     {loc.updatedAt && (
-                      <p className="text-[9px] text-gray-400 leading-tight">
+                      <p className="text-[9px] text-gray-400 mt-0.5">
                         🕐 {formatDate(loc.updatedAt)}
                       </p>
                     )}
                   </div>
 
-                  {/* Lock button */}
+                  {/* Lock / Unlock button — shows current relay state */}
                   <button
                     onClick={e => {
                       e.stopPropagation();
                       setLockTarget({
                         id:     loc.vehicleId,
                         plate:  loc.vehicle?.licensePlate ?? '',
-                        action: 'lock',
+                        action: isLocked ? 'unlock' : 'lock',
                       });
                     }}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition shrink-0"
-                    title="Lock engine">
-                    <Lock size={13} />
+                    className={cn(
+                      'shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg border text-[9px] font-bold transition',
+                      isLocked
+                        ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                        : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+                    )}
+                    title={isLocked ? 'Engine LOCKED — click to unlock' : 'Engine UNLOCKED — click to lock'}>
+                    {isLocked
+                      ? <><Lock size={11} /><span>LOCKED</span></>
+                      : <><Unlock size={11} /><span>UNLOCKED</span></>}
                   </button>
                 </div>
               </div>
