@@ -661,23 +661,23 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     <div className="space-y-5">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
           <Link href="/vehicles"
-            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition text-gray-500">
+            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition text-gray-500 shrink-0">
             <ArrowLeft size={16} />
           </Link>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-            <Truck size={20} className="text-blue-600" />
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+            <Truck size={18} className="text-blue-600" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 leading-tight">{vehicle.name}</h1>
-            <p className="text-sm text-gray-500 font-mono">{vehicle.licensePlate}</p>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900 leading-tight truncate">{vehicle.name}</h1>
+            <p className="text-xs sm:text-sm text-gray-500 font-mono">{vehicle.licensePlate}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* WebSocket connection indicator — only show after first connect attempt */}
+          {/* WebSocket connection indicator */}
           {wsInitialised && (
             <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
               wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
@@ -691,12 +691,12 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
             {status}
           </span>
 
-          {/* GPS module live indicator (from MQTT connect/disconnect events) */}
+          {/* GPS module live indicator */}
           {gpsModuleOnline !== null && (
-            <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold',
+            <span className={cn('hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold',
               gpsModuleOnline ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700')}>
               {gpsModuleOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
-              {gpsModuleOnline ? 'GPS Connected' : 'GPS Disconnected'}
+              {gpsModuleOnline ? 'GPS Connected' : 'GPS Off'}
             </span>
           )}
 
@@ -721,17 +721,18 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         <Stat label="Speed"       value={formatSpeed(loc?.speed)}     icon={<Gauge size={18} />}       color="blue"   />
         <Stat label="Fuel Level"  value={formatFuel(loc?.fuelLevel)}  icon={<Fuel size={18} />}        color="yellow" />
         <Stat label="Engine Temp" value={formatTemp(loc?.engineTemp)} icon={<Thermometer size={18} />} color="red"    />
-        <Stat label="Today km"    value={`${(loc?.distanceTodayKm ?? 0).toFixed(1)} km`}
+        <Stat label="Today km"
+          value={`${((loc as any)?.distanceTodayKm ?? 0).toFixed(1)} km`}
           icon={<Route size={18} />} color="green"
           sub={loc?.updatedAt ? `Last seen ${timeAgo(loc.updatedAt)}` : 'No data'} />
       </div>
 
       {/* ── Tabs ────────────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto scrollbar-none -mx-0">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={cn(
-              'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px',
+              'flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition -mb-px whitespace-nowrap shrink-0',
               tab === t.id
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700'

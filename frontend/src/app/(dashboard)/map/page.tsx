@@ -99,6 +99,7 @@ export default function LiveMapPage() {
   const [search, setSearch] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
   const [lockTarget, setLockTarget] = useState<{id:string; plate:string; action:'lock'|'unlock'} | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile sidebar toggle
 
   // Live location map: vehicleId → LocationData
   const [locations, setLocations] = useState<Record<string, LocationData>>({});
@@ -272,10 +273,31 @@ export default function LiveMapPage() {
   const offlineCount = locationList.filter(l => getStatus(l) === 'OFFLINE').length;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] -m-6 overflow-hidden">
+    <div className="flex h-[calc(100vh-4rem)] -m-6 overflow-hidden relative">
+
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Mobile toggle button — shows on small screens, floats over map */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="lg:hidden absolute top-3 left-3 z-40 bg-white rounded-lg shadow-lg border border-gray-200 px-3 py-2 flex items-center gap-2 text-xs font-semibold text-gray-700">
+        <Truck size={14} />
+        {sidebarOpen ? 'Hide' : `Fleet (${locationList.length})`}
+      </button>
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <div className="w-72 bg-white border-r border-gray-200 flex flex-col shrink-0 z-10 shadow-sm">
+      <div className={cn(
+        'bg-white border-r border-gray-200 flex flex-col shrink-0 z-30 shadow-sm transition-all duration-300',
+        // Desktop: always visible
+        'lg:relative lg:translate-x-0 lg:w-72',
+        // Mobile: slide in from left
+        sidebarOpen
+          ? 'fixed inset-y-0 left-0 w-72 translate-x-0'
+          : 'fixed inset-y-0 left-0 w-72 -translate-x-full lg:translate-x-0'
+      )}>
 
         {/* Header */}
         <div className="p-4 border-b border-gray-100 space-y-3">

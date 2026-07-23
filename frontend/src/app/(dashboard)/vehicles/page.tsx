@@ -214,9 +214,10 @@ export default function VehiclesPage() {
         </select>
       </div>
 
-      {/* Table */}
+      {/* Table — horizontally scrollable on mobile */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[700px]">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {['Vehicle','Plate / Type','Fleet','Status','Engine Lock','Last Seen','Actions'].map(h => (
@@ -355,6 +356,7 @@ export default function VehiclesPage() {
                 ))}
           </tbody>
         </table>
+        </div>{/* end overflow-x-auto */}
 
         {!isLoading && !vehicles.length && (
           <div className="text-center py-14 text-gray-400">
