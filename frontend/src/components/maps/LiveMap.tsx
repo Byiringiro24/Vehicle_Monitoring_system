@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatSpeed, formatFuel, formatDate } from '@/lib/utils';
-import { getLiveStatus } from '@/lib/liveStatus';
+import { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
 import { reverseGeocode } from '@/lib/geocode';
 
 // Re-export so pages can import without pulling in Leaflet (avoids SSR window error)
-export { getLiveStatus } from '@/lib/liveStatus';
+export { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
 
 // Fix default Leaflet icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -124,7 +124,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
   // GPS status is based on speed, NOT engine lock state
   function resolveStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
     if (connectedDevices.has(loc.vehicleId)) {
-      return (loc.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE';
+      return (loc.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
     }
     return getLiveStatus(loc.updatedAt, loc.speed);
   }

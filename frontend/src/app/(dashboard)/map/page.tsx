@@ -9,7 +9,7 @@ import { formatSpeed, formatDate } from '@/lib/utils';
 import { Search, Truck, Lock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
-import { getLiveStatus, STALE_MS } from '@/lib/liveStatus';
+import { getLiveStatus, STALE_MS, SPEED_THRESHOLD } from '@/lib/liveStatus';
 import type { LocationData } from '@/components/maps/LiveMap';
 
 const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
@@ -247,7 +247,7 @@ export default function LiveMapPage() {
   function getStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
     if (connectedDevices.has(loc.vehicleId)) {
       // Device is confirmed online — use speed for ACTIVE vs IDLE
-      return (loc.speed ?? 0) > 2 ? 'ACTIVE' : 'IDLE';
+      return (loc.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
     }
     return getLiveStatus(loc.updatedAt, loc.speed);
   }

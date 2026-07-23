@@ -234,6 +234,18 @@ void onMessage(char* topic, byte* payload, unsigned int len) {
 }
 
 // ─── Publish GPS Telemetry ────────────────────────────────────────────────────
+// Speed smoothing — average last 3 readings to reduce GPS noise
+float speedHistory[3] = {0, 0, 0};
+int   speedIdx = 0;
+
+float smoothSpeed(float raw) {
+  speedHistory[speedIdx % 3] = raw;
+  speedIdx++;
+  float sum = 0;
+  for (int i = 0; i < 3; i++) sum += speedHistory[i];
+  return sum / 3.0f;
+}
+
 void publishGPS() {
   if (millis() - lastTelemetryAt < TELEMETRY_MS) return;
   lastTelemetryAt = millis();
@@ -241,6 +253,11 @@ void publishGPS() {
   float lat = 0, lon = 0, spd = 0, alt = 0, acc = 0;
   int   vsat = 0, usat = 0;
   bool  fix  = modem.getGPS(&lat, &lon, &spd, &alt, &vsat, &usat, &acc);
+
+  // Apply smoothing and noise floor — SIM808 reports 0.5–3.5 km/h even when stationary
+  // Only report non-zero speed if smoothed value exceeds 5 km/h (real movement)
+  float smoothedSpd = smoothSpeed(fix ? spd : 0.0f);
+  float reportedSpd = (smoothedSpd >= 5.0f) ? smoothedSpd : 0.0f;
 
   JsonDocument doc;
   doc["online"]        = true;
@@ -255,14 +272,15 @@ void publishGPS() {
   if (fix && lat != 0.0f && lon != 0.0f) {
     doc["latitude"]   = serialized(String(lat, 6));
     doc["longitude"]  = serialized(String(lon, 6));
-    doc["speed"]      = serialized(String(spd, 2));
+    doc["speed"]      = serialized(String(reportedSpd, 2));  // smoothed, noise-filtered
     doc["altitude"]   = serialized(String(alt, 2));
     doc["accuracy"]   = serialized(String(acc, 2));
     doc["heading"]    = nullptr;
     doc["satellites"] = usat;
     Serial.print("[GPS] ");
     Serial.print(lat, 6); Serial.print(", "); Serial.print(lon, 6);
-    Serial.print("  "); Serial.print(spd, 1); Serial.print("km/h");
+    Serial.print("  raw:"); Serial.print(spd, 1);
+    Serial.print(" smooth:"); Serial.print(reportedSpd, 1); Serial.print("km/h");
     Serial.print("  Sats:"); Serial.println(usat);
   } else {
     doc["latitude"]  = nullptr; doc["longitude"] = nullptr;

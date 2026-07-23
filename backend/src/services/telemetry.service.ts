@@ -91,9 +91,10 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
     });
 
     // 4. Update vehicle status based on GPS activity
-    // ACTIVE = moving (speed > 2 km/h), IDLE = stationary with GPS signal
+    // ACTIVE = moving (speed > 5 km/h) — threshold raised to filter SIM808 GPS noise
+    // IDLE   = stationary with GPS signal (speed ≤ 5 km/h)
     // NEVER set to OFFLINE from telemetry — offline is detected by absence of telemetry
-    const newStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
+    const newStatus = data.speed && data.speed > 5 ? 'ACTIVE' : 'IDLE';
     await prisma.vehicle.update({ where: { id: vehicleId }, data: { status: newStatus as any } });
 
     // 4b. If device reported a SIM number, store it on the gpsDevice for verification
@@ -159,7 +160,7 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       // Emit location update for live map — always emit when we have valid GPS coords
       // The frontend handles display; filtering jitter here causes missed updates
       if (data.latitude !== undefined && data.longitude !== undefined && data.latitude && data.longitude) {
-        const liveStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
+        const liveStatus = data.speed && data.speed > 5 ? 'ACTIVE' : 'IDLE';
         io.to(`org:${vehicle.organizationId}`).emit('location:update', {
           vehicleId,
           latitude:    data.latitude,
