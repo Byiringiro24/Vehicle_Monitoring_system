@@ -38,8 +38,13 @@ export async function getFleetLocations(req: AuthenticatedRequest, res: Response
     const locations = await prisma.lastLocation.findMany({
       where: { vehicle: { organizationId: req.user!.organizationId } },
       include: {
-        vehicle: { select: { id: true, name: true, licensePlate: true, status: true,
-          fleet: { select: { id: true, name: true, color: true } } } },
+        vehicle: {
+          select: {
+            id: true, name: true, licensePlate: true, status: true,
+            engineLocked: true,
+            fleet: { select: { id: true, name: true, color: true } },
+          },
+        },
       },
     });
     res.json(locations);

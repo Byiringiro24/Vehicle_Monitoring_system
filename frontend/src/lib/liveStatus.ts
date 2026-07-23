@@ -3,18 +3,19 @@
  *
  * Device sends every 2s, so STALE = 10s (5 missed packets before offline).
  * Status is ONLINE as long as ANY message arrived in the last 10s.
- * Engine lock has no effect on GPS status.
+ * Engine lock has NO effect on GPS status.
  *
- * ACTIVE  = message < 10s ago AND speed > 5 km/h  → moving
- * IDLE    = message < 10s ago AND speed ≤ 5 km/h  → stationary but online
- * OFFLINE = no message for > 10s                  → connection lost
+ * ACTIVE  = message < STALE_MS ago AND speed ≥ SPEED_THRESHOLD km/h
+ * IDLE    = message < STALE_MS ago AND speed < SPEED_THRESHOLD km/h
+ * OFFLINE = no message for > STALE_MS
  *
- * Threshold is 5 km/h (not 2) because SIM808 GPS noise can reach 3–4 km/h
- * when truly stationary due to satellite geometry drift.
+ * SPEED_THRESHOLD = 3 km/h — SIM808 GPS noise is typically 0–2.5 km/h when
+ * stationary, so 3 km/h reliably distinguishes real movement from noise.
+ * This is the single source of truth used across the entire frontend.
  */
 
-export const STALE_MS    = 10_000; // 10s = 5× the 2s send interval
-export const SPEED_THRESHOLD = 5;  // km/h — below this = IDLE
+export const STALE_MS        = 10_000; // 10s = 5× the 2s send interval
+export const SPEED_THRESHOLD = 3;      // km/h — real movement threshold
 
 export type LiveStatus = 'ACTIVE' | 'IDLE' | 'OFFLINE';
 
@@ -25,5 +26,5 @@ export function getLiveStatus(
 ): LiveStatus {
   if (!updatedAt) return 'OFFLINE';
   if (Date.now() - new Date(updatedAt).getTime() > STALE_MS) return 'OFFLINE';
-  return (speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
+  return (speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
 }

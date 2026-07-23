@@ -10,7 +10,26 @@ import { Search, Truck, Lock, Unlock, AlertTriangle, Wifi, WifiOff, RefreshCw } 
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
 import { getLiveStatus, STALE_MS, SPEED_THRESHOLD } from '@/lib/liveStatus';
+import { reverseGeocode } from '@/lib/geocode';
 import type { LocationData } from '@/components/maps/LiveMap';
+
+// ─── Inline address lookup for sidebar cards ──────────────────────────────────
+// Caches at component level; only fetches when coords are available
+function InlineAddress({ lat, lon }: { lat: number; lon: number }) {
+  const [address, setAddress] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lat || !lon) return;
+    let cancelled = false;
+    reverseGeocode(lat, lon).then(a => { if (!cancelled) setAddress(a); });
+    return () => { cancelled = true; };
+  }, [lat.toFixed(3), lon.toFixed(3)]); // only re-fetch when position changes by ~100m
+  if (!address) return null;
+  return (
+    <p className="text-[9px] text-gray-500 leading-tight mt-0.5 truncate" title={address}>
+      📍 {address}
+    </p>
+  );
+}
 
 const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
   ssr: false,
@@ -421,7 +440,7 @@ export default function LiveMapPage() {
                     {hasGps ? (
                       <div className="space-y-0.5">
                         <p className="text-[10px] text-blue-600 font-medium">
-                          📍 {formatSpeed(loc.speed)}
+                          {formatSpeed(loc.speed)}
                           {loc.accuracy && loc.accuracy > 0 && (
                             <span className="text-gray-400 ml-1">±{loc.accuracy.toFixed(0)}m</span>
                           )}
@@ -429,6 +448,8 @@ export default function LiveMapPage() {
                         <p className="text-[9px] text-gray-400 font-mono">
                           {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
                         </p>
+                        {/* Human-readable address via reverse geocoding */}
+                        <InlineAddress lat={loc.latitude} lon={loc.longitude} />
                       </div>
                     ) : (
                       <p className="text-[10px] text-gray-400">No GPS fix</p>

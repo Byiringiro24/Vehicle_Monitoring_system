@@ -279,12 +279,12 @@ export default function VehiclesPage() {
                         )}
                         <span className={cn('text-xs px-2 py-1 rounded-full font-medium',
                           onlineIds.has(v.id)
-                            ? (v.lastLocation?.speed ?? 0) > SPEED_THRESHOLD
+                            ? (v.lastLocation?.speed ?? 0) >= SPEED_THRESHOLD
                               ? 'bg-green-100 text-green-800'
                               : 'bg-yellow-100 text-yellow-800'
                             : getStatusColor(v.status))}>
                           {onlineIds.has(v.id)
-                            ? ((v.lastLocation?.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE')
+                            ? ((v.lastLocation?.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE')
                             : v.status}
                         </span>
                       </div>

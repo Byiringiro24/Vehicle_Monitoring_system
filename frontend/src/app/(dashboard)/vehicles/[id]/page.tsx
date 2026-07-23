@@ -435,7 +435,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       if (lastUpd && Date.now() - new Date(lastUpd).getTime() < 15_000) {
         setConnectedNow(true);
         setLiveStatus(prev => prev === 'OFFLINE' || prev === null ? 
-          ((vehicle.lastLocation?.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE') : prev);
+          ((vehicle.lastLocation?.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE') : prev);
       }
     }
   }, [vehicle]);
@@ -482,7 +482,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       });
       // GPS status based on speed, NOT engineOn
       const spd = d.speed ?? 0;
-      setLiveStatus(spd > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE');
+      setLiveStatus(spd >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE');
     });
 
     // ── Command responses from ESP32 device ───────────────────────────────────
@@ -638,14 +638,12 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   // Fall back to DB status only when we have no live signal at all.
   function getStatus(): string {
     if (connectedNow) {
-      return (loc?.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
+      return (loc?.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
     }
-    // If liveStatus was set by telemetry:update (ACTIVE/IDLE), trust it
     if (liveStatus && liveStatus !== 'OFFLINE') return liveStatus;
-    // If updatedAt is within STALE_MS, device is likely still alive
     if (loc?.updatedAt) {
       const age = Date.now() - new Date(loc.updatedAt).getTime();
-      if (age < 10_000) return (loc?.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
+      if (age < 10_000) return (loc?.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
     }
     return liveStatus ?? vehicle.status ?? 'OFFLINE';
   }

@@ -125,7 +125,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
   // GPS status is based on speed, NOT engine lock state
   function resolveStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
     if (connectedDevices.has(loc.vehicleId)) {
-      return (loc.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
+      return (loc.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
     }
     return getLiveStatus(loc.updatedAt, loc.speed);
   }

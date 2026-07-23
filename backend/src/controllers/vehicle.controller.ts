@@ -126,95 +126,112 @@ export async function updateVehicle(req: AuthenticatedRequest, res: Response, ne
     });
     if (!existing) throw new AppError(404, 'Vehicle not found');
 
-    // Destructure ALL known fields — anything not listed here goes into `rest`
-    const {
-      // Date fields (need new Date() conversion)
-      purchaseDate, insuranceExpiry, roadTaxExpiry, inspectionExpiry,
-      transportPermitExpiry, batteryWarranty, warrantyExpiry, nextServiceDate,
-      insuranceStart,
-      // Numeric fields (need parseFloat/parseInt)
-      year, fuelCapacity, purchasePrice, currentValue, horsepower, engineCc,
-      batteryCapacityKwh, chargingSpeedKw, batteryReplaceCost, batteryHealth,
-      avgConsumption, minFuelAlert, insurancePremium, oilChangeKmInterval,
-      lastServiceOdometer, odometer, engineHours,
-      // Strip ALL read-only / system / relation fields
-      id: _id, organizationId: _org, deviceToken: _dt, createdAt: _ca, updatedAt: _ua,
-      status: _st, engineLocked: _el,
-      lastLocation: _ll, gpsDevice: _gd, currentDriver: _cd,
-      fleet: _fleet, _count: _cnt,
-      // Strip relation objects that aren't scalar FK fields
-      alerts: _al, telemetry: _tel, trips: _tr, gpsHistory: _gh,
-      ...rest
-    } = req.body;
-
-    // Build the update data object
-    const updateData: any = { ...rest };
-
-    // fleetId empty string → null (disconnect from fleet)
-    if (rest.fleetId === '') updateData.fleetId = null;
-
-    // Numeric coercions — only set if provided and not empty
-    if (year                != null && year !== '')                updateData.year                = parseInt(String(year), 10);
-    if (fuelCapacity        != null && fuelCapacity !== '')        updateData.fuelCapacity        = parseFloat(String(fuelCapacity));
-    if (purchasePrice       != null && purchasePrice !== '')       updateData.purchasePrice       = parseFloat(String(purchasePrice));
-    if (currentValue        != null && currentValue !== '')        updateData.currentValue        = parseFloat(String(currentValue));
-    if (horsepower          != null && horsepower !== '')          updateData.horsepower          = parseInt(String(horsepower), 10);
-    if (engineCc            != null && engineCc !== '')            updateData.engineCc            = parseFloat(String(engineCc));
-    if (batteryCapacityKwh  != null && batteryCapacityKwh !== '')  updateData.batteryCapacityKwh  = parseFloat(String(batteryCapacityKwh));
-    if (chargingSpeedKw     != null && chargingSpeedKw !== '')     updateData.chargingSpeedKw     = parseFloat(String(chargingSpeedKw));
-    if (batteryReplaceCost  != null && batteryReplaceCost !== '')  updateData.batteryReplaceCost  = parseFloat(String(batteryReplaceCost));
-    if (batteryHealth       != null && batteryHealth !== '')       updateData.batteryHealth       = parseFloat(String(batteryHealth));
-    if (avgConsumption      != null && avgConsumption !== '')      updateData.avgConsumption      = parseFloat(String(avgConsumption));
-    if (minFuelAlert        != null && minFuelAlert !== '')        updateData.minFuelAlert        = parseFloat(String(minFuelAlert));
-    if (insurancePremium    != null && insurancePremium !== '')    updateData.insurancePremium    = parseFloat(String(insurancePremium));
-    if (oilChangeKmInterval != null && oilChangeKmInterval !== '') updateData.oilChangeKmInterval = parseFloat(String(oilChangeKmInterval));
-    if (lastServiceOdometer != null && lastServiceOdometer !== '') updateData.lastServiceOdometer = parseFloat(String(lastServiceOdometer));
-    if (odometer            != null && odometer !== '')            updateData.odometer            = parseFloat(String(odometer));
-    if (engineHours         != null && engineHours !== '')         updateData.engineHours         = parseFloat(String(engineHours));
-
-    // Date coercions — only set if non-empty string
-    if (purchaseDate          && purchaseDate !== '')          updateData.purchaseDate          = new Date(purchaseDate);
-    if (insuranceExpiry       && insuranceExpiry !== '')       updateData.insuranceExpiry       = new Date(insuranceExpiry);
-    if (roadTaxExpiry         && roadTaxExpiry !== '')         updateData.roadTaxExpiry         = new Date(roadTaxExpiry);
-    if (inspectionExpiry      && inspectionExpiry !== '')      updateData.inspectionExpiry      = new Date(inspectionExpiry);
-    if (transportPermitExpiry && transportPermitExpiry !== '') updateData.transportPermitExpiry = new Date(transportPermitExpiry);
-    if (batteryWarranty       && batteryWarranty !== '')       updateData.batteryWarranty       = new Date(batteryWarranty);
-    if (warrantyExpiry        && warrantyExpiry !== '')        updateData.warrantyExpiry        = new Date(warrantyExpiry);
-    if (nextServiceDate       && nextServiceDate !== '')       updateData.nextServiceDate       = new Date(nextServiceDate);
-
-    // Remove any keys that are undefined or not valid Prisma scalar fields
-    const knownFields = new Set([
-      'name','licensePlate','manufacturer','model','year','color','vin','engineNumber',
-      'registrationNumber','fleetNumber','assetTag','vehicleClass','vehicleType','purpose',
-      'energyType','fuelCapacity','recommendedFuel','avgConsumption','minFuelAlert',
-      'batteryCapacityKwh','chargingSpeedKw','batteryHealth','batteryReplaceCost',
-      'engineType','engineCc','horsepower','transmission','driveType',
-      'ownershipType','purchaseDate','purchasePrice','currentValue','ownerName',
-      'insuranceCompany','insurancePolicyNo','insuranceExpiry','insurancePremium','insuranceCoverage',
-      'roadTaxExpiry','inspectionExpiry','transportPermit','transportPermitExpiry',
-      'oilChangeKmInterval','lastServiceOdometer','nextServiceDate','tyreBrand','tyreSize',
-      'batteryWarranty','warrantyExpiry','odometer','engineHours','fleetId',
-      'notes','description',
+    // ── All valid scalar fields from the Vehicle Prisma model ─────────────────
+    // These are the ONLY keys allowed through to Prisma.update()
+    // Grouped exactly as they appear in schema.prisma
+    const VEHICLE_SCALAR_FIELDS = new Set([
+      // Identity
+      'name', 'licensePlate', 'fleetNumber', 'assetTag', 'vin', 'engineNumber', 'registrationNumber',
+      // Classification
+      'vehicleClass', 'vehicleType', 'purpose', 'manufacturer', 'model', 'year', 'trim', 'color',
+      // Energy
+      'energyType', 'fuelCapacity', 'recommendedFuel', 'avgConsumption', 'minFuelAlert',
+      'fuelCardNumber', 'preferredStation',
+      'batteryCapacityKwh', 'batterySerial', 'batteryManufacturer', 'batteryHealth',
+      'batteryWarranty', 'chargerType', 'chargingSpeedKw', 'batteryReplaceCost',
+      // Engine
+      'engineType', 'engineCc', 'horsepower', 'transmission', 'driveType', 'maxSpeedKph',
+      // Ownership
+      'ownerName', 'ownerCompany', 'ownershipType', 'purchaseDate', 'purchasePrice',
+      'currentValue', 'supplierName', 'warrantyExpiry',
+      // Insurance
+      'insuranceCompany', 'insurancePolicyNo', 'insuranceStart', 'insuranceExpiry',
+      'insurancePremium', 'insuranceCoverage', 'insuranceAgent', 'insuranceEmergency',
+      // Compliance
+      'roadTaxExpiry', 'inspectionExpiry', 'transportPermit', 'transportPermitExpiry',
+      'commercialLicense', 'commercialLicExpiry', 'taxiPermit', 'taxiPermitExpiry',
+      'roadworthinessCert', 'emissionCert', 'emissionExpiry',
+      // Maintenance
+      'oilChangeKmInterval', 'nextServiceDate', 'lastServiceDate', 'lastServiceOdometer',
+      // Tyres
+      'tyreBrand', 'tyreSize', 'tyreFrontLeft', 'tyreFrontRight', 'tyreRearLeft',
+      'tyreRearRight', 'tyreSpare', 'tyrePurchaseDate',
+      // Documents
+      'docRegistrationCard', 'docInsurancePdf', 'docInspectionCert',
+      'docPurchaseInvoice', 'docPhoto', 'docOwnershipCert',
+      // Odometer / hours
+      'odometer', 'engineHours',
+      // FK
+      'fleetId',
+      // Notes
+      'notes', 'description',
     ]);
 
-    // Delete any unknown keys to prevent Prisma errors
-    for (const key of Object.keys(updateData)) {
-      if (!knownFields.has(key)) {
-        delete updateData[key];
+    // ── Date fields — need new Date() conversion ─────────────────────────────
+    const DATE_FIELDS = new Set([
+      'purchaseDate', 'insuranceStart', 'insuranceExpiry', 'roadTaxExpiry',
+      'inspectionExpiry', 'transportPermitExpiry', 'commercialLicExpiry',
+      'taxiPermitExpiry', 'emissionExpiry', 'batteryWarranty', 'warrantyExpiry',
+      'nextServiceDate', 'lastServiceDate', 'tyrePurchaseDate',
+    ]);
+
+    // ── Numeric fields — need parseFloat/parseInt ────────────────────────────
+    const INT_FIELDS   = new Set(['year', 'horsepower']);
+    const FLOAT_FIELDS = new Set([
+      'fuelCapacity', 'avgConsumption', 'minFuelAlert', 'batteryCapacityKwh',
+      'chargingSpeedKw', 'batteryHealth', 'batteryReplaceCost', 'engineCc',
+      'maxSpeedKph', 'purchasePrice', 'currentValue', 'insurancePremium',
+      'oilChangeKmInterval', 'lastServiceOdometer', 'odometer', 'engineHours',
+    ]);
+
+    const body = req.body as Record<string, any>;
+    const updateData: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(body)) {
+      // Skip unknown / relation / system fields
+      if (!VEHICLE_SCALAR_FIELDS.has(key)) continue;
+
+      // null / undefined → skip (don't overwrite with null unless explicitly set)
+      if (value === undefined) continue;
+
+      // Empty string for FK → null
+      if (key === 'fleetId') {
+        updateData.fleetId = value === '' ? null : value;
+        continue;
       }
+
+      // Date coercion
+      if (DATE_FIELDS.has(key)) {
+        updateData[key] = value && value !== '' ? new Date(value) : null;
+        continue;
+      }
+
+      // Integer coercion
+      if (INT_FIELDS.has(key)) {
+        if (value !== null && value !== '') updateData[key] = parseInt(String(value), 10);
+        continue;
+      }
+
+      // Float coercion
+      if (FLOAT_FIELDS.has(key)) {
+        if (value !== null && value !== '') updateData[key] = parseFloat(String(value));
+        continue;
+      }
+
+      // String / enum — pass through as-is
+      updateData[key] = value;
     }
+
+    console.log(`[updateVehicle] id=${req.params.id} keys=${Object.keys(updateData).join(',')}`);
 
     const vehicle = await prisma.vehicle.update({
       where: { id: req.params.id },
-      data: updateData,
-      include: { fleet: { select: { id: true, name: true } } },
+      data:  updateData,
+      include: { fleet: { select: { id: true, name: true, color: true } } },
     });
     res.json(vehicle);
   } catch (err: any) {
-    // Log the actual Prisma error for debugging
-    if (err?.code) {
-      console.error(`[updateVehicle] Prisma error ${err.code}:`, err.message, err.meta);
-    }
+    console.error(`[updateVehicle] ERROR code=${err?.code} msg=${err?.message}`, err?.meta ?? '');
     next(err);
   }
 }
