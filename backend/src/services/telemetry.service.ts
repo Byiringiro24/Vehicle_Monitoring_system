@@ -145,48 +145,39 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       });
 
       // Always emit a heartbeat so the frontend knows device is online
-      // (even when there's no GPS fix — device is still connected)
+      // Include current speed so status (ACTIVE/IDLE) is always up to date
       io.to(`org:${vehicle.organizationId}`).emit('device:heartbeat', {
         vehicleId,
         updatedAt: now,
-        engineOn:  data.engineOn ?? false,
-        engineLocked: (data as any).engineLocked ?? false,
-        gpsModuleOn: (data as any).gpsModuleOn ?? false,
+        speed:     data.speed     ?? 0,
+        engineOn:  data.engineOn  ?? false,
+        engineLocked:  (data as any).engineLocked  ?? false,
+        gpsModuleOn:   (data as any).gpsModuleOn   ?? false,
         signalQuality: (data as any).signalQuality ?? 0,
       });
 
-      // Emit location update for live map — only when we have valid GPS coords
-      // Apply a minimum movement threshold to filter GPS jitter:
-      // Only broadcast new position if moved >10m from last known, OR speed >2, OR first position
+      // Emit location update for live map — always emit when we have valid GPS coords
+      // The frontend handles display; filtering jitter here causes missed updates
       if (data.latitude !== undefined && data.longitude !== undefined && data.latitude && data.longitude) {
         const liveStatus = data.speed && data.speed > 2 ? 'ACTIVE' : 'IDLE';
-
-        // Use the PREVIOUS lastLocation (captured before the upsert) to measure movement
-        const distM = prevLocation?.latitude && prevLocation?.longitude
-          ? haversineKm(prevLocation.latitude, prevLocation.longitude, data.latitude, data.longitude) * 1000
-          : 999; // first position — always emit
-
-        // Emit if: moved >10m (real movement), OR speed >2 (definitely moving), OR first position
-        if (distM > 10 || (data.speed ?? 0) > 2 || distM === 999) {
-          io.to(`org:${vehicle.organizationId}`).emit('location:update', {
-            vehicleId,
-            latitude:    data.latitude,
-            longitude:   data.longitude,
-            speed:       data.speed   ?? 0,
-            heading:     data.heading ?? 0,
-            fuelLevel:   data.fuelLevel,
-            engineTemp:  data.engineTemp,
-            engineOn:    data.engineOn ?? false,
-            updatedAt:   now,
-            vehicle: {
-              id:           vehicleId,
-              name:         vehicle.name,
-              licensePlate: vehicle.licensePlate,
-              status:       liveStatus,
-              fleet:        vehicle.fleet,
-            },
-          });
-        }
+        io.to(`org:${vehicle.organizationId}`).emit('location:update', {
+          vehicleId,
+          latitude:    data.latitude,
+          longitude:   data.longitude,
+          speed:       data.speed   ?? 0,
+          heading:     data.heading ?? 0,
+          fuelLevel:   data.fuelLevel,
+          engineTemp:  data.engineTemp,
+          engineOn:    data.engineOn ?? false,
+          updatedAt:   now,
+          vehicle: {
+            id:           vehicleId,
+            name:         vehicle.name,
+            licensePlate: vehicle.licensePlate,
+            status:       liveStatus,
+            fleet:        vehicle.fleet,
+          },
+        });
       }
     }
   }

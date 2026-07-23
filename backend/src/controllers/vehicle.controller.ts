@@ -126,58 +126,97 @@ export async function updateVehicle(req: AuthenticatedRequest, res: Response, ne
     });
     if (!existing) throw new AppError(404, 'Vehicle not found');
 
+    // Destructure ALL known fields — anything not listed here goes into `rest`
     const {
+      // Date fields (need new Date() conversion)
       purchaseDate, insuranceExpiry, roadTaxExpiry, inspectionExpiry,
       transportPermitExpiry, batteryWarranty, warrantyExpiry, nextServiceDate,
+      insuranceStart,
+      // Numeric fields (need parseFloat/parseInt)
       year, fuelCapacity, purchasePrice, currentValue, horsepower, engineCc,
       batteryCapacityKwh, chargingSpeedKw, batteryReplaceCost, batteryHealth,
       avgConsumption, minFuelAlert, insurancePremium, oilChangeKmInterval,
       lastServiceOdometer, odometer, engineHours,
-      // Strip read-only / system fields
+      // Strip ALL read-only / system / relation fields
       id: _id, organizationId: _org, deviceToken: _dt, createdAt: _ca, updatedAt: _ua,
-      status: _st, engineLocked: _el, lastLocation: _ll, gpsDevice: _gd,
-      currentDriver: _cd, fleet: _fleet, _count: _cnt,
+      status: _st, engineLocked: _el,
+      lastLocation: _ll, gpsDevice: _gd, currentDriver: _cd,
+      fleet: _fleet, _count: _cnt,
+      // Strip relation objects that aren't scalar FK fields
+      alerts: _al, telemetry: _tel, trips: _tr, gpsHistory: _gh,
       ...rest
     } = req.body;
 
+    // Build the update data object
+    const updateData: any = { ...rest };
+
+    // fleetId empty string → null (disconnect from fleet)
+    if (rest.fleetId === '') updateData.fleetId = null;
+
+    // Numeric coercions — only set if provided and not empty
+    if (year                != null && year !== '')                updateData.year                = parseInt(String(year), 10);
+    if (fuelCapacity        != null && fuelCapacity !== '')        updateData.fuelCapacity        = parseFloat(String(fuelCapacity));
+    if (purchasePrice       != null && purchasePrice !== '')       updateData.purchasePrice       = parseFloat(String(purchasePrice));
+    if (currentValue        != null && currentValue !== '')        updateData.currentValue        = parseFloat(String(currentValue));
+    if (horsepower          != null && horsepower !== '')          updateData.horsepower          = parseInt(String(horsepower), 10);
+    if (engineCc            != null && engineCc !== '')            updateData.engineCc            = parseFloat(String(engineCc));
+    if (batteryCapacityKwh  != null && batteryCapacityKwh !== '')  updateData.batteryCapacityKwh  = parseFloat(String(batteryCapacityKwh));
+    if (chargingSpeedKw     != null && chargingSpeedKw !== '')     updateData.chargingSpeedKw     = parseFloat(String(chargingSpeedKw));
+    if (batteryReplaceCost  != null && batteryReplaceCost !== '')  updateData.batteryReplaceCost  = parseFloat(String(batteryReplaceCost));
+    if (batteryHealth       != null && batteryHealth !== '')       updateData.batteryHealth       = parseFloat(String(batteryHealth));
+    if (avgConsumption      != null && avgConsumption !== '')      updateData.avgConsumption      = parseFloat(String(avgConsumption));
+    if (minFuelAlert        != null && minFuelAlert !== '')        updateData.minFuelAlert        = parseFloat(String(minFuelAlert));
+    if (insurancePremium    != null && insurancePremium !== '')    updateData.insurancePremium    = parseFloat(String(insurancePremium));
+    if (oilChangeKmInterval != null && oilChangeKmInterval !== '') updateData.oilChangeKmInterval = parseFloat(String(oilChangeKmInterval));
+    if (lastServiceOdometer != null && lastServiceOdometer !== '') updateData.lastServiceOdometer = parseFloat(String(lastServiceOdometer));
+    if (odometer            != null && odometer !== '')            updateData.odometer            = parseFloat(String(odometer));
+    if (engineHours         != null && engineHours !== '')         updateData.engineHours         = parseFloat(String(engineHours));
+
+    // Date coercions — only set if non-empty string
+    if (purchaseDate          && purchaseDate !== '')          updateData.purchaseDate          = new Date(purchaseDate);
+    if (insuranceExpiry       && insuranceExpiry !== '')       updateData.insuranceExpiry       = new Date(insuranceExpiry);
+    if (roadTaxExpiry         && roadTaxExpiry !== '')         updateData.roadTaxExpiry         = new Date(roadTaxExpiry);
+    if (inspectionExpiry      && inspectionExpiry !== '')      updateData.inspectionExpiry      = new Date(inspectionExpiry);
+    if (transportPermitExpiry && transportPermitExpiry !== '') updateData.transportPermitExpiry = new Date(transportPermitExpiry);
+    if (batteryWarranty       && batteryWarranty !== '')       updateData.batteryWarranty       = new Date(batteryWarranty);
+    if (warrantyExpiry        && warrantyExpiry !== '')        updateData.warrantyExpiry        = new Date(warrantyExpiry);
+    if (nextServiceDate       && nextServiceDate !== '')       updateData.nextServiceDate       = new Date(nextServiceDate);
+
+    // Remove any keys that are undefined or not valid Prisma scalar fields
+    const knownFields = new Set([
+      'name','licensePlate','manufacturer','model','year','color','vin','engineNumber',
+      'registrationNumber','fleetNumber','assetTag','vehicleClass','vehicleType','purpose',
+      'energyType','fuelCapacity','recommendedFuel','avgConsumption','minFuelAlert',
+      'batteryCapacityKwh','chargingSpeedKw','batteryHealth','batteryReplaceCost',
+      'engineType','engineCc','horsepower','transmission','driveType',
+      'ownershipType','purchaseDate','purchasePrice','currentValue','ownerName',
+      'insuranceCompany','insurancePolicyNo','insuranceExpiry','insurancePremium','insuranceCoverage',
+      'roadTaxExpiry','inspectionExpiry','transportPermit','transportPermitExpiry',
+      'oilChangeKmInterval','lastServiceOdometer','nextServiceDate','tyreBrand','tyreSize',
+      'batteryWarranty','warrantyExpiry','odometer','engineHours','fleetId',
+      'notes','description',
+    ]);
+
+    // Delete any unknown keys to prevent Prisma errors
+    for (const key of Object.keys(updateData)) {
+      if (!knownFields.has(key)) {
+        delete updateData[key];
+      }
+    }
+
     const vehicle = await prisma.vehicle.update({
       where: { id: req.params.id },
-      data: {
-        ...rest,
-        // fleetId empty string → null (disconnect from fleet)
-        ...(rest.fleetId === '' ? { fleetId: null } : {}),
-        // Numeric coercions
-        ...(year                !== undefined && year !== '' && { year:                parseInt(year, 10) }),
-        ...(fuelCapacity        !== undefined && fuelCapacity !== '' && { fuelCapacity:        parseFloat(fuelCapacity) }),
-        ...(purchasePrice       !== undefined && purchasePrice !== '' && { purchasePrice:       parseFloat(purchasePrice) }),
-        ...(currentValue        !== undefined && currentValue !== '' && { currentValue:        parseFloat(currentValue) }),
-        ...(horsepower          !== undefined && horsepower !== '' && { horsepower:          parseInt(horsepower, 10) }),
-        ...(engineCc            !== undefined && engineCc !== '' && { engineCc:            parseFloat(engineCc) }),
-        ...(batteryCapacityKwh  !== undefined && batteryCapacityKwh !== '' && { batteryCapacityKwh:  parseFloat(batteryCapacityKwh) }),
-        ...(chargingSpeedKw     !== undefined && chargingSpeedKw !== '' && { chargingSpeedKw:     parseFloat(chargingSpeedKw) }),
-        ...(batteryReplaceCost  !== undefined && batteryReplaceCost !== '' && { batteryReplaceCost:  parseFloat(batteryReplaceCost) }),
-        ...(batteryHealth       !== undefined && batteryHealth !== '' && { batteryHealth:       parseFloat(batteryHealth) }),
-        ...(avgConsumption      !== undefined && avgConsumption !== '' && { avgConsumption:      parseFloat(avgConsumption) }),
-        ...(minFuelAlert        !== undefined && minFuelAlert !== '' && { minFuelAlert:        parseFloat(minFuelAlert) }),
-        ...(insurancePremium    !== undefined && insurancePremium !== '' && { insurancePremium:    parseFloat(insurancePremium) }),
-        ...(oilChangeKmInterval !== undefined && oilChangeKmInterval !== '' && { oilChangeKmInterval: parseFloat(oilChangeKmInterval) }),
-        ...(lastServiceOdometer !== undefined && lastServiceOdometer !== '' && { lastServiceOdometer: parseFloat(lastServiceOdometer) }),
-        ...(odometer            !== undefined && odometer !== '' && { odometer:            parseFloat(odometer) }),
-        ...(engineHours         !== undefined && engineHours !== '' && { engineHours:         parseFloat(engineHours) }),
-        // Date coercions
-        ...(purchaseDate          && { purchaseDate:          new Date(purchaseDate) }),
-        ...(insuranceExpiry       && { insuranceExpiry:       new Date(insuranceExpiry) }),
-        ...(roadTaxExpiry         && { roadTaxExpiry:         new Date(roadTaxExpiry) }),
-        ...(inspectionExpiry      && { inspectionExpiry:      new Date(inspectionExpiry) }),
-        ...(transportPermitExpiry && { transportPermitExpiry: new Date(transportPermitExpiry) }),
-        ...(batteryWarranty       && { batteryWarranty:       new Date(batteryWarranty) }),
-        ...(warrantyExpiry        && { warrantyExpiry:        new Date(warrantyExpiry) }),
-        ...(nextServiceDate       && { nextServiceDate:       new Date(nextServiceDate) }),
-      },
+      data: updateData,
       include: { fleet: { select: { id: true, name: true } } },
     });
     res.json(vehicle);
-  } catch (err) { next(err); }
+  } catch (err: any) {
+    // Log the actual Prisma error for debugging
+    if (err?.code) {
+      console.error(`[updateVehicle] Prisma error ${err.code}:`, err.message, err.meta);
+    }
+    next(err);
+  }
 }
 
 export async function deleteVehicle(req: AuthenticatedRequest, res: Response, next: NextFunction) {

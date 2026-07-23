@@ -177,12 +177,22 @@ export default function LiveMapPage() {
     });
 
     // ── Heartbeat — device is online but may not have GPS fix
-    // Updates the updatedAt so status stays ONLINE even when stationary
-    socket.on('device:heartbeat', (p: { vehicleId: string; updatedAt: string }) => {
+    // Updates updatedAt AND speed so ACTIVE/IDLE status is always correct
+    socket.on('device:heartbeat', (p: { vehicleId: string; updatedAt: string; speed?: number }) => {
       setLocations(prev => {
         if (!prev[p.vehicleId]) return prev;
-        return { ...prev, [p.vehicleId]: { ...prev[p.vehicleId], updatedAt: p.updatedAt } };
+        return {
+          ...prev,
+          [p.vehicleId]: {
+            ...prev[p.vehicleId],
+            updatedAt: p.updatedAt,
+            // Update speed if provided so status badge reflects current movement
+            ...(p.speed !== undefined ? { speed: p.speed } : {}),
+          },
+        };
       });
+      // Ensure this vehicle is in connectedDevices
+      setConnectedDevices(prev => { const s = new Set(prev); s.add(p.vehicleId); return s; });
     });
 
     // ── ESP32 connected to MQTT broker — device is ONLINE
