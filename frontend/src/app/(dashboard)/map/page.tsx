@@ -5,24 +5,12 @@ import { telemetryApi, vehicleApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { getSocket } from '@/lib/socket';
 import { cn } from '@/lib/utils';
-import { formatSpeed } from '@/lib/utils';
+import { formatSpeed, formatDate } from '@/lib/utils';
 import { Search, Truck, Lock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
-// getLiveStatus lives in lib/liveStatus — no Leaflet, safe for SSR
 import { getLiveStatus, STALE_MS } from '@/lib/liveStatus';
 import type { LocationData } from '@/components/maps/LiveMap';
-
-// ─── Relative time helper ─────────────────────────────────────────────────────
-function timeAgo(dateStr: string | undefined | null): string {
-  if (!dateStr) return 'Never';
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (diff < 5)    return 'Just now';
-  if (diff < 60)   return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
 
 const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
   ssr: false,
@@ -403,10 +391,10 @@ export default function LiveMapPage() {
                         {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
                       </p>
                     )}
-                    {/* Time since last update — updates every 2s via tick */}
+                    {/* Exact date/time of last update */}
                     {loc.updatedAt && (
                       <p className="text-[9px] text-gray-400 leading-tight">
-                        🕐 {timeAgo(loc.updatedAt)}
+                        🕐 {formatDate(loc.updatedAt)}
                       </p>
                     )}
                   </div>
