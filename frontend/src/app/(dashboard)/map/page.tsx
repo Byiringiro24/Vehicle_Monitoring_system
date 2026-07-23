@@ -285,8 +285,7 @@ export default function LiveMapPage() {
   // Engine lock state has NO effect on GPS status
   function getStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
     if (connectedDevices.has(loc.vehicleId)) {
-      // Device is confirmed online — use speed for ACTIVE vs IDLE
-      return (loc.speed ?? 0) > SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
+      return (loc.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
     }
     return getLiveStatus(loc.updatedAt, loc.speed);
   }
@@ -383,104 +382,107 @@ export default function LiveMapPage() {
           )}
 
           {sorted.map(loc => {
-            const status    = getStatus(loc);
-            const isOnline  = status !== 'OFFLINE';
-            const isActive  = status === 'ACTIVE';
-            const isIdle    = status === 'IDLE';
-            const hasGps    = !!(loc.latitude && loc.longitude && Math.abs(loc.latitude) > 0.001);
+            const status     = getStatus(loc);
+            const isOnline   = status !== 'OFFLINE';
+            const isActive   = status === 'ACTIVE';
+            const hasGps     = !!(loc.latitude && loc.longitude && Math.abs(loc.latitude) > 0.001);
             const isSelected = selectedId === loc.vehicleId;
-            const isLocked  = lockedVehicles[loc.vehicleId] ?? false;
+            const isLocked   = lockedVehicles[loc.vehicleId] ?? false;
 
             return (
               <div
                 key={loc.vehicleId}
                 onClick={() => setSelectedId(isSelected ? null : loc.vehicleId)}
                 className={cn(
-                  'px-3 py-3 cursor-pointer border-b border-gray-100 hover:bg-blue-50/40 transition-all select-none',
+                  'px-3 py-2.5 cursor-pointer border-b border-gray-100 hover:bg-gray-50 transition-all select-none',
                   isSelected ? 'bg-blue-50 border-l-[3px] border-l-blue-500' : 'border-l-[3px] border-l-transparent'
                 )}>
 
-                {/* Row 1: plate + GPS status badges */}
-                <div className="flex items-center justify-between gap-1 mb-1.5">
-                  <p className="font-bold text-xs text-gray-900 font-mono truncate">
+                {/* ── Top row: plate + ONLINE/OFFLINE + IDLE/ACTIVE ── */}
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <p className="font-bold text-xs text-gray-900 font-mono truncate flex-1">
                     {loc.vehicle?.licensePlate ?? 'Unknown'}
                   </p>
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* ONLINE / OFFLINE badge */}
+                    {/* ONLINE / OFFLINE — pure connectivity, no relation to lock */}
                     <span className={cn(
-                      'text-[9px] font-bold px-1.5 py-0.5 rounded-full border',
+                      'text-[8px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5',
                       isOnline
-                        ? 'bg-green-50 text-green-700 border-green-200'
-                        : 'bg-gray-100 text-gray-500 border-gray-200'
+                        ? 'bg-green-100 text-green-800 border border-green-300'
+                        : 'bg-gray-100 text-gray-500 border border-gray-300'
                     )}>
-                      {isOnline ? '🟢 ONLINE' : '🔴 OFFLINE'}
+                      <span className={cn('w-1.5 h-1.5 rounded-full inline-block',
+                        isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400')} />
+                      {isOnline ? 'ONLINE' : 'OFFLINE'}
                     </span>
-                    {/* IDLE / ACTIVE badge — only when online */}
+                    {/* IDLE / ACTIVE — only meaningful when online */}
                     {isOnline && (
                       <span className={cn(
-                        'text-[9px] font-bold px-1.5 py-0.5 rounded-full border',
+                        'text-[8px] font-bold px-1.5 py-0.5 rounded-full border',
                         isActive
                           ? 'bg-green-100 text-green-800 border-green-300'
                           : 'bg-yellow-100 text-yellow-800 border-yellow-300'
                       )}>
-                        {isActive ? '🚗 ACTIVE' : '⏸ IDLE'}
+                        {isActive ? 'ACTIVE' : 'IDLE'}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Row 2: vehicle name */}
-                <p className="text-[10px] text-gray-500 truncate leading-tight mb-1">
+                {/* ── Vehicle name ── */}
+                <p className="text-[10px] text-gray-500 truncate mb-1.5">
                   {loc.vehicle?.name ?? '—'}
                 </p>
 
-                {/* Row 3: GPS data + lock state */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    {hasGps ? (
-                      <div className="space-y-0.5">
-                        <p className="text-[10px] text-blue-600 font-medium">
-                          {formatSpeed(loc.speed)}
-                          {loc.accuracy && loc.accuracy > 0 && (
-                            <span className="text-gray-400 ml-1">±{loc.accuracy.toFixed(0)}m</span>
-                          )}
-                        </p>
-                        <p className="text-[9px] text-gray-400 font-mono">
-                          {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
-                        </p>
-                        {/* Human-readable address via reverse geocoding */}
-                        <InlineAddress lat={loc.latitude} lon={loc.longitude} />
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-gray-400">No GPS fix</p>
-                    )}
-                    {loc.updatedAt && (
-                      <p className="text-[9px] text-gray-400 mt-0.5">
-                        🕐 {formatDate(loc.updatedAt)}
-                      </p>
-                    )}
+                {/* ── GPS data section ── */}
+                {hasGps ? (
+                  <div className="space-y-0.5 mb-1.5">
+                    <p className="text-[10px] text-blue-600 font-semibold">
+                      📍 {formatSpeed(loc.speed)}
+                      {loc.accuracy != null && loc.accuracy > 0 && (
+                        <span className="text-gray-400 font-normal ml-1">±{loc.accuracy.toFixed(0)}m</span>
+                      )}
+                    </p>
+                    <p className="text-[9px] text-gray-400 font-mono leading-tight">
+                      {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
+                    </p>
+                    <InlineAddress lat={loc.latitude} lon={loc.longitude} />
                   </div>
+                ) : (
+                  <p className="text-[10px] text-gray-400 mb-1.5">No GPS fix</p>
+                )}
 
-                  {/* Lock / Unlock button — shows current relay state */}
+                {/* ── Timestamp: "Last seen" when offline, current when online ── */}
+                {loc.updatedAt && (
+                  <p className={cn('text-[9px] leading-tight mb-1.5',
+                    isOnline ? 'text-gray-400' : 'text-orange-500 font-medium')}>
+                    {isOnline
+                      ? `🕐 ${formatDate(loc.updatedAt)}`
+                      : `⏱ Last seen: ${formatDate(loc.updatedAt)}`}
+                  </p>
+                )}
+
+                {/* ── Lock / Unlock — completely independent of GPS status ── */}
+                <div className="flex justify-end">
                   <button
                     onClick={e => {
                       e.stopPropagation();
                       setLockTarget({
-                        id:     loc.vehicleId,
-                        plate:  loc.vehicle?.licensePlate ?? '',
+                        id:    loc.vehicleId,
+                        plate: loc.vehicle?.licensePlate ?? '',
                         action: isLocked ? 'unlock' : 'lock',
                       });
                     }}
                     className={cn(
-                      'shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg border text-[9px] font-bold transition',
+                      'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[9px] font-bold transition',
                       isLocked
                         ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
                         : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
                     )}
-                    title={isLocked ? 'Engine LOCKED — click to unlock' : 'Engine UNLOCKED — click to lock'}>
+                    title={isLocked ? 'Relay LOCKED — tap to unlock engine' : 'Relay UNLOCKED — tap to lock engine'}>
                     {isLocked
-                      ? <><Lock size={11} /><span>LOCKED</span></>
-                      : <><Unlock size={11} /><span>UNLOCKED</span></>}
+                      ? <><Lock size={10} /> LOCKED</>
+                      : <><Unlock size={10} /> UNLOCKED</>}
                   </button>
                 </div>
               </div>
