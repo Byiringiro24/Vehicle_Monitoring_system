@@ -3,7 +3,7 @@ import { authenticate, authorize } from '../middleware/auth';
 import { listVehicles, getVehicle, createVehicle, updateVehicle, deleteVehicle,
          regenerateToken, getGpsHistory, getTrips } from '../controllers/vehicle.controller';
 import { prisma } from '../config/database';
-import { getSocketServer } from '../websocket/socketServer';
+import { getSocketServer, markLockCommandSent } from '../websocket/socketServer';
 import { publishCommand } from '../services/mqttClient';
 import { pingGpsDevice } from '../services/mqttBroker';
 
@@ -61,12 +61,15 @@ router.patch('/:id/lock', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), as
     await prisma.vehicle.update({ where: { id: req.params.id }, data: { engineLocked: locked } });
 
     // 1. Publish MQTT command → ESP32 on its specific token topic
-    //    Topic format: artic/<DEVICE_TOKEN>/command  (matches ESP32 sketch exactly)
     publishCommand(`artic/${vehicle.deviceToken}/command`, {
       command:   locked ? 'lock' : 'unlock',
       vehicleId: vehicle.id,
       timestamp: new Date().toISOString(),
     });
+
+    // Mark lock grace period — suppress false OFFLINE events for 30s
+    // (device may briefly restart if relay cuts its power source)
+    if (locked) markLockCommandSent(vehicle.id);
 
     // 2. Broadcast via Socket.IO → dashboard updates in real-time
     const io = getSocketServer();

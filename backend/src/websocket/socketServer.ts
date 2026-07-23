@@ -19,6 +19,26 @@ export function isVehicleOnline(vehicleId: string, thresholdMs = 15_000): boolea
   return ts !== undefined && Date.now() - ts < thresholdMs;
 }
 
+// Grace period after a lock command — device may restart momentarily when relay cuts
+// Don't emit gps:offline for this vehicle during this window
+const lockGracePeriod = new Map<string, number>();
+const LOCK_GRACE_MS = 30_000; // 30s grace after lock command
+
+export function markLockCommandSent(vehicleId: string) {
+  lockGracePeriod.set(vehicleId, Date.now());
+  logger.info(`[LOCK] Grace period started for vehicle ${vehicleId}`);
+}
+
+export function isInLockGrace(vehicleId: string): boolean {
+  const ts = lockGracePeriod.get(vehicleId);
+  if (!ts) return false;
+  if (Date.now() - ts > LOCK_GRACE_MS) {
+    lockGracePeriod.delete(vehicleId);
+    return false;
+  }
+  return true;
+}
+
 export function initSocketServer(httpServer: HttpServer) {
   io = new SocketIOServer(httpServer, {
     cors: {

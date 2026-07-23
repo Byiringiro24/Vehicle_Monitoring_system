@@ -10,7 +10,7 @@
 import mqtt from 'mqtt';
 import { prisma } from '../config/database';
 import { processTelemetry } from './telemetry.service';
-import { getSocketServer, markVehicleSeen, markVehicleOffline } from '../websocket/socketServer';
+import { getSocketServer, markVehicleSeen, markVehicleOffline, isInLockGrace } from '../websocket/socketServer';
 import logger from '../utils/logger';
 
 let client: mqtt.MqttClient | null = null;
@@ -147,21 +147,29 @@ export function initMqttClient() {
 
     for (const [token, ts] of lastSeen.entries()) {
       if (now - ts > OFFLINE_THRESHOLD_MS) {
-        lastSeen.delete(token);
+        // Look up the vehicle first to check grace period
         try {
           const vehicle = await prisma.vehicle.findFirst({
             where:  { deviceToken: token },
             select: { id: true, organizationId: true, licensePlate: true },
           });
+
+          if (vehicle && isInLockGrace(vehicle.id)) {
+            // Device may be momentarily offline because relay cut its power.
+            // Keep lastSeen alive for the grace period — don't mark offline yet.
+            lastSeen.set(token, now - OFFLINE_THRESHOLD_MS + 5_000); // reset timer by 5s
+            logger.info(`[GPS] Lock grace active for ${vehicle.licensePlate} — skipping offline`);
+            continue;
+          }
+
+          lastSeen.delete(token);
+
           if (vehicle) {
-            // Update DB status
             await prisma.vehicle.update({
               where: { id: vehicle.id },
               data:  { status: 'OFFLINE' },
             }).catch(() => {});
-            // Remove from shared online tracker
             markVehicleOffline(vehicle.id);
-            // Broadcast to dashboard
             if (io) {
               io.to(`org:${vehicle.organizationId}`).emit('gps:offline', {
                 vehicleId:    vehicle.id,

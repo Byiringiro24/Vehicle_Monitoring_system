@@ -254,10 +254,9 @@ void publishGPS() {
   int   vsat = 0, usat = 0;
   bool  fix  = modem.getGPS(&lat, &lon, &spd, &alt, &vsat, &usat, &acc);
 
-  // Apply smoothing and noise floor — SIM808 reports 0.5–2.5 km/h even when stationary
-  // Only report non-zero speed if smoothed value reaches 3 km/h (real movement threshold)
+  // Apply smoothing — only report non-zero speed if smoothed value reaches 2 km/h
   float smoothedSpd = smoothSpeed(fix ? spd : 0.0f);
-  float reportedSpd = (smoothedSpd >= 3.0f) ? smoothedSpd : 0.0f;
+  float reportedSpd = (smoothedSpd >= 2.0f) ? smoothedSpd : 0.0f;
 
   JsonDocument doc;
   doc["online"]        = true;
