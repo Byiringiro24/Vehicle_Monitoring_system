@@ -1,8 +1,8 @@
 /**
  * Live GPS status — based on MQTT connectivity only.
  *
- * Device sends every 2s, so STALE = 10s (5 missed packets before offline).
- * Status is ONLINE as long as ANY message arrived in the last 10s.
+ * Device sends every 2s. Allow 30s for normal cellular jitter before showing
+ * offline, rather than flipping after a few delayed packets.
  * Engine lock has NO effect on GPS status.
  *
  * ACTIVE  = message < STALE_MS ago AND speed >= SPEED_THRESHOLD km/h
@@ -13,7 +13,7 @@
  * This is the single source of truth used across the entire codebase.
  */
 
-export const STALE_MS        = 10_000; // 10s = 5x the 2s send interval
+export const STALE_MS        = 30_000; // 30s = 15x the 2s send interval
 export const SPEED_THRESHOLD = 2;      // km/h
 
 export type LiveStatus = 'ACTIVE' | 'IDLE' | 'OFFLINE';

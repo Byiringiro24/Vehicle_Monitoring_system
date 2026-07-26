@@ -14,7 +14,7 @@ export function getSocketServer(): SocketIOServer | null { return io; }
 const lastSeenByVehicleId = new Map<string, number>();
 export function markVehicleSeen(vehicleId: string) { lastSeenByVehicleId.set(vehicleId, Date.now()); }
 export function markVehicleOffline(vehicleId: string) { lastSeenByVehicleId.delete(vehicleId); }
-export function isVehicleOnline(vehicleId: string, thresholdMs = 15_000): boolean {
+export function isVehicleOnline(vehicleId: string, thresholdMs = 30_000): boolean {
   const ts = lastSeenByVehicleId.get(vehicleId);
   return ts !== undefined && Date.now() - ts < thresholdMs;
 }

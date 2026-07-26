@@ -9,6 +9,14 @@ import { X, Loader2, Truck, Fuel, Settings, Shield, FileText, ChevronRight } fro
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
+// Browser number inputs submit an empty value as "".  Converting that with
+// z.coerce.number() produces 0, which unintentionally overwrote optional
+// vehicle fields during an edit.  Keep blank optional fields absent instead.
+const optionalNumber = z.preprocess(
+  (value) => value === '' || value === null ? undefined : value,
+  z.coerce.number().finite().optional(),
+);
+
 const schema = z.object({
   // Basic
   name:             z.string().min(1, 'Name required'),
@@ -28,28 +36,28 @@ const schema = z.object({
   fleetId:          z.string().optional(),
   // Energy
   energyType:       z.string().default('PETROL'),
-  fuelCapacity:     z.coerce.number().optional(),
+  fuelCapacity:     optionalNumber,
   recommendedFuel:  z.string().optional(),
-  avgConsumption:   z.coerce.number().optional(),
-  minFuelAlert:     z.coerce.number().optional(),
-  batteryCapacityKwh: z.coerce.number().optional(),
+  avgConsumption:   optionalNumber,
+  minFuelAlert:     optionalNumber,
+  batteryCapacityKwh: optionalNumber,
   // Engine
   engineType:       z.string().optional(),
-  engineCc:         z.coerce.number().optional(),
-  horsepower:       z.coerce.number().optional(),
+  engineCc:         optionalNumber,
+  horsepower:       optionalNumber,
   transmission:     z.string().default('MANUAL'),
   driveType:        z.string().optional(),
   // Ownership
   ownershipType:    z.string().default('COMPANY_OWNED'),
   purchaseDate:     z.string().optional(),
-  purchasePrice:    z.coerce.number().optional(),
-  currentValue:     z.coerce.number().optional(),
+  purchasePrice:    optionalNumber,
+  currentValue:     optionalNumber,
   ownerName:        z.string().optional(),
   // Insurance
   insuranceCompany: z.string().optional(),
   insurancePolicyNo:z.string().optional(),
   insuranceExpiry:  z.string().optional(),
-  insurancePremium: z.coerce.number().optional(),
+  insurancePremium: optionalNumber,
   insuranceCoverage:z.string().optional(),
   // Compliance
   roadTaxExpiry:    z.string().optional(),
@@ -57,7 +65,7 @@ const schema = z.object({
   transportPermit:  z.string().optional(),
   transportPermitExpiry: z.string().optional(),
   // Maintenance
-  oilChangeKmInterval: z.coerce.number().optional(),
+  oilChangeKmInterval: optionalNumber,
   nextServiceDate:  z.string().optional(),
   // Tyres
   tyreBrand:        z.string().optional(),
@@ -187,7 +195,13 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
         </div>
 
         {/* Form body */}
-        <form onSubmit={handleSubmit(d => mutation.mutate(d))} className="flex flex-col flex-1 min-h-0">
+        <form onSubmit={handleSubmit(
+          d => mutation.mutate(d),
+          () => {
+            setStep('basic');
+            toast.error('Please complete the required Basic Info fields before saving.');
+          },
+        )} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto p-6">
 
             {/* ── BASIC INFO ───────────────────────────────────────────── */}

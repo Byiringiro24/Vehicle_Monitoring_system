@@ -17,7 +17,9 @@ let client: mqtt.MqttClient | null = null;
 
 // Track last-seen timestamp per deviceToken (for offline detection loop)
 const lastSeen = new Map<string, number>();
-const OFFLINE_THRESHOLD_MS = 10_000; // mark offline if no message for 10s
+// A tracker sends every 2 seconds, but cellular GPRS can delay a few packets.
+// Thirty seconds prevents online/offline flapping while remaining responsive.
+const OFFLINE_THRESHOLD_MS = 30_000;
 
 // pong handlers — mqttBroker registers one
 const pongHandlers: Array<(topic: string, msg: Buffer) => void> = [];

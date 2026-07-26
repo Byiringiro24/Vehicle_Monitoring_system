@@ -6,6 +6,43 @@ import { checkGeofences } from './geofence.service';
 import logger from '../utils/logger';
 
 export async function processTelemetry(vehicleId: string, data: TelemetryData) {
+  const rawPayload = data as any;
+  // Command acknowledgements prove connectivity but are not GPS samples. In
+  // particular, an ACK has no speed/coordinates and must not change a moving
+  // vehicle to IDLE after a relay lock/unlock command.
+  const isCommandResponse = Boolean(
+    rawPayload.ack ||
+    rawPayload.pong ||
+    (rawPayload.cmd && ['internet_status', 'ussd_response', 'restarting'].includes(rawPayload.cmd)) ||
+    rawPayload.event === 'device_connected',
+  );
+
+  if (isCommandResponse) {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { organizationId: true },
+    });
+
+    if (rawPayload.ack === 'lock' || rawPayload.ack === 'unlock') {
+      await prisma.vehicle.update({
+        where: { id: vehicleId },
+        data: { engineLocked: rawPayload.ack === 'lock' },
+      });
+    }
+
+    const io = getSocketServer();
+    if (io && vehicle) {
+      const now = new Date().toISOString();
+      io.to(`org:${vehicle.organizationId}`).emit('device:response', {
+        vehicleId, timestamp: now, payload: rawPayload,
+      });
+      io.to(`org:${vehicle.organizationId}`).emit('device:heartbeat', {
+        vehicleId, updatedAt: now,
+      });
+    }
+    return null;
+  }
+
   // 1. Save full telemetry record (only include known Telemetry fields)
   const record = await prisma.telemetry.create({
     data: {
@@ -121,22 +158,6 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       // These are special payloads published by the ESP32 in response to commands.
       // They are NOT standard telemetry and are NOT stored in DB fields.
       // We detect them here before touching the DB record and emit device:response.
-      const rawPayload = data as any;
-      const isCommandResponse =
-        rawPayload.ack ||
-        rawPayload.pong ||
-        (rawPayload.cmd && ['internet_status', 'ussd_response', 'restarting'].includes(rawPayload.cmd)) ||
-        rawPayload.event === 'device_connected';
-
-      if (isCommandResponse) {
-        io.to(`org:${vehicle.organizationId}`).emit('device:response', {
-          vehicleId,
-          timestamp: now,
-          payload: rawPayload,
-        });
-        logger.info(`[CMD-RESPONSE] Vehicle ${vehicleId}: cmd=${rawPayload.cmd ?? rawPayload.ack ?? rawPayload.event}`);
-      }
-
       // Emit raw telemetry for charts
       io.to(`org:${vehicle.organizationId}`).emit('telemetry:update', {
         vehicleId, data: record, timestamp: now,
@@ -147,11 +168,12 @@ export async function processTelemetry(vehicleId: string, data: TelemetryData) {
       io.to(`org:${vehicle.organizationId}`).emit('device:heartbeat', {
         vehicleId,
         updatedAt: now,
-        speed:     data.speed     ?? 0,
         engineOn:  data.engineOn  ?? false,
         engineLocked:  (data as any).engineLocked  ?? false,
         gpsModuleOn:   (data as any).gpsModuleOn   ?? false,
         signalQuality: (data as any).signalQuality ?? 0,
+        // Do not turn a temporary GPS no-fix into a stationary reading.
+        ...(typeof data.speed === 'number' && Number.isFinite(data.speed) ? { speed: data.speed } : {}),
       });
 
       // Emit location update for live map — always emit when we have valid GPS coords

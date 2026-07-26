@@ -29,8 +29,20 @@ router.post('/:vehicleId/command', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANA
       const { command, ...params } = req.body;
       if (!command) throw new AppError(400, 'command is required');
 
-      const topic = `artic/${vehicle.deviceToken}/command`;
-      const sent  = publishCommand(topic, { command, ...params, ts: Date.now() });
+      const allowedCommands = new Set(['check_internet', 'restart', 'ussd', 'ping']);
+      if (!allowedCommands.has(command)) throw new AppError(400, 'Unsupported device command');
+      if (command === 'ussd' && (typeof params.code !== 'string' || !/^[*#0-9]+$/.test(params.code))) {
+        throw new AppError(400, 'A valid USSD code is required');
+      }
+
+      // The installed ESP32 listens for ping on its dedicated ping topic.
+      const topic = command === 'ping'
+        ? `artic/${vehicle.deviceToken}/ping`
+        : `artic/${vehicle.deviceToken}/command`;
+      const payload = command === 'ping'
+        ? { ts: Date.now() }
+        : { command, ...params, ts: Date.now() };
+      const sent = publishCommand(topic, payload);
 
       if (!sent) throw new AppError(503, 'MQTT client not connected — cannot send command');
 

@@ -235,17 +235,6 @@ void onMessage(char* topic, byte* payload, unsigned int len) {
 
 // ─── Publish GPS Telemetry ────────────────────────────────────────────────────
 // Speed smoothing — average last 3 readings to reduce GPS noise
-float speedHistory[3] = {0, 0, 0};
-int   speedIdx = 0;
-
-float smoothSpeed(float raw) {
-  speedHistory[speedIdx % 3] = raw;
-  speedIdx++;
-  float sum = 0;
-  for (int i = 0; i < 3; i++) sum += speedHistory[i];
-  return sum / 3.0f;
-}
-
 void publishGPS() {
   if (millis() - lastTelemetryAt < TELEMETRY_MS) return;
   lastTelemetryAt = millis();
@@ -255,8 +244,9 @@ void publishGPS() {
   bool  fix  = modem.getGPS(&lat, &lon, &spd, &alt, &vsat, &usat, &acc);
 
   // Apply smoothing — only report non-zero speed if smoothed value reaches 2 km/h
-  float smoothedSpd = smoothSpeed(fix ? spd : 0.0f);
-  float reportedSpd = (smoothedSpd >= 2.0f) ? smoothedSpd : 0.0f;
+  // Report the GPS speed directly. Averaging three readings delayed ACTIVE
+  // status and could make a moving vehicle appear IDLE.
+  float reportedSpd = fix ? max(0.0f, spd) : 0.0f;
 
   JsonDocument doc;
   doc["online"]        = true;
@@ -271,7 +261,7 @@ void publishGPS() {
   if (fix && lat != 0.0f && lon != 0.0f) {
     doc["latitude"]   = serialized(String(lat, 6));
     doc["longitude"]  = serialized(String(lon, 6));
-    doc["speed"]      = serialized(String(reportedSpd, 2));  // smoothed, noise-filtered
+    doc["speed"]      = serialized(String(reportedSpd, 2));
     doc["altitude"]   = serialized(String(alt, 2));
     doc["accuracy"]   = serialized(String(acc, 2));
     doc["heading"]    = nullptr;
@@ -279,7 +269,7 @@ void publishGPS() {
     Serial.print("[GPS] ");
     Serial.print(lat, 6); Serial.print(", "); Serial.print(lon, 6);
     Serial.print("  raw:"); Serial.print(spd, 1);
-    Serial.print(" smooth:"); Serial.print(reportedSpd, 1); Serial.print("km/h");
+    Serial.print(" speed:"); Serial.print(reportedSpd, 1); Serial.print("km/h");
     Serial.print("  Sats:"); Serial.println(usat);
   } else {
     doc["latitude"]  = nullptr; doc["longitude"] = nullptr;
