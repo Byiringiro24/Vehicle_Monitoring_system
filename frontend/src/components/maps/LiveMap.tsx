@@ -1,11 +1,13 @@
 'use client';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip, LayersControl } from 'react-leaflet';
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatSpeed, formatFuel, formatDate } from '@/lib/utils';
 import { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
 import { reverseGeocode } from '@/lib/geocode';
+
+const { BaseLayer } = LayersControl;
 
 // Re-export so pages can import without pulling in Leaflet (avoids SSR window error)
 export { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
@@ -172,11 +174,30 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
       </div>
 
       <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }} zoomControl>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          maxZoom={19}
-        />
+        {/* ── Map layer switcher: Street / Satellite / Hybrid ── */}
+        <LayersControl position="topright">
+          <BaseLayer checked name="🗺️ Street">
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              maxZoom={19}
+            />
+          </BaseLayer>
+          <BaseLayer name="🛰️ Satellite">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
+              maxZoom={19}
+            />
+          </BaseLayer>
+          <BaseLayer name="🌍 Hybrid (Satellite + Labels)">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri'
+              maxZoom={19}
+            />
+          </BaseLayer>
+        </LayersControl>
         <FitBounds locations={valid} />
         <FollowSelected locations={valid} selectedId={selectedId} />
 

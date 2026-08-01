@@ -1,9 +1,11 @@
 'use client';
-import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap, Marker } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap, Marker, LayersControl } from 'react-leaflet';
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatDate } from '@/lib/utils';
+
+const { BaseLayer } = LayersControl;
 
 interface GpsPoint {
   id: string;
@@ -100,10 +102,29 @@ export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: Gps
   return (
     <div className="relative h-full w-full rounded-xl overflow-hidden">
       <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap'
-        />
+        <LayersControl position="topright">
+          <BaseLayer checked name="🗺️ Street">
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; OpenStreetMap'
+              maxZoom={19}
+            />
+          </BaseLayer>
+          <BaseLayer name="🛰️ Satellite">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri'
+              maxZoom={19}
+            />
+          </BaseLayer>
+          <BaseLayer name="🌍 Hybrid (Satellite + Labels)">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri'
+              maxZoom={19}
+            />
+          </BaseLayer>
+        </LayersControl>
         <FitBounds points={valid} />
 
         {/* Coloured path segments */}
