@@ -502,8 +502,8 @@ export default function LiveMapPage() {
           })}
         </div>
 
-        {/* Footer stats */}
-        <div className="p-3 border-t border-gray-100 bg-gray-50">
+        {/* Footer stats + map toggle */}
+        <div className="p-3 border-t border-gray-100 bg-gray-50 space-y-2">
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>{locationList.length} vehicle{locationList.length !== 1 ? 's' : ''} total</span>
             <span className="flex items-center gap-1">
@@ -511,23 +511,16 @@ export default function LiveMapPage() {
               Updates every 2s
             </span>
           </div>
+          <button
+            onClick={() => setUseSatellite(s => !s)}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border text-xs font-semibold transition bg-white hover:bg-gray-50 border-gray-300 text-gray-700">
+            {useSatellite ? <><Map size={11} /> Switch to Street Map</> : <><Satellite size={11} /> Switch to Satellite View</>}
+          </button>
         </div>
       </div>
 
       {/* ── Map ─────────────────────────────────────────────────────────── */}
       <div className="flex-1 relative">
-        {/* Map type toggle button */}
-        <button
-          onClick={() => setUseSatellite(s => !s)}
-          className={cn(
-            'absolute top-3 right-3 z-[1001] flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-md transition',
-            useSatellite
-              ? 'bg-blue-600 text-white border-blue-700 hover:bg-blue-700'
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-          )}>
-          {useSatellite ? <><Map size={13} /> Street</> : <><Satellite size={13} /> Satellite</>}
-        </button>
-
         {useSatellite ? (
           <LiveMapSatellite
             locations={sorted}
