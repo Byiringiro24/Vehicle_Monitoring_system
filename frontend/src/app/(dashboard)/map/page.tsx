@@ -6,31 +6,14 @@ import { useAuthStore } from '@/store/authStore';
 import { getSocket } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 import { formatSpeed, formatDate } from '@/lib/utils';
-import { Search, Truck, Lock, Unlock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Search, Truck, Lock, Unlock, AlertTriangle, Wifi, WifiOff, RefreshCw, Satellite, Map } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
 import { getLiveStatus, STALE_MS, SPEED_THRESHOLD } from '@/lib/liveStatus';
 import { reverseGeocode } from '@/lib/geocode';
 import type { LocationData } from '@/components/maps/LiveMap';
 
-// ─── Inline address lookup for sidebar cards ──────────────────────────────────
-// Caches at component level; only fetches when coords are available
-function InlineAddress({ lat, lon }: { lat: number; lon: number }) {
-  const [address, setAddress] = useState<string | null>(null);
-  useEffect(() => {
-    if (!lat || !lon) return;
-    let cancelled = false;
-    reverseGeocode(lat, lon).then(a => { if (!cancelled) setAddress(a); });
-    return () => { cancelled = true; };
-  }, [lat.toFixed(3), lon.toFixed(3)]); // only re-fetch when position changes by ~100m
-  if (!address) return null;
-  return (
-    <p className="text-[9px] text-gray-500 leading-tight mt-0.5 truncate" title={address}>
-      📍 {address}
-    </p>
-  );
-}
-
+// ── Two map variants — switch with the 🗺️/🛰️ button ────────────────────────
 const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
   ssr: false,
   loading: () => (
@@ -42,6 +25,34 @@ const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
     </div>
   ),
 });
+const LiveMapSatellite = dynamic(() => import('@/components/maps/LiveMapSatellite'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full bg-gray-900 text-gray-400">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+        <p className="text-sm">Loading satellite…</p>
+      </div>
+    </div>
+  ),
+});
+
+// ─── Inline address lookup for sidebar cards ──────────────────────────────────
+function InlineAddress({ lat, lon }: { lat: number; lon: number }) {
+  const [address, setAddress] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lat || !lon) return;
+    let cancelled = false;
+    reverseGeocode(lat, lon).then(a => { if (!cancelled) setAddress(a); });
+    return () => { cancelled = true; };
+  }, [lat.toFixed(3), lon.toFixed(3)]);
+  if (!address) return null;
+  return (
+    <p className="text-[9px] text-gray-500 leading-tight mt-0.5 truncate" title={address}>
+      📍 {address}
+    </p>
+  );
+}
 
 // ─── Plate confirmation modal ─────────────────────────────────────────────────
 function LockModal({ plate, action, onConfirm, onCancel }:
@@ -106,7 +117,8 @@ export default function LiveMapPage() {
   const [search, setSearch] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
   const [lockTarget, setLockTarget] = useState<{id:string; plate:string; action:'lock'|'unlock'} | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile sidebar toggle
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [useSatellite, setUseSatellite] = useState(false); // map layer toggle
 
   // Live location map: vehicleId → LocationData
   const [locations, setLocations] = useState<Record<string, LocationData>>({});
@@ -504,12 +516,33 @@ export default function LiveMapPage() {
 
       {/* ── Map ─────────────────────────────────────────────────────────── */}
       <div className="flex-1 relative">
-        <LiveMap
-          locations={sorted}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          connectedDevices={connectedDevices}
-        />
+        {/* Map type toggle button */}
+        <button
+          onClick={() => setUseSatellite(s => !s)}
+          className={cn(
+            'absolute top-3 right-3 z-[1001] flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-md transition',
+            useSatellite
+              ? 'bg-blue-600 text-white border-blue-700 hover:bg-blue-700'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          )}>
+          {useSatellite ? <><Map size={13} /> Street</> : <><Satellite size={13} /> Satellite</>}
+        </button>
+
+        {useSatellite ? (
+          <LiveMapSatellite
+            locations={sorted}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            connectedDevices={connectedDevices}
+          />
+        ) : (
+          <LiveMap
+            locations={sorted}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            connectedDevices={connectedDevices}
+          />
+        )}
       </div>
 
       {/* Lock confirmation modal */}

@@ -1,11 +1,29 @@
+/**
+ * LiveMapSatellite.tsx
+ *
+ * Drop-in replacement for LiveMap.tsx with Street / Satellite / Hybrid layer switcher.
+ * Uses the same props interface as LiveMap so you can swap them without changing any page.
+ *
+ * To use this instead of LiveMap, change the dynamic import in your page:
+ *   // original:
+ *   const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), { ssr: false });
+ *   // satellite version:
+ *   const LiveMap = dynamic(() => import('@/components/maps/LiveMapSatellite'), { ssr: false });
+ *
+ * Tile sources:
+ *   Street  → OpenStreetMap (free, no key needed)
+ *   Satellite / Hybrid → Esri World Imagery (free for many uses, no key needed)
+ */
 'use client';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip, LayersControl } from 'react-leaflet';
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatSpeed, formatFuel, formatDate } from '@/lib/utils';
 import { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
 import { reverseGeocode } from '@/lib/geocode';
+
+const { BaseLayer } = LayersControl;
 
 // Re-export so pages can import without pulling in Leaflet (avoids SSR window error)
 export { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
@@ -48,7 +66,6 @@ function createIcon(status: string, plate: string, selected: boolean) {
   });
 }
 
-// Address lookup shown inside Popup
 function GeoAddress({ lat, lon }: { lat: number; lon: number }) {
   const [address, setAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +81,6 @@ function GeoAddress({ lat, lon }: { lat: number; lon: number }) {
   return <p style={{ color: '#374151', fontSize: 11, margin: '5px 0', lineHeight: 1.4 }}>📍 {address}</p>;
 }
 
-// Auto-follow selected vehicle when its position updates
 function FollowSelected({ locations, selectedId }: { locations: LocationData[]; selectedId: string | null }) {
   const map = useMap();
   useEffect(() => {
@@ -77,7 +93,6 @@ function FollowSelected({ locations, selectedId }: { locations: LocationData[]; 
   return null;
 }
 
-// Fit all markers on first load
 function FitBounds({ locations }: { locations: LocationData[] }) {
   const map = useMap();
   const done = useRef(false);
@@ -94,7 +109,6 @@ function FitBounds({ locations }: { locations: LocationData[] }) {
   return null;
 }
 
-// ── Public types ──────────────────────────────────────────────────────────────
 export interface VehicleInfo {
   id: string; name: string; licensePlate: string; status: string;
   engineLocked?: boolean;
@@ -115,14 +129,11 @@ interface Props {
   locations: LocationData[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  /** Set of vehicleIds currently connected to MQTT — used as ground truth for online status */
   connectedDevices?: Set<string>;
 }
 
-export default function LiveMap({ locations, selectedId, onSelect, connectedDevices = new Set() }: Props) {
+export default function LiveMapSatellite({ locations, selectedId, onSelect, connectedDevices = new Set() }: Props) {
 
-  // Resolve status: MQTT connection is ground truth, timestamp staleness is fallback
-  // GPS status is based on speed, NOT engine lock state
   function resolveStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
     if (connectedDevices.has(loc.vehicleId)) {
       return (loc.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
@@ -130,7 +141,6 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
     return getLiveStatus(loc.updatedAt, loc.speed);
   }
 
-  // Only render vehicles with valid GPS coordinates
   const valid = locations.filter(l =>
     l.latitude  != null && l.longitude != null &&
     Math.abs(l.latitude)  > 0.0001 &&
@@ -139,7 +149,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
 
   const center: [number, number] = valid.length
     ? [valid[0].latitude, valid[0].longitude]
-    : [-1.9403, 29.8739]; // Kigali default
+    : [-1.9403, 29.8739];
 
   const activeCount  = valid.filter(l => resolveStatus(l) === 'ACTIVE').length;
   const idleCount    = valid.filter(l => resolveStatus(l) === 'IDLE').length;
@@ -150,33 +160,58 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
 
       {/* Legend */}
       <div style={{
-        position: 'absolute', top: 12, right: 12, zIndex: 1000,
-        background: 'white', borderRadius: 10, padding: '10px 14px',
-        boxShadow: '0 2px 12px rgba(0,0,0,.15)', fontSize: 11,
-        display: 'flex', flexDirection: 'column', gap: 5, minWidth: 160,
-        border: '1px solid #e5e7eb',
+        position: 'absolute', top: 12, left: 12, zIndex: 1000,
+        background: 'rgba(0,0,0,0.75)', borderRadius: 10, padding: '10px 14px',
+        fontSize: 11, display: 'flex', flexDirection: 'column', gap: 5, minWidth: 160,
+        backdropFilter: 'blur(4px)',
       }}>
-        <div style={{ fontWeight: 700, color: '#111', fontSize: 12 }}>
+        <div style={{ fontWeight: 700, color: '#fff', fontSize: 12 }}>
           {valid.length} vehicle{valid.length !== 1 ? 's' : ''} on map
         </div>
         {[
           { color: '#22c55e', label: `● Active (${activeCount})` },
           { color: '#f59e0b', label: `● Idle (${idleCount})` },
-          { color: '#6b7280', label: `● Offline (${offlineCount})` },
+          { color: '#9ca3af', label: `● Offline (${offlineCount})` },
         ].map(({ color, label }) => (
           <div key={label} style={{ color, fontWeight: 600 }}>{label}</div>
         ))}
-        <div style={{ color: '#9ca3af', fontSize: 9, borderTop: '1px solid #f3f4f6', paddingTop: 4, marginTop: 2 }}>
+        <div style={{ color: '#9ca3af', fontSize: 9, borderTop: '1px solid #444', paddingTop: 4, marginTop: 2 }}>
           Live · updates every 2s
         </div>
       </div>
 
       <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }} zoomControl>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          maxZoom={19}
-        />
+
+        {/* ── Layer switcher: Street / Satellite / Hybrid ── */}
+        <LayersControl position="topright">
+
+          <BaseLayer checked name="🗺️ Street Map">
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              maxZoom={19}
+            />
+          </BaseLayer>
+
+          <BaseLayer name="🛰️ Satellite">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri &mdash; Esri, Maxar, GeoEye, USDA, USGS, AeroGRID, IGN'
+              maxZoom={19}
+            />
+          </BaseLayer>
+
+          <BaseLayer name="🌍 Hybrid (Satellite + Roads)">
+            {/* Satellite base */}
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri'
+              maxZoom={19}
+            />
+          </BaseLayer>
+
+        </LayersControl>
+
         <FitBounds locations={valid} />
         <FollowSelected locations={valid} selectedId={selectedId} />
 
@@ -189,7 +224,6 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
 
           return (
             <div key={loc.vehicleId}>
-              {/* Accuracy circle */}
               {loc.accuracy && loc.accuracy > 0 && loc.accuracy < 500 && (
                 <Circle
                   center={pos}
@@ -197,8 +231,6 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                   pathOptions={{ color, fillColor: color, fillOpacity: 0.07, weight: 1, opacity: 0.35 }}
                 />
               )}
-
-              {/* Vehicle marker — react-leaflet moves it automatically when position prop changes */}
               <Marker
                 position={pos}
                 icon={createIcon(status, plate, isSelected)}
@@ -207,10 +239,8 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                 <Tooltip direction="top" offset={[0, -10]} opacity={0.92}>
                   <span style={{ fontSize: 11, fontWeight: 700 }}>{plate} · {status}</span>
                 </Tooltip>
-
                 <Popup maxWidth={280} autoPan={false}>
                   <div style={{ minWidth: 230, fontSize: 13 }}>
-                    {/* Header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                       <span style={{ fontWeight: 800, fontSize: 15 }}>{plate}</span>
                       <span style={{
@@ -220,11 +250,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                       }}>{status}</span>
                     </div>
                     <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 4 }}>{loc.vehicle?.name}</p>
-
-                    {/* Plain-text location address */}
                     <GeoAddress lat={pos[0]} lon={pos[1]} />
-
-                    {/* Stats grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 8 }}>
                       {([
                         ['Speed',    formatSpeed(loc.speed)],

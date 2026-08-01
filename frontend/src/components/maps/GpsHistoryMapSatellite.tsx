@@ -1,9 +1,20 @@
+/**
+ * GpsHistoryMapSatellite.tsx
+ *
+ * Drop-in replacement for GpsHistoryMap.tsx with Street / Satellite / Hybrid layer switcher.
+ * Identical behaviour to GpsHistoryMap — only the tile layer differs.
+ *
+ * To use: change the dynamic import in vehicles/[id]/page.tsx:
+ *   const GpsHistoryMap = dynamic(() => import('@/components/maps/GpsHistoryMapSatellite'), { ssr: false });
+ */
 'use client';
-import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap, Marker } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap, Marker, LayersControl } from 'react-leaflet';
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatDate } from '@/lib/utils';
+
+const { BaseLayer } = LayersControl;
 
 interface GpsPoint {
   id: string;
@@ -21,14 +32,13 @@ interface GpsHistoryMapProps {
 }
 
 function speedColor(speed: number): string {
-  if (speed > 100) return '#ef4444';  // red   — speeding
-  if (speed > 60)  return '#f97316';  // orange — fast
-  if (speed > 20)  return '#22c55e';  // green  — moving
-  if (speed > 2)   return '#3b82f6';  // blue   — slow
-  return '#9ca3af';                    // grey   — stopped
+  if (speed > 100) return '#ef4444';
+  if (speed > 60)  return '#f97316';
+  if (speed > 20)  return '#22c55e';
+  if (speed > 2)   return '#3b82f6';
+  return '#9ca3af';
 }
 
-// Auto-fit map to all points
 function FitBounds({ points }: { points: GpsPoint[] }) {
   const map = useMap();
   useEffect(() => {
@@ -39,7 +49,6 @@ function FitBounds({ points }: { points: GpsPoint[] }) {
   return null;
 }
 
-// Start / end marker icons
 function makeEndpointIcon(color: string, label: string) {
   return L.divIcon({
     html: `<div style="background:${color};color:white;font-size:10px;font-weight:bold;padding:3px 6px;border-radius:12px;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);white-space:nowrap">${label}</div>`,
@@ -48,7 +57,7 @@ function makeEndpointIcon(color: string, label: string) {
   });
 }
 
-export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: GpsHistoryMapProps) {
+export default function GpsHistoryMapSatellite({ points, vehiclePlate, vehicleName }: GpsHistoryMapProps) {
   const [replayIdx, setReplayIdx] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -65,7 +74,6 @@ export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: Gps
   const firstPoint = valid[0];
   const lastPoint  = valid[valid.length - 1];
 
-  // Build polyline segments coloured by speed
   const segments: { points: [number, number][]; color: string }[] = [];
   for (let i = 1; i < valid.length; i++) {
     const prev = valid[i - 1];
@@ -100,13 +108,35 @@ export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: Gps
   return (
     <div className="relative h-full w-full rounded-xl overflow-hidden">
       <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap'
-        />
+
+        {/* ── Layer switcher ── */}
+        <LayersControl position="topright">
+          <BaseLayer checked name="🗺️ Street Map">
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; OpenStreetMap'
+              maxZoom={19}
+            />
+          </BaseLayer>
+          <BaseLayer name="🛰️ Satellite">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri &mdash; Esri, Maxar, GeoEye, USDA, USGS, AeroGRID, IGN'
+              maxZoom={19}
+            />
+          </BaseLayer>
+          <BaseLayer name="🌍 Hybrid (Satellite + Roads)">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri'
+              maxZoom={19}
+            />
+          </BaseLayer>
+        </LayersControl>
+
         <FitBounds points={valid} />
 
-        {/* Coloured path segments */}
+        {/* Speed-coloured path */}
         {segments.map((seg, i) => (
           <Polyline key={i} positions={seg.points} color={seg.color} weight={3} opacity={0.85} />
         ))}
@@ -133,7 +163,7 @@ export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: Gps
           </Popup>
         </Marker>
 
-        {/* Replay position */}
+        {/* Replay marker */}
         {replayPoint && (
           <CircleMarker
             center={[replayPoint.latitude, replayPoint.longitude]}
@@ -153,7 +183,7 @@ export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: Gps
         )}
       </MapContainer>
 
-      {/* Overlay controls */}
+      {/* Bottom controls */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-full px-4 py-2 shadow-lg z-[1000]">
         <div className="flex items-center gap-2 text-xs text-gray-600">
           <span className="w-3 h-3 rounded-full bg-gray-400 inline-block" /> Stopped
@@ -182,12 +212,12 @@ export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: Gps
       </div>
 
       {/* Stats overlay */}
-      <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl px-4 py-3 shadow-md z-[1000] text-xs space-y-1">
-        <p className="font-bold text-gray-900">{vehiclePlate}</p>
-        <p className="text-gray-500">{vehicleName}</p>
-        <p className="text-gray-600">{valid.length} GPS points</p>
-        <p className="text-gray-600">
-          Max: <span className="font-bold text-red-600">{Math.round(Math.max(...valid.map(p => p.speed)))} km/h</span>
+      <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm rounded-xl px-4 py-3 shadow-md z-[1000] text-xs space-y-1">
+        <p className="font-bold text-white">{vehiclePlate}</p>
+        <p className="text-gray-300">{vehicleName}</p>
+        <p className="text-gray-300">{valid.length} GPS points</p>
+        <p className="text-gray-300">
+          Max: <span className="font-bold text-red-400">{Math.round(Math.max(...valid.map(p => p.speed)))} km/h</span>
         </p>
       </div>
     </div>
