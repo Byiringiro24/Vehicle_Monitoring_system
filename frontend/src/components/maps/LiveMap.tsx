@@ -207,9 +207,20 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   connectedDevices?: Set<string>;
+  /** When set, the map flies to these coordinates (set by location search) */
+  flyToCoords?: [number, number] | null;
 }
 
-export default function LiveMap({ locations, selectedId, onSelect, connectedDevices = new Set() }: Props) {
+// Handles flying to a searched location inside the MapContainer
+function FlyTo({ coords }: { coords: [number, number] | null | undefined }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords) map.flyTo(coords, 16, { animate: true, duration: 1.2 });
+  }, [coords, map]);
+  return null;
+}
+
+export default function LiveMap({ locations, selectedId, onSelect, connectedDevices = new Set(), flyToCoords }: Props) {
   const [mapLayer, setMapLayer] = useState<MapLayer>('street');
 
   function resolveStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
@@ -262,6 +273,9 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
       <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }} zoomControl>
         {/* Tile layers — switch instantly via React state */}
         <ActiveTiles layer={mapLayer} />
+
+        {/* Fly to searched location */}
+        <FlyTo coords={flyToCoords} />
 
         {/* Layer switcher — bottom-left inside map */}
         <LayerSwitcher layer={mapLayer} onChange={setMapLayer} />

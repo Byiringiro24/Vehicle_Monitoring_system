@@ -118,7 +118,14 @@ export default function LiveMapPage() {
   const [wsConnected, setWsConnected] = useState(false);
   const [lockTarget, setLockTarget] = useState<{id:string; plate:string; action:'lock'|'unlock'} | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [useSatellite, setUseSatellite] = useState(false); // map layer toggle
+  const [useSatellite, setUseSatellite] = useState(false);
+
+  // ── Location search state ────────────────────────────────────────────────
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationResults, setLocationResults] = useState<Array<{display_name: string; lat: string; lon: string}>>([]);
+  const [locationSearching, setLocationSearching] = useState(false);
+  const [flyToCoords, setFlyToCoords] = useState<[number, number] | null>(null);
+  const locationSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Live location map: vehicleId → LocationData
   const [locations, setLocations] = useState<Record<string, LocationData>>({});
@@ -292,7 +299,48 @@ export default function LiveMapPage() {
     onError: () => toast.error('Command failed — check device connection'),
   });
 
-  // ── Compute live status using connectedDevices as ground truth ───────────────
+  // ── Location search handler ───────────────────────────────────────────────
+  function handleLocationInput(val: string) {
+    setLocationQuery(val);
+    setLocationResults([]);
+    if (!val.trim()) return;
+
+    // Detect GPS coordinates: "lat, lon" or "lat lon"
+    const coordMatch = val.trim().match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lon = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        // Valid coords — fly directly without searching
+        setFlyToCoords([lat, lon]);
+        setLocationResults([]);
+        return;
+      }
+    }
+
+    // Debounced Nominatim place search
+    if (locationSearchRef.current) clearTimeout(locationSearchRef.current);
+    locationSearchRef.current = setTimeout(async () => {
+      setLocationSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5`,
+          { headers: { 'Accept-Language': 'en', 'User-Agent': 'ARTIC-VMS/1.0' } }
+        );
+        const data = await res.json();
+        setLocationResults(data);
+      } catch { /* ignore */ }
+      finally { setLocationSearching(false); }
+    }, 500);
+  }
+
+  function selectLocationResult(result: { display_name: string; lat: string; lon: string }) {
+    setFlyToCoords([parseFloat(result.lat), parseFloat(result.lon)]);
+    setLocationQuery(result.display_name.split(',').slice(0, 2).join(', '));
+    setLocationResults([]);
+  }
+
+  // ── Compute live status ───────────────────────────────────────────────────
   // GPS status = ACTIVE (moving), IDLE (stationary), OFFLINE (no signal)
   // Engine lock state has NO effect on GPS status
   function getStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
@@ -366,7 +414,7 @@ export default function LiveMapPage() {
             </span>
           </div>
 
-          {/* Search */}
+          {/* Vehicle search */}
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -374,6 +422,37 @@ export default function LiveMapPage() {
               placeholder="Search plate or name…"
               className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition"
             />
+          </div>
+
+          {/* Location / coordinate search */}
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-3 text-gray-400" />
+            <input
+              value={locationQuery}
+              onChange={e => handleLocationInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setLocationQuery(''); setLocationResults([]); }
+              }}
+              placeholder="Search place or paste lat, lng…"
+              className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition"
+            />
+            {locationSearching && (
+              <RefreshCw size={11} className="absolute right-2.5 top-3 text-gray-400 animate-spin" />
+            )}
+            {/* Dropdown results */}
+            {locationResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden">
+                {locationResults.map((r, i) => (
+                  <button
+                    key={i}
+                    onClick={() => selectLocationResult(r)}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-gray-50 last:border-0 transition">
+                    <p className="font-medium text-gray-800 truncate">{r.display_name.split(',')[0]}</p>
+                    <p className="text-gray-400 truncate text-[10px]">{r.display_name.split(',').slice(1, 3).join(',')}</p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -534,6 +613,7 @@ export default function LiveMapPage() {
             selectedId={selectedId}
             onSelect={setSelectedId}
             connectedDevices={connectedDevices}
+            flyToCoords={flyToCoords}
           />
         )}
       </div>
