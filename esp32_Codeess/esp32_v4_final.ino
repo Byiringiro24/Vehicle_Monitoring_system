@@ -56,10 +56,10 @@
 #include <ArduinoJson.h>
 
 // ── CHANGE THESE 4 ──────────────────────────────────────────
-const char DEVICE_TOKEN[] = "5466f18d-ffd6-4267-ad81-93583d1bbaa4";
+const char DEVICE_TOKEN[] = "7b37481e-ffd5-4355-b0d1-875c38ff29d3";
 const char SIM_NUMBER[]   = "+250733768958";
 const char APN[]          = "internet";
-const char MQTT_HOST[]    = "102.37.128.81"; // new server
+const char MQTT_HOST[]    = "102.37.128.81";
 // ────────────────────────────────────────────────────────────
 
 const char APN_USER[] = "";
@@ -127,6 +127,14 @@ void checkGps() {
       Serial.println("[GPS] Restarted OK");
     }
   }
+}
+
+// ─── Ensure MQTT connected before publishing a command response ───────────────
+bool ensureConnected() {
+  if (mqtt.connected()) return true;
+  // Try to reconnect GPRS + MQTT once before giving up
+  if (!modem.isGprsConnected()) { modem.gprsDisconnect(); delay(300); connectGPRS(); }
+  return connectMQTT();
 }
 
 // ─── MQTT message callback ────────────────────────────────────────────────────
@@ -375,7 +383,7 @@ void setup() {
   mqtt.setCallback(onMessage);
   mqtt.setKeepAlive(60);
   mqtt.setSocketTimeout(15);
-  mqtt.setBufferSize(512);
+  mqtt.setBufferSize(1024);  // increased for USSD responses
   connectMQTT();
 }
 

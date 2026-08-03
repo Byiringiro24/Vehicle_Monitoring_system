@@ -6,31 +6,14 @@ import { useAuthStore } from '@/store/authStore';
 import { getSocket } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 import { formatSpeed, formatDate } from '@/lib/utils';
-import { Search, Truck, Lock, Unlock, AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Search, Truck, Lock, Unlock, AlertTriangle, Wifi, WifiOff, RefreshCw, Satellite, Map } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
 import { getLiveStatus, STALE_MS, SPEED_THRESHOLD } from '@/lib/liveStatus';
 import { reverseGeocode } from '@/lib/geocode';
 import type { LocationData } from '@/components/maps/LiveMap';
 
-// ─── Inline address lookup for sidebar cards ──────────────────────────────────
-// Caches at component level; only fetches when coords are available
-function InlineAddress({ lat, lon }: { lat: number; lon: number }) {
-  const [address, setAddress] = useState<string | null>(null);
-  useEffect(() => {
-    if (!lat || !lon) return;
-    let cancelled = false;
-    reverseGeocode(lat, lon).then(a => { if (!cancelled) setAddress(a); });
-    return () => { cancelled = true; };
-  }, [lat.toFixed(3), lon.toFixed(3)]); // only re-fetch when position changes by ~100m
-  if (!address) return null;
-  return (
-    <p className="text-[9px] text-gray-500 leading-tight mt-0.5 truncate" title={address}>
-      📍 {address}
-    </p>
-  );
-}
-
+// ── Two map variants — switch with the 🗺️/🛰️ button ────────────────────────
 const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
   ssr: false,
   loading: () => (
@@ -42,6 +25,34 @@ const LiveMap = dynamic(() => import('@/components/maps/LiveMap'), {
     </div>
   ),
 });
+const LiveMapSatellite = dynamic(() => import('@/components/maps/LiveMapSatellite'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full bg-gray-900 text-gray-400">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+        <p className="text-sm">Loading satellite…</p>
+      </div>
+    </div>
+  ),
+});
+
+// ─── Inline address lookup for sidebar cards ──────────────────────────────────
+function InlineAddress({ lat, lon }: { lat: number; lon: number }) {
+  const [address, setAddress] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lat || !lon) return;
+    let cancelled = false;
+    reverseGeocode(lat, lon).then(a => { if (!cancelled) setAddress(a); });
+    return () => { cancelled = true; };
+  }, [lat.toFixed(3), lon.toFixed(3)]);
+  if (!address) return null;
+  return (
+    <p className="text-[9px] text-gray-500 leading-tight mt-0.5 truncate" title={address}>
+      📍 {address}
+    </p>
+  );
+}
 
 // ─── Plate confirmation modal ─────────────────────────────────────────────────
 function LockModal({ plate, action, onConfirm, onCancel }:
@@ -106,7 +117,15 @@ export default function LiveMapPage() {
   const [search, setSearch] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
   const [lockTarget, setLockTarget] = useState<{id:string; plate:string; action:'lock'|'unlock'} | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile sidebar toggle
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [useSatellite, setUseSatellite] = useState(false);
+
+  // ── Location search state ────────────────────────────────────────────────
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationResults, setLocationResults] = useState<Array<{display_name: string; lat: string; lon: string}>>([]);
+  const [locationSearching, setLocationSearching] = useState(false);
+  const [flyToCoords, setFlyToCoords] = useState<[number, number] | null>(null);
+  const locationSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Live location map: vehicleId → LocationData
   const [locations, setLocations] = useState<Record<string, LocationData>>({});
@@ -280,7 +299,48 @@ export default function LiveMapPage() {
     onError: () => toast.error('Command failed — check device connection'),
   });
 
-  // ── Compute live status using connectedDevices as ground truth ───────────────
+  // ── Location search handler ───────────────────────────────────────────────
+  function handleLocationInput(val: string) {
+    setLocationQuery(val);
+    setLocationResults([]);
+    if (!val.trim()) return;
+
+    // Detect GPS coordinates: "lat, lon" or "lat lon"
+    const coordMatch = val.trim().match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lon = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        // Valid coords — fly directly without searching
+        setFlyToCoords([lat, lon]);
+        setLocationResults([]);
+        return;
+      }
+    }
+
+    // Debounced Nominatim place search
+    if (locationSearchRef.current) clearTimeout(locationSearchRef.current);
+    locationSearchRef.current = setTimeout(async () => {
+      setLocationSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5`,
+          { headers: { 'Accept-Language': 'en', 'User-Agent': 'ARTIC-VMS/1.0' } }
+        );
+        const data = await res.json();
+        setLocationResults(data);
+      } catch { /* ignore */ }
+      finally { setLocationSearching(false); }
+    }, 500);
+  }
+
+  function selectLocationResult(result: { display_name: string; lat: string; lon: string }) {
+    setFlyToCoords([parseFloat(result.lat), parseFloat(result.lon)]);
+    setLocationQuery(result.display_name.split(',').slice(0, 2).join(', '));
+    setLocationResults([]);
+  }
+
+  // ── Compute live status ───────────────────────────────────────────────────
   // GPS status = ACTIVE (moving), IDLE (stationary), OFFLINE (no signal)
   // Engine lock state has NO effect on GPS status
   function getStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
@@ -354,7 +414,7 @@ export default function LiveMapPage() {
             </span>
           </div>
 
-          {/* Search */}
+          {/* Vehicle search */}
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -362,6 +422,37 @@ export default function LiveMapPage() {
               placeholder="Search plate or name…"
               className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition"
             />
+          </div>
+
+          {/* Location / coordinate search */}
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-3 text-gray-400" />
+            <input
+              value={locationQuery}
+              onChange={e => handleLocationInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setLocationQuery(''); setLocationResults([]); }
+              }}
+              placeholder="Search place or paste lat, lng…"
+              className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition"
+            />
+            {locationSearching && (
+              <RefreshCw size={11} className="absolute right-2.5 top-3 text-gray-400 animate-spin" />
+            )}
+            {/* Dropdown results */}
+            {locationResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden">
+                {locationResults.map((r, i) => (
+                  <button
+                    key={i}
+                    onClick={() => selectLocationResult(r)}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-gray-50 last:border-0 transition">
+                    <p className="font-medium text-gray-800 truncate">{r.display_name.split(',')[0]}</p>
+                    <p className="text-gray-400 truncate text-[10px]">{r.display_name.split(',').slice(1, 3).join(',')}</p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -490,8 +581,8 @@ export default function LiveMapPage() {
           })}
         </div>
 
-        {/* Footer stats */}
-        <div className="p-3 border-t border-gray-100 bg-gray-50">
+        {/* Footer stats + map toggle */}
+        <div className="p-3 border-t border-gray-100 bg-gray-50 space-y-2">
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>{locationList.length} vehicle{locationList.length !== 1 ? 's' : ''} total</span>
             <span className="flex items-center gap-1">
@@ -499,17 +590,32 @@ export default function LiveMapPage() {
               Updates every 2s
             </span>
           </div>
+          <button
+            onClick={() => setUseSatellite(s => !s)}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border text-xs font-semibold transition bg-white hover:bg-gray-50 border-gray-300 text-gray-700">
+            {useSatellite ? <><Map size={11} /> Switch to Street Map</> : <><Satellite size={11} /> Switch to Satellite View</>}
+          </button>
         </div>
       </div>
 
       {/* ── Map ─────────────────────────────────────────────────────────── */}
       <div className="flex-1 relative">
-        <LiveMap
-          locations={sorted}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          connectedDevices={connectedDevices}
-        />
+        {useSatellite ? (
+          <LiveMapSatellite
+            locations={sorted}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            connectedDevices={connectedDevices}
+          />
+        ) : (
+          <LiveMap
+            locations={sorted}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            connectedDevices={connectedDevices}
+            flyToCoords={flyToCoords}
+          />
+        )}
       </div>
 
       {/* Lock confirmation modal */}

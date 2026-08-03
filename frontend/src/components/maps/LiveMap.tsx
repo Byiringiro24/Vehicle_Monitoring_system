@@ -7,16 +7,134 @@ import { formatSpeed, formatFuel, formatDate } from '@/lib/utils';
 import { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
 import { reverseGeocode } from '@/lib/geocode';
 
-// Re-export so pages can import without pulling in Leaflet (avoids SSR window error)
 export { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
 
-// Fix default Leaflet icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
   iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
   shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
+
+type MapLayer = 'street' | 'satellite' | 'hybrid';
+
+const LAYERS: { id: MapLayer; icon: string; label: string }[] = [
+  { id: 'street',    icon: '🗺️', label: 'Street' },
+  { id: 'satellite', icon: '🛰️', label: 'Satellite' },
+  { id: 'hybrid',    icon: '🌍', label: 'Hybrid' },
+];
+
+function ActiveTiles({ layer }: { layer: MapLayer }) {
+  if (layer === 'street') {
+    return (
+      <TileLayer
+        key="street"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        maxZoom={21}
+        maxNativeZoom={19}
+      />
+    );
+  }
+  if (layer === 'satellite') {
+    return (
+      <TileLayer
+        key="satellite"
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        attribution="Tiles &copy; Esri &mdash; Esri, Maxar, GeoEye, Earthstar Geographics"
+        maxZoom={21}
+        maxNativeZoom={18}
+      />
+    );
+  }
+  return (
+    <>
+      <TileLayer
+        key="hybrid-sat"
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        attribution="Tiles &copy; Esri"
+        maxZoom={21}
+        maxNativeZoom={18}
+        zIndex={1}
+      />
+      <TileLayer
+        key="hybrid-osm"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution=""
+        maxZoom={21}
+        maxNativeZoom={19}
+        zIndex={2}
+        opacity={0.5}
+      />
+    </>
+  );
+}
+
+// ── Map controls: layer switcher + auto-fit button (must be inside MapContainer)
+function MapControls({
+  layer, onChange, locations,
+}: {
+  layer: MapLayer;
+  onChange: (l: MapLayer) => void;
+  locations: LocationData[];
+}) {
+  const map = useMap();
+
+  function fitAll() {
+    const valid = locations.filter(l => l.latitude && l.longitude);
+    if (valid.length === 0) return;
+    if (valid.length === 1) {
+      map.flyTo([valid[0].latitude, valid[0].longitude], 15, { animate: true, duration: 1 });
+      return;
+    }
+    const bounds = L.latLngBounds(valid.map(l => [l.latitude, l.longitude]));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: true });
+  }
+
+  return (
+    <>
+      {/* Layer switcher — bottom-left */}
+      <div style={{
+        position: 'absolute', bottom: 28, left: 12, zIndex: 1000,
+        display: 'flex', gap: 4,
+        background: 'rgba(255,255,255,0.97)', borderRadius: 10, padding: '5px 6px',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.2)', border: '1px solid #d1d5db',
+      }}>
+        {LAYERS.map(btn => (
+          <button key={btn.id} onClick={() => onChange(btn.id)} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 700,
+            cursor: 'pointer',
+            border: layer === btn.id ? '2px solid #2563eb' : '2px solid transparent',
+            background: layer === btn.id ? '#eff6ff' : 'transparent',
+            color: layer === btn.id ? '#1d4ed8' : '#4b5563',
+            transition: 'all 0.12s', whiteSpace: 'nowrap',
+          }}>
+            <span style={{ fontSize: 15 }}>{btn.icon}</span>{btn.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Auto-fit all vehicles — below zoom controls (top-left) */}
+      <div style={{
+        position: 'absolute', top: 80, left: 11, zIndex: 1000,
+      }}>
+        <button
+          onClick={fitAll}
+          title="Fit all vehicles on screen"
+          style={{
+            width: 30, height: 30,
+            background: 'white', border: '2px solid rgba(0,0,0,0.2)',
+            borderRadius: 4, cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', fontSize: 16,
+            boxShadow: '0 1px 5px rgba(0,0,0,.15)',
+          }}>
+          ⊞
+        </button>
+      </div>
+    </>
+  );
+}
 
 const STATUS_COLOR: Record<string, string> = {
   ACTIVE:  '#22c55e',
@@ -48,7 +166,6 @@ function createIcon(status: string, plate: string, selected: boolean) {
   });
 }
 
-// Address lookup shown inside Popup
 function GeoAddress({ lat, lon }: { lat: number; lon: number }) {
   const [address, setAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +181,6 @@ function GeoAddress({ lat, lon }: { lat: number; lon: number }) {
   return <p style={{ color: '#374151', fontSize: 11, margin: '5px 0', lineHeight: 1.4 }}>📍 {address}</p>;
 }
 
-// Auto-follow selected vehicle when its position updates
 function FollowSelected({ locations, selectedId }: { locations: LocationData[]; selectedId: string | null }) {
   const map = useMap();
   useEffect(() => {
@@ -77,7 +193,6 @@ function FollowSelected({ locations, selectedId }: { locations: LocationData[]; 
   return null;
 }
 
-// Fit all markers on first load
 function FitBounds({ locations }: { locations: LocationData[] }) {
   const map = useMap();
   const done = useRef(false);
@@ -94,7 +209,6 @@ function FitBounds({ locations }: { locations: LocationData[] }) {
   return null;
 }
 
-// ── Public types ──────────────────────────────────────────────────────────────
 export interface VehicleInfo {
   id: string; name: string; licensePlate: string; status: string;
   engineLocked?: boolean;
@@ -115,14 +229,23 @@ interface Props {
   locations: LocationData[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  /** Set of vehicleIds currently connected to MQTT — used as ground truth for online status */
   connectedDevices?: Set<string>;
+  /** When set, the map flies to these coordinates (set by location search) */
+  flyToCoords?: [number, number] | null;
 }
 
-export default function LiveMap({ locations, selectedId, onSelect, connectedDevices = new Set() }: Props) {
+// Handles flying to a searched location inside the MapContainer
+function FlyTo({ coords }: { coords: [number, number] | null | undefined }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords) map.flyTo(coords, 16, { animate: true, duration: 1.2 });
+  }, [coords, map]);
+  return null;
+}
 
-  // Resolve status: MQTT connection is ground truth, timestamp staleness is fallback
-  // GPS status is based on speed, NOT engine lock state
+export default function LiveMap({ locations, selectedId, onSelect, connectedDevices = new Set(), flyToCoords }: Props) {
+  const [mapLayer, setMapLayer] = useState<MapLayer>('street');
+
   function resolveStatus(loc: LocationData): 'ACTIVE' | 'IDLE' | 'OFFLINE' {
     if (connectedDevices.has(loc.vehicleId)) {
       return (loc.speed ?? 0) >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE';
@@ -130,7 +253,6 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
     return getLiveStatus(loc.updatedAt, loc.speed);
   }
 
-  // Only render vehicles with valid GPS coordinates
   const valid = locations.filter(l =>
     l.latitude  != null && l.longitude != null &&
     Math.abs(l.latitude)  > 0.0001 &&
@@ -139,7 +261,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
 
   const center: [number, number] = valid.length
     ? [valid[0].latitude, valid[0].longitude]
-    : [-1.9403, 29.8739]; // Kigali default
+    : [-1.9403, 29.8739];
 
   const activeCount  = valid.filter(l => resolveStatus(l) === 'ACTIVE').length;
   const idleCount    = valid.filter(l => resolveStatus(l) === 'IDLE').length;
@@ -148,7 +270,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
-      {/* Legend */}
+      {/* Legend — top-right */}
       <div style={{
         position: 'absolute', top: 12, right: 12, zIndex: 1000,
         background: 'white', borderRadius: 10, padding: '10px 14px',
@@ -171,12 +293,16 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
         </div>
       </div>
 
-      <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }} zoomControl>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          maxZoom={19}
-        />
+      <MapContainer center={center} zoom={13} maxZoom={21} style={{ width: '100%', height: '100%' }} zoomControl>
+        {/* Tile layers — switch instantly via React state */}
+        <ActiveTiles layer={mapLayer} />
+
+        {/* Fly to searched location */}
+        <FlyTo coords={flyToCoords} />
+
+        {/* Layer switcher + auto-fit button */}
+        <MapControls layer={mapLayer} onChange={setMapLayer} locations={valid} />
+
         <FitBounds locations={valid} />
         <FollowSelected locations={valid} selectedId={selectedId} />
 
@@ -189,7 +315,6 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
 
           return (
             <div key={loc.vehicleId}>
-              {/* Accuracy circle */}
               {loc.accuracy && loc.accuracy > 0 && loc.accuracy < 500 && (
                 <Circle
                   center={pos}
@@ -197,8 +322,6 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                   pathOptions={{ color, fillColor: color, fillOpacity: 0.07, weight: 1, opacity: 0.35 }}
                 />
               )}
-
-              {/* Vehicle marker — react-leaflet moves it automatically when position prop changes */}
               <Marker
                 position={pos}
                 icon={createIcon(status, plate, isSelected)}
@@ -207,10 +330,8 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                 <Tooltip direction="top" offset={[0, -10]} opacity={0.92}>
                   <span style={{ fontSize: 11, fontWeight: 700 }}>{plate} · {status}</span>
                 </Tooltip>
-
                 <Popup maxWidth={280} autoPan={false}>
                   <div style={{ minWidth: 230, fontSize: 13 }}>
-                    {/* Header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                       <span style={{ fontWeight: 800, fontSize: 15 }}>{plate}</span>
                       <span style={{
@@ -220,11 +341,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                       }}>{status}</span>
                     </div>
                     <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 4 }}>{loc.vehicle?.name}</p>
-
-                    {/* Plain-text location address */}
                     <GeoAddress lat={pos[0]} lon={pos[1]} />
-
-                    {/* Stats grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 8 }}>
                       {([
                         ['Speed',    formatSpeed(loc.speed)],
@@ -233,7 +350,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                         ['Accuracy', loc.accuracy ? `±${loc.accuracy.toFixed(0)}m` : '—'],
                         ['Lat',      pos[0].toFixed(6)],
                         ['Lon',      pos[1].toFixed(6)],
-                      ] as [string,string][]).map(([label, val]) => (
+                      ] as [string, string][]).map(([label, val]) => (
                         <div key={label} style={{ background: '#f9fafb', borderRadius: 6, padding: '5px 8px' }}>
                           <div style={{ color: '#9ca3af', fontSize: 10 }}>{label}</div>
                           <div style={{ fontWeight: 600, fontSize: 12 }}>{val}</div>

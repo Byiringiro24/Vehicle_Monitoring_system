@@ -23,6 +23,10 @@ const GpsHistoryMap  = dynamic(() => import('@/components/maps/GpsHistoryMap'), 
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full bg-gray-100 rounded-xl text-gray-400">Loading map…</div>,
 });
+const GpsHistoryMapSatellite = dynamic(() => import('@/components/maps/GpsHistoryMapSatellite'), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full bg-gray-900 rounded-xl text-gray-400">Loading satellite…</div>,
+});
 
 type Tab = 'overview' | 'history' | 'trips' | 'telemetry' | 'commands';
 
@@ -400,6 +404,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const [tab, setTab]   = useState<Tab>('overview');
   const [from, setFrom] = useState(format(subDays(new Date(), 1), "yyyy-MM-dd'T'HH:mm"));
   const [to, setTo]     = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [mapSatellite, setMapSatellite] = useState(false); // GPS history map toggle
 
   // Live state from Socket.IO
   const [liveLoc, setLiveLoc]               = useState<any>(null);
@@ -926,14 +931,34 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
             <span className="text-sm text-gray-500 font-medium">
               {gpsData?.count ?? 0} GPS points
             </span>
+            {/* Map type toggle */}
+            <button
+              onClick={() => setMapSatellite(s => !s)}
+              className={cn(
+                'ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition',
+                mapSatellite
+                  ? 'bg-blue-600 text-white border-blue-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              )}>
+              <Satellite size={13} />
+              {mapSatellite ? 'Satellite' : 'Street'}
+            </button>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ height: 500 }}>
             {gpsData?.points ? (
-              <GpsHistoryMap
-                points={gpsData.points}
-                vehiclePlate={vehicle.licensePlate}
-                vehicleName={vehicle.name}
-              />
+              mapSatellite ? (
+                <GpsHistoryMapSatellite
+                  points={gpsData.points}
+                  vehiclePlate={vehicle.licensePlate}
+                  vehicleName={vehicle.name}
+                />
+              ) : (
+                <GpsHistoryMap
+                  points={gpsData.points}
+                  vehiclePlate={vehicle.licensePlate}
+                  vehicleName={vehicle.name}
+                />
+              )
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">
                 <RefreshCw size={20} className="animate-spin mr-2" /> Loading GPS history…

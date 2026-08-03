@@ -134,6 +134,26 @@ export function initMqttClient() {
     if (topic.endsWith('/pong')) {
       logger.debug(`[MQTT] Pong on ${topic}`);
       pongHandlers.forEach(h => h(topic, message));
+
+      // Also emit device:response so the Commands tab shows the pong result
+      try {
+        const token = topic.split('/')[1];
+        const vehicle = await prisma.vehicle.findFirst({
+          where:  { deviceToken: token },
+          select: { id: true, organizationId: true },
+        });
+        if (vehicle) {
+          const io = getSocketServer();
+          if (io) {
+            const payload = JSON.parse(message.toString());
+            io.to(`org:${vehicle.organizationId}`).emit('device:response', {
+              vehicleId:  vehicle.id,
+              timestamp:  new Date().toISOString(),
+              payload:    { pong: true, ...payload },
+            });
+          }
+        }
+      } catch { /* non-fatal */ }
       return;
     }
   });
