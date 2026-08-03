@@ -59,7 +59,7 @@
 const char DEVICE_TOKEN[] = "5466f18d-ffd6-4267-ad81-93583d1bbaa4";
 const char SIM_NUMBER[]   = "+250733768958";
 const char APN[]          = "internet";
-const char MQTT_HOST[]    = "172.209.217.176";
+const char MQTT_HOST[]    = "102.37.128.81"; // new server
 // ────────────────────────────────────────────────────────────
 
 const char APN_USER[] = "";
