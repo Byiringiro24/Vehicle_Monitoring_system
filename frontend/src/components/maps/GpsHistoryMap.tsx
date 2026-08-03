@@ -17,41 +17,25 @@ const LAYERS: { id: MapLayer; icon: string; label: string }[] = [
 function ActiveTiles({ layer }: { layer: MapLayer }) {
   if (layer === 'street') {
     return (
-      <TileLayer
-        key="street"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; OpenStreetMap'
-        maxZoom={19}
-      />
+      <TileLayer key="street" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; OpenStreetMap' maxZoom={21} maxNativeZoom={19} />
     );
   }
   if (layer === 'satellite') {
     return (
-      <TileLayer
-        key="satellite"
+      <TileLayer key="satellite"
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        attribution="Tiles &copy; Esri"
-        maxZoom={19}
-      />
+        attribution="Tiles &copy; Esri" maxZoom={21} maxNativeZoom={18} />
     );
   }
   return (
     <>
-      <TileLayer
-        key="hybrid-sat"
+      <TileLayer key="hybrid-sat"
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        attribution="Tiles &copy; Esri"
-        maxZoom={19}
-        zIndex={1}
-      />
-      <TileLayer
-        key="hybrid-osm"
+        attribution="Tiles &copy; Esri" maxZoom={21} maxNativeZoom={18} zIndex={1} />
+      <TileLayer key="hybrid-osm"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution=""
-        maxZoom={19}
-        zIndex={2}
-        opacity={0.5}
-      />
+        attribution="" maxZoom={21} maxNativeZoom={19} zIndex={2} opacity={0.5} />
     </>
   );
 }
@@ -185,7 +169,7 @@ export default function GpsHistoryMap({ points, vehiclePlate, vehicleName }: Gps
 
   return (
     <div className="relative h-full w-full rounded-xl overflow-hidden">
-      <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }}>
+      <MapContainer center={center} zoom={13} maxZoom={21} style={{ width: '100%', height: '100%' }}>
         {/* Tile layers — React state controlled */}
         <ActiveTiles layer={mapLayer} />
 

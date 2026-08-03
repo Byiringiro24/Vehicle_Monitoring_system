@@ -16,7 +16,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// ── Map layer types and tile configs ──────────────────────────────────────────
 type MapLayer = 'street' | 'satellite' | 'hybrid';
 
 const LAYERS: { id: MapLayer; icon: string; label: string }[] = [
@@ -25,7 +24,6 @@ const LAYERS: { id: MapLayer; icon: string; label: string }[] = [
   { id: 'hybrid',    icon: '🌍', label: 'Hybrid' },
 ];
 
-// Renders the correct tile layers for the current map type
 function ActiveTiles({ layer }: { layer: MapLayer }) {
   if (layer === 'street') {
     return (
@@ -33,7 +31,8 @@ function ActiveTiles({ layer }: { layer: MapLayer }) {
         key="street"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        maxZoom={19}
+        maxZoom={21}
+        maxNativeZoom={19}
       />
     );
   }
@@ -42,26 +41,28 @@ function ActiveTiles({ layer }: { layer: MapLayer }) {
       <TileLayer
         key="satellite"
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics"
-        maxZoom={19}
+        attribution="Tiles &copy; Esri &mdash; Esri, Maxar, GeoEye, Earthstar Geographics"
+        maxZoom={21}
+        maxNativeZoom={18}
       />
     );
   }
-  // hybrid = satellite base + semi-transparent OSM labels
   return (
     <>
       <TileLayer
         key="hybrid-sat"
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution="Tiles &copy; Esri"
-        maxZoom={19}
+        maxZoom={21}
+        maxNativeZoom={18}
         zIndex={1}
       />
       <TileLayer
         key="hybrid-osm"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution=""
-        maxZoom={19}
+        maxZoom={21}
+        maxNativeZoom={19}
         zIndex={2}
         opacity={0.5}
       />
@@ -69,47 +70,69 @@ function ActiveTiles({ layer }: { layer: MapLayer }) {
   );
 }
 
-// Layer switcher rendered inside MapContainer (must use useMap)
-function LayerSwitcher({ layer, onChange }: { layer: MapLayer; onChange: (l: MapLayer) => void }) {
-  useMap(); // required to be inside MapContainer
+// ── Map controls: layer switcher + auto-fit button (must be inside MapContainer)
+function MapControls({
+  layer, onChange, locations,
+}: {
+  layer: MapLayer;
+  onChange: (l: MapLayer) => void;
+  locations: LocationData[];
+}) {
+  const map = useMap();
+
+  function fitAll() {
+    const valid = locations.filter(l => l.latitude && l.longitude);
+    if (valid.length === 0) return;
+    if (valid.length === 1) {
+      map.flyTo([valid[0].latitude, valid[0].longitude], 15, { animate: true, duration: 1 });
+      return;
+    }
+    const bounds = L.latLngBounds(valid.map(l => [l.latitude, l.longitude]));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: true });
+  }
+
   return (
-    <div style={{
-      position: 'absolute',
-      bottom: 28,
-      left: 12,
-      zIndex: 1000,
-      display: 'flex',
-      gap: 4,
-      background: 'rgba(255,255,255,0.97)',
-      borderRadius: 10,
-      padding: '5px 6px',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
-      border: '1px solid #d1d5db',
-    }}>
-      {LAYERS.map(btn => (
-        <button
-          key={btn.id}
-          onClick={() => onChange(btn.id)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            padding: '5px 11px',
-            borderRadius: 7,
-            fontSize: 11,
-            fontWeight: 700,
+    <>
+      {/* Layer switcher — bottom-left */}
+      <div style={{
+        position: 'absolute', bottom: 28, left: 12, zIndex: 1000,
+        display: 'flex', gap: 4,
+        background: 'rgba(255,255,255,0.97)', borderRadius: 10, padding: '5px 6px',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.2)', border: '1px solid #d1d5db',
+      }}>
+        {LAYERS.map(btn => (
+          <button key={btn.id} onClick={() => onChange(btn.id)} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 700,
             cursor: 'pointer',
             border: layer === btn.id ? '2px solid #2563eb' : '2px solid transparent',
             background: layer === btn.id ? '#eff6ff' : 'transparent',
             color: layer === btn.id ? '#1d4ed8' : '#4b5563',
-            transition: 'all 0.12s',
-            whiteSpace: 'nowrap',
+            transition: 'all 0.12s', whiteSpace: 'nowrap',
           }}>
-          <span style={{ fontSize: 15 }}>{btn.icon}</span>
-          {btn.label}
+            <span style={{ fontSize: 15 }}>{btn.icon}</span>{btn.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Auto-fit all vehicles — below zoom controls (top-left) */}
+      <div style={{
+        position: 'absolute', top: 80, left: 11, zIndex: 1000,
+      }}>
+        <button
+          onClick={fitAll}
+          title="Fit all vehicles on screen"
+          style={{
+            width: 30, height: 30,
+            background: 'white', border: '2px solid rgba(0,0,0,0.2)',
+            borderRadius: 4, cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', fontSize: 16,
+            boxShadow: '0 1px 5px rgba(0,0,0,.15)',
+          }}>
+          ⊞
         </button>
-      ))}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -270,15 +293,15 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
         </div>
       </div>
 
-      <MapContainer center={center} zoom={13} style={{ width: '100%', height: '100%' }} zoomControl>
+      <MapContainer center={center} zoom={13} maxZoom={21} style={{ width: '100%', height: '100%' }} zoomControl>
         {/* Tile layers — switch instantly via React state */}
         <ActiveTiles layer={mapLayer} />
 
         {/* Fly to searched location */}
         <FlyTo coords={flyToCoords} />
 
-        {/* Layer switcher — bottom-left inside map */}
-        <LayerSwitcher layer={mapLayer} onChange={setMapLayer} />
+        {/* Layer switcher + auto-fit button */}
+        <MapControls layer={mapLayer} onChange={setMapLayer} locations={valid} />
 
         <FitBounds locations={valid} />
         <FollowSelected locations={valid} selectedId={selectedId} />
