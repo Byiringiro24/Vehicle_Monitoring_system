@@ -67,56 +67,79 @@ export async function getVehicle(req: AuthenticatedRequest, res: Response, next:
 export async function createVehicle(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const {
+      // Date fields — must be stripped from rest and handled explicitly
       purchaseDate, insuranceStart, insuranceExpiry, roadTaxExpiry,
       inspectionExpiry, batteryWarranty, warrantyExpiry,
-      // Pull out fields that need type coercion or validation
+      transportPermitExpiry, nextServiceDate, lastServiceDate,
+      commercialLicExpiry, taxiPermitExpiry, emissionExpiry, tyrePurchaseDate,
+      // Numeric fields
       year, fuelCapacity, purchasePrice, currentValue, odometer, engineHours,
       horsepower, engineCc, batteryCapacityKwh, chargingSpeedKw, batteryReplaceCost,
       batteryHealth, avgConsumption, minFuelAlert, insurancePremium,
       oilChangeKmInterval, lastServiceOdometer, yearsDriving, baseSalary, commissionRate,
+      // Strip always-empty / relation fields
+      fleetId: rawFleetId,
       ...rest
     } = req.body;
 
-    // Required field check
     if (!rest.name)         throw new AppError(400, 'Vehicle name is required');
     if (!rest.licensePlate) throw new AppError(400, 'License plate is required');
     if (!rest.manufacturer) throw new AppError(400, 'Manufacturer is required');
     if (!rest.model)        throw new AppError(400, 'Model is required');
     if (!year)              throw new AppError(400, 'Year is required');
 
+    // Helper: only include date if it's a non-empty string
+    const toDate = (v: any) => (v && String(v).trim() !== '') ? new Date(v) : undefined;
+    // Helper: only include string if non-empty
+    const toStr  = (v: any) => (v && String(v).trim() !== '') ? String(v) : undefined;
+
     const vehicle = await prisma.vehicle.create({
       data: {
         ...rest,
-        organizationId:   req.user!.organizationId,
-        deviceToken:      uuidv4(),
-        year:             parseInt(year, 10),
-        fuelCapacity:     fuelCapacity     ? parseFloat(fuelCapacity)     : undefined,
-        purchasePrice:    purchasePrice    ? parseFloat(purchasePrice)    : undefined,
-        currentValue:     currentValue     ? parseFloat(currentValue)     : undefined,
-        odometer:         odometer         ? parseFloat(odometer)         : 0,
-        engineHours:      engineHours      ? parseFloat(engineHours)      : 0,
-        horsepower:       horsepower       ? parseInt(horsepower, 10)     : undefined,
-        engineCc:         engineCc         ? parseFloat(engineCc)         : undefined,
-        batteryCapacityKwh: batteryCapacityKwh ? parseFloat(batteryCapacityKwh) : undefined,
-        chargingSpeedKw:  chargingSpeedKw  ? parseFloat(chargingSpeedKw)  : undefined,
-        batteryReplaceCost: batteryReplaceCost ? parseFloat(batteryReplaceCost) : undefined,
-        batteryHealth:    batteryHealth    ? parseFloat(batteryHealth)    : undefined,
-        avgConsumption:   avgConsumption   ? parseFloat(avgConsumption)   : undefined,
-        minFuelAlert:     minFuelAlert     ? parseFloat(minFuelAlert)     : undefined,
-        insurancePremium: insurancePremium ? parseFloat(insurancePremium) : undefined,
+        // FK — empty string → omit (don't connect to fleet)
+        ...(rawFleetId && rawFleetId !== '' ? { fleetId: rawFleetId } : {}),
+        organizationId: req.user!.organizationId,
+        deviceToken:    uuidv4(),
+        year:           parseInt(year, 10),
+        // Numerics
+        fuelCapacity:        fuelCapacity        ? parseFloat(fuelCapacity)        : undefined,
+        purchasePrice:       purchasePrice       ? parseFloat(purchasePrice)       : undefined,
+        currentValue:        currentValue        ? parseFloat(currentValue)        : undefined,
+        odometer:            odometer            ? parseFloat(odometer)            : 0,
+        engineHours:         engineHours         ? parseFloat(engineHours)         : 0,
+        horsepower:          horsepower          ? parseInt(horsepower, 10)        : undefined,
+        engineCc:            engineCc            ? parseFloat(engineCc)            : undefined,
+        batteryCapacityKwh:  batteryCapacityKwh  ? parseFloat(batteryCapacityKwh)  : undefined,
+        chargingSpeedKw:     chargingSpeedKw     ? parseFloat(chargingSpeedKw)     : undefined,
+        batteryReplaceCost:  batteryReplaceCost  ? parseFloat(batteryReplaceCost)  : undefined,
+        batteryHealth:       batteryHealth       ? parseFloat(batteryHealth)       : undefined,
+        avgConsumption:      avgConsumption      ? parseFloat(avgConsumption)      : undefined,
+        minFuelAlert:        minFuelAlert        ? parseFloat(minFuelAlert)        : undefined,
+        insurancePremium:    insurancePremium    ? parseFloat(insurancePremium)    : undefined,
         oilChangeKmInterval: oilChangeKmInterval ? parseFloat(oilChangeKmInterval) : undefined,
         lastServiceOdometer: lastServiceOdometer ? parseFloat(lastServiceOdometer) : undefined,
-        purchaseDate:     purchaseDate     ? new Date(purchaseDate)       : undefined,
-        insuranceExpiry:  insuranceExpiry  ? new Date(insuranceExpiry)    : undefined,
-        roadTaxExpiry:    roadTaxExpiry    ? new Date(roadTaxExpiry)      : undefined,
-        inspectionExpiry: inspectionExpiry ? new Date(inspectionExpiry)   : undefined,
-        batteryWarranty:  batteryWarranty  ? new Date(batteryWarranty)    : undefined,
-        warrantyExpiry:   warrantyExpiry   ? new Date(warrantyExpiry)     : undefined,
+        // Dates — empty string → undefined (omit)
+        purchaseDate:          toDate(purchaseDate),
+        insuranceExpiry:       toDate(insuranceExpiry),
+        roadTaxExpiry:         toDate(roadTaxExpiry),
+        inspectionExpiry:      toDate(inspectionExpiry),
+        batteryWarranty:       toDate(batteryWarranty),
+        warrantyExpiry:        toDate(warrantyExpiry),
+        transportPermitExpiry: toDate(transportPermitExpiry),
+        nextServiceDate:       toDate(nextServiceDate),
+        lastServiceDate:       toDate(lastServiceDate),
+        commercialLicExpiry:   toDate(commercialLicExpiry),
+        taxiPermitExpiry:      toDate(taxiPermitExpiry),
+        emissionExpiry:        toDate(emissionExpiry),
+        tyrePurchaseDate:      toDate(tyrePurchaseDate),
       },
       include: { fleet: { select: { id: true, name: true } } },
     });
     res.status(201).json(vehicle);
-  } catch (err) { next(err); }
+  } catch (err: any) {
+    console.error('[createVehicle]', err?.message);
+    next(err);
+  }
 }
 
 export async function updateVehicle(req: AuthenticatedRequest, res: Response, next: NextFunction) {
