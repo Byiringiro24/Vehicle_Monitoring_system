@@ -66,8 +66,9 @@
  */
 
 // ── Define modem BEFORE including TinyGSM ───────────────────
-// Air780E is EC618-based, compatible with EC600/EC800 AT set
-#define TINY_GSM_MODEM_EC600
+// Air780E (EC618) is compatible with SIM7600 AT command set
+// TinyGSM v0.12 supports SIM7600 which covers EC618/Air780E
+#define TINY_GSM_MODEM_SIM7600
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
@@ -380,7 +381,7 @@ void setup() {
   SerialGPS.begin(9600, SERIAL_8N1, GPS_RXD, GPS_TXD);
   Serial.println("[GT-U7] GPS serial started (9600 baud)");
 
-  // ── Start Air780E serial ────────────────────────────────────
+  // ── Start Air780E serial (default 115200 baud) ─────────────
   SerialAT.begin(115200, SERIAL_8N1, AIR_RXD, AIR_TXD);
   delay(1000);
 
