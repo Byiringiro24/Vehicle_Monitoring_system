@@ -1,0 +1,18 @@
+{
+  "default_branch": "master",
+  "branches": [
+    "feature/satellite-map",
+    "master",
+    "origin"
+  ],
+  "parent": {
+    "feature/satellite-map": "master",
+    "master": null,
+    "origin": "master"
+  },
+  "order": [
+    "master",
+    "feature/satellite-map",
+    "origin"
+  ]
+}
