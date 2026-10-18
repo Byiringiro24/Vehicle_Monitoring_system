@@ -4,9 +4,9 @@
   "description": "ARTIC Vehicle Monitoring System - Backend API",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "node api.js && tsx watch src/index.ts",
-    "build": "node api.js && tsc",
-    "start": "node api.js && node dist/index.js",
+    "dev": "node init && tsx watch src/index.ts",
+    "build": "node init && tsc",
+    "start": "node init && node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",

@@ -9,8 +9,6 @@ dist/
 out/
 
 # Environment
-.env
-.env.local
 .env.*.local
 
 # Logs
@@ -25,5 +23,5 @@ Thumbs.db
 # prisma/migrations/  ← DO NOT ignore migrations, they are needed for production deploys
 
 # Editor
-.vscode/
 .idea/
+config.bat
