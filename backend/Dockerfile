@@ -1,13 +1,21 @@
-﻿FROM node:20-alpine AS builder
+﻿FROM node:20-slim AS builder
 WORKDIR /app
+
+# Install OpenSSL — required by Prisma on Debian slim
+RUN apt-get update -qq && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /app
+
+# Runtime OpenSSL — Prisma client needs it at runtime too
+RUN apt-get update -qq && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
