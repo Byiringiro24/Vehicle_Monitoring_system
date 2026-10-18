@@ -1,126 +1,54 @@
 # ARTIC VMS — Contabo Server Deployment Guide
 **Server:** vmi3674971 · 185.208.207.100 · Ubuntu 24.04 LTS  
-**Method:** Docker Compose (all services in containers)  
+**Domain:** articvms.ddnsgeek.com → 185.208.207.100 (confirmed)  
+**Method:** Docker Compose (all services in containers) + Nginx reverse proxy  
 **Git repo:** https://github.com/Byiringiro24/Vehicle_Monitoring_system.git  
-**Date:** October 2026
 
 ---
 
 ## WHAT YOU WILL END UP WITH
 
-After completing this guide:
-
-| Service | URL / Port | Notes |
+| Service | Public URL | Internal port |
 |---|---|---|
-| Frontend (dashboard) | http://185.208.207.100 | Port 80 via Nginx |
-| Backend API | http://185.208.207.100/api | Proxied by Nginx |
-| WebSocket (Socket.IO) | ws://185.208.207.100/socket.io | Proxied by Nginx |
-| MQTT broker | 185.208.207.100:1883 | Direct TCP, for ESP32 devices |
-| PostgreSQL | internal only | Not exposed publicly |
-| Redis | internal only | Not exposed publicly |
+| Dashboard (frontend) | https://articvms.ddnsgeek.com | 3000 |
+| Backend API | https://articvms.ddnsgeek.com/api/v1/ | 4000 |
+| WebSocket (Socket.IO) | wss://articvms.ddnsgeek.com/socket.io/ | 4000 |
+| MQTT (GPS trackers) | articvms.ddnsgeek.com **:1883** | 1883 (direct TCP) |
+| PostgreSQL | internal only — never public | — |
+| Redis | internal only — never public | — |
+
+HTTP on port 80 automatically redirects to HTTPS. MQTT stays plain TCP on 1883
+(GPS trackers use it directly — Nginx does not proxy TCP).
 
 ---
 
-## BEFORE YOU START
+## CONFIRMED SERVER STATE (from inspection)
 
-You need:
-- Your SSH private key at `C:\Users\Byiringiro\.ssh\artic_vms`
-- A strong database password (make one up — you will paste it once)
-- Two random secrets for JWT (generate them below)
+Before starting, you ran `ss -tulpn` and `ufw status`. This is what we found:
 
-Open Windows PowerShell and connect:
+| Item | Status |
+|---|---|
+| SSH (port 22) | listening — UFW allows it |
+| Nginx | installed, running, listening on 80 |
+| UFW | active — rules: 22, 80, 443, 1883 already open |
+| Docker | **not yet installed** |
+| Port 3000 | free |
+| Port 4000 | free |
+| Port 1883 | free |
+| PostgreSQL / Redis | not running |
 
-```powershell
-ssh -i "$env:USERPROFILE\.ssh\artic_vms" articadmin@185.208.207.100
-```
-
-All commands from here on are run **inside the server** (as articadmin) unless
-the step says "on your Windows machine".
-
----
-
-## STEP 1 — INSPECT THE SERVER FIRST
-
-Run these read-only commands to see the current state. Do not skip this.
-
-```bash
-sudo ufw status verbose
-sudo ss -tulpn
-systemctl is-active ssh
-timedatectl
-df -h
-```
-
-Expected results before we proceed:
-- UFW should show active or inactive — either is fine, we will configure it
-- SSH should show `active`
-- Timezone should show `Africa/Kigali` (already confirmed)
-- Disk should show roughly 191 GiB free on `/`
+The firewall is already correctly configured. No port changes needed.
 
 ---
 
-## STEP 2 — FIREWALL CONFIGURATION
+## STEP 1 — INSTALL DOCKER
 
-This sets up UFW to allow only the ports the VMS actually needs.  
-Port 5432 (Postgres) and 6379 (Redis) are intentionally NOT opened — they
-stay internal to Docker.
-
+Connect to the server:
 ```bash
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-
-sudo ufw allow 22/tcp    # SSH — never close this first
-sudo ufw allow 80/tcp    # HTTP (Nginx frontend + API proxy)
-sudo ufw allow 443/tcp   # HTTPS (when you add a domain later)
-sudo ufw allow 1883/tcp  # MQTT — ESP32 GPS trackers connect here
-
-sudo ufw --force enable
-sudo ufw status verbose
+ssh -i ~/.ssh/artic_vms articadmin@185.208.207.100
 ```
 
-You should see exactly these five rules open (22, 80, 443, 1883 + loopback).
-
----
-
-## STEP 3 — SSH HARDENING (OPTIONAL BUT RECOMMENDED)
-
-Disable root SSH login now that articadmin is working.
-
-```bash
-sudo nano /etc/ssh/sshd_config
-```
-
-Find and change (or add) these lines:
-```
-PermitRootLogin no
-PasswordAuthentication no
-PubkeyAuthentication yes
-```
-
-Then reload SSH — keep your current session open while doing this:
-```bash
-sudo systemctl reload sshd
-```
-
-Open a **second PowerShell window** and test that articadmin login still works:
-```powershell
-ssh -i "$env:USERPROFILE\.ssh\artic_vms" articadmin@185.208.207.100
-```
-
-If the second window connects, the hardening worked. If not, use your first
-window to revert the change.
-
----
-
-## STEP 4 — INSTALL REQUIRED PACKAGES
-
-```bash
-sudo apt update
-sudo apt install -y git curl nano htop fail2ban
-```
-
-### 4.1 Install Docker Engine
-
+Install Docker Engine:
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker articadmin
@@ -130,29 +58,21 @@ sudo usermod -aG docker articadmin
 ```bash
 exit
 ```
-```powershell
-ssh -i "$env:USERPROFILE\.ssh\artic_vms" articadmin@185.208.207.100
+```bash
+ssh -i ~/.ssh/artic_vms articadmin@185.208.207.100
 ```
 
-Verify Docker works without sudo:
+Verify:
 ```bash
 docker --version
 docker compose version
 ```
 
-Expected: Docker 26.x or newer, Compose 2.x or newer.
-
-### 4.2 Install Nginx
-
-```bash
-sudo apt install -y nginx
-sudo systemctl enable nginx
-sudo systemctl start nginx
-```
+Expected: Docker 26.x or newer, Compose v2.x or newer.
 
 ---
 
-## STEP 5 — CLONE THE REPOSITORY
+## STEP 2 — CLONE THE REPOSITORY
 
 ```bash
 cd /home/articadmin
@@ -161,69 +81,131 @@ cd artic-vms
 ls
 ```
 
-You should see: `backend/`, `frontend/`, `docker-compose.yml`, etc.
-
-> Note: The repo's default production branch is `master`. Always clone or pull
-> from `master` for server deployments.
+You should see: `backend/`, `frontend/`, `docker-compose.yml`, `.env.example`
 
 ---
 
-## STEP 6 — CREATE THE PRODUCTION .env FILE
+## STEP 3 — CREATE THE PRODUCTION .env FILE
 
-The docker-compose.yml reads secrets from a `.env` file in the project root.
-You will create this file now with real production values.
+The `.env` file in the project root is read by docker-compose at startup.
+It is never committed to git (it's in `.gitignore`).
 
-### 6.1 Generate JWT secrets
+### 3.1 Generate JWT secrets
 
 ```bash
-openssl rand -hex 32   # copy the output — this is JWT_SECRET
-openssl rand -hex 32   # copy the output — this is JWT_REFRESH_SECRET
+openssl rand -hex 32
+openssl rand -hex 32
 ```
 
-Run each command separately and save the two outputs.
+Run each line separately. Save both outputs — first is JWT_SECRET, second is
+JWT_REFRESH_SECRET.
 
-### 6.2 Create the .env file
+### 3.2 Create the file
 
 ```bash
 nano /home/articadmin/artic-vms/.env
 ```
 
-Paste the following, replacing every `CHANGE_ME` value:
+Paste this, replacing the three `CHANGE_ME` values:
 
 ```env
-# ── Database ─────────────────────────────────────────────────────────────────
-POSTGRES_PASSWORD=CHANGE_ME_strong_db_password_here
+# ── Database ──────────────────────────────────────────────────────────────────
+POSTGRES_PASSWORD=CHANGE_ME_strong_password_here
 
-# ── JWT (paste the two openssl outputs from step 6.1) ────────────────────────
-JWT_SECRET=CHANGE_ME_paste_first_openssl_output_here
-JWT_REFRESH_SECRET=CHANGE_ME_paste_second_openssl_output_here
+# ── JWT secrets ───────────────────────────────────────────────────────────────
+JWT_SECRET=CHANGE_ME_paste_first_openssl_output
+JWT_REFRESH_SECRET=CHANGE_ME_paste_second_openssl_output
 
-# ── URLs — using IP address (no domain yet) ───────────────────────────────────
-# IMPORTANT: Do NOT add /api here. The frontend code appends /api/v1 itself.
-# Both go through Nginx on port 80, so no extra firewall port needed.
-NEXT_PUBLIC_API_URL=http://185.208.207.100
-NEXT_PUBLIC_WS_URL=ws://185.208.207.100
+# ── Public URLs (domain, HTTPS) ───────────────────────────────────────────────
+# Do NOT add /api here — the frontend appends /api/v1 itself
+NEXT_PUBLIC_API_URL=https://articvms.ddnsgeek.com
+NEXT_PUBLIC_WS_URL=wss://articvms.ddnsgeek.com
 
-# ── CORS — must match what the browser address bar shows ─────────────────────
-CORS_ORIGIN=http://185.208.207.100
+# ── CORS — must match what the browser shows in the address bar ───────────────
+CORS_ORIGIN=https://articvms.ddnsgeek.com
 ```
 
-Save with Ctrl+O, Enter, Ctrl+X.
+Save: Ctrl+O → Enter → Ctrl+X
 
-Verify the file looks correct:
+Verify it looks right:
 ```bash
 cat /home/articadmin/artic-vms/.env
 ```
 
 ---
 
-## STEP 7 — CONFIGURE NGINX
+## STEP 4 — BUILD AND START ALL CONTAINERS
 
-Nginx will sit in front of everything:
-- Port 80 → frontend (port 3000)
-- `/api/` → backend API (port 4000)
-- `/socket.io/` → WebSocket (port 4000)
-- Port 1883 stays direct TCP for MQTT (Nginx does not proxy this)
+```bash
+cd /home/articadmin/artic-vms
+docker compose up -d --build
+```
+
+First run takes **10–20 minutes** — it compiles TypeScript and builds Next.js
+from scratch. Subsequent starts are instant.
+
+Watch the build progress (optional, Ctrl+C to stop watching — services keep running):
+```bash
+docker compose logs -f
+```
+
+Once done, check all four containers are up:
+```bash
+docker compose ps
+```
+
+Expected output — all services should show `Up` or `Up (healthy)`:
+```
+NAME                        STATUS
+artic-vms-postgres-1        Up (healthy)
+artic-vms-redis-1           Up
+artic-vms-backend-1         Up
+artic-vms-frontend-1        Up
+```
+
+Quick API sanity check (before Nginx):
+```bash
+curl http://localhost:4000/health
+```
+Expected: `{"status":"ok","service":"artic-vms-backend","version":"1.0.0",...}`
+
+---
+
+## STEP 5 — RUN DATABASE MIGRATIONS AND SEED
+
+```bash
+# Create all database tables
+docker compose exec backend npx prisma migrate deploy
+
+# Create default admin account + demo organisation
+docker compose exec backend node dist/utils/seed.js
+```
+
+> If seed fails (file not compiled yet), run:
+> ```bash
+> docker compose exec backend npx tsx src/utils/seed.ts
+> ```
+
+Default credentials — **change these after first login**:
+```
+Email:    admin@artic.io
+Password: Admin1234!
+```
+
+---
+
+## STEP 6 — CONFIGURE NGINX
+
+Nginx is already running. We will replace the default site with the ARTIC VMS
+config, then get a free SSL certificate from Let's Encrypt.
+
+### 6.1 Remove the default site
+
+```bash
+sudo rm /etc/nginx/sites-enabled/default
+```
+
+### 6.2 Create the ARTIC VMS Nginx config
 
 ```bash
 sudo nano /etc/nginx/sites-available/artic-vms
@@ -232,194 +214,174 @@ sudo nano /etc/nginx/sites-available/artic-vms
 Paste this complete config:
 
 ```nginx
+# ── HTTP — redirect everything to HTTPS ──────────────────────────────────────
 server {
     listen 80;
-    server_name 185.208.207.100;
+    listen [::]:80;
+    server_name articvms.ddnsgeek.com;
 
-    # Increase body size for file uploads (documents, receipts)
-    client_max_body_size 20M;
+    # Let's Encrypt challenge (Certbot needs this before issuing the cert)
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
 
-    # ── Frontend (Next.js on port 3000) ──────────────────────────────────────
     location / {
-        proxy_pass         http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection "upgrade";
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 86400;
-    }
-
-    # ── Backend REST API (port 4000) ─────────────────────────────────────────
-    location /api/ {
-        proxy_pass         http://127.0.0.1:4000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_read_timeout 60;
-    }
-
-    # ── Health check ─────────────────────────────────────────────────────────
-    location = /health {
-        proxy_pass http://127.0.0.1:4000/health;
-    }
-
-    # ── WebSocket / Socket.IO ─────────────────────────────────────────────────
-    location /socket.io/ {
-        proxy_pass         http://127.0.0.1:4000;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection "upgrade";
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
-        proxy_send_timeout 86400;
+        return 301 https://$host$request_uri;
     }
 }
+
+# ── HTTPS ─────────────────────────────────────────────────────────────────────
+# NOTE: Certbot will add the ssl_certificate lines below automatically.
+# This block is a placeholder — fill it in after running certbot (Step 6.4).
+# Uncomment and complete after Certbot runs.
+#
+# server {
+#     listen 443 ssl;
+#     listen [::]:443 ssl;
+#     server_name articvms.ddnsgeek.com;
+#
+#     ssl_certificate     /etc/letsencrypt/live/articvms.ddnsgeek.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/articvms.ddnsgeek.com/privkey.pem;
+#     include             /etc/letsencrypt/options-ssl-nginx.conf;
+#     ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+#
+#     client_max_body_size 20M;
+#
+#     # Frontend (Next.js)
+#     location / {
+#         proxy_pass         http://127.0.0.1:3000;
+#         proxy_http_version 1.1;
+#         proxy_set_header   Upgrade $http_upgrade;
+#         proxy_set_header   Connection "upgrade";
+#         proxy_set_header   Host $host;
+#         proxy_set_header   X-Real-IP $remote_addr;
+#         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header   X-Forwarded-Proto $scheme;
+#         proxy_cache_bypass $http_upgrade;
+#         proxy_read_timeout 86400;
+#     }
+#
+#     # Backend REST API
+#     location /api/ {
+#         proxy_pass         http://127.0.0.1:4000;
+#         proxy_http_version 1.1;
+#         proxy_set_header   Host $host;
+#         proxy_set_header   X-Real-IP $remote_addr;
+#         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header   X-Forwarded-Proto $scheme;
+#         proxy_read_timeout 60;
+#     }
+#
+#     # Health check
+#     location = /health {
+#         proxy_pass http://127.0.0.1:4000/health;
+#     }
+#
+#     # WebSocket / Socket.IO
+#     location /socket.io/ {
+#         proxy_pass         http://127.0.0.1:4000;
+#         proxy_http_version 1.1;
+#         proxy_set_header   Upgrade $http_upgrade;
+#         proxy_set_header   Connection "upgrade";
+#         proxy_set_header   Host $host;
+#         proxy_set_header   X-Real-IP $remote_addr;
+#         proxy_read_timeout 86400;
+#         proxy_send_timeout 86400;
+#     }
+# }
 ```
 
-Enable it and test:
+Enable the site and test:
 ```bash
 sudo ln -s /etc/nginx/sites-available/artic-vms /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-`nginx -t` must output: `syntax is ok` and `test is successful`.
+`nginx -t` must print: `syntax is ok` and `test is successful`.
+
+### 6.3 Install Certbot
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+```
+
+### 6.4 Get the SSL certificate
+
+```bash
+sudo certbot --nginx -d articvms.ddnsgeek.com
+```
+
+Certbot will:
+1. Ask for your email address (for renewal reminders)
+2. Ask you to agree to the terms of service
+3. Issue the certificate
+4. **Automatically update your Nginx config** with the HTTPS block and SSL lines
+
+After it finishes, verify the config was updated:
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Test renewal (dry run — does not issue a real cert):
+```bash
+sudo certbot renew --dry-run
+```
+
+Expected: `Congratulations, all simulated renewals succeeded.`
+
+### 6.5 Verify HTTPS is working
+
+```bash
+curl https://articvms.ddnsgeek.com/health
+```
+
+Expected: `{"status":"ok","service":"artic-vms-backend",...}`
+
+Open in your browser: **https://articvms.ddnsgeek.com**
 
 ---
 
-## STEP 8 — BUILD AND START ALL SERVICES
-
-This single command builds the backend and frontend Docker images, then starts
-PostgreSQL, Redis, the API, and the dashboard — in the correct order.
-
-```bash
-cd /home/articadmin/artic-vms
-docker compose up -d --build
-```
-
-This will take **10–20 minutes** on first run because it builds both Next.js and
-the TypeScript backend from source. Subsequent restarts are instant.
-
-Watch progress:
-```bash
-docker compose logs -f
-```
-
-Press Ctrl+C to stop watching logs (services keep running).
-
----
-
-## STEP 9 — RUN DATABASE MIGRATIONS AND SEED
-
-Wait for the backend container to be healthy, then run migrations:
-
-```bash
-# Check all containers are running
-docker compose ps
-
-# Run Prisma migrations (creates all tables)
-docker compose exec backend npx prisma migrate deploy
-
-# Seed the database (creates admin account + demo data)
-docker compose exec backend node dist/utils/seed.js
-```
-
-> If the seed command fails because the seed file is not compiled, run:
-> ```bash
-> docker compose exec backend npx tsx src/utils/seed.ts
-> ```
-
-### Default admin credentials (change after first login!)
-```
-Email:    admin@artic.io
-Password: Admin1234!
-```
-
----
-
-## STEP 10 — VERIFY EVERYTHING IS WORKING
-
-### 10.1 Check container status
-```bash
-docker compose ps
-```
-All four services (postgres, redis, backend, frontend) should show `Up` or
-`Up (healthy)`.
-
-### 10.2 Test the API health endpoint
-```bash
-curl http://localhost:4000/health
-```
-Expected: `{"status":"ok","service":"artic-vms-backend","version":"1.0.0"}`
-
-### 10.3 Test Nginx is proxying correctly
-```bash
-curl http://185.208.207.100/health
-```
-Same JSON response — confirms Nginx is working.
-
-### 10.4 Open the dashboard in your browser
-Navigate to: **http://185.208.207.100**
-
-Login with `admin@artic.io` / `Admin1234!`.
-
-### 10.5 Test MQTT port
-From your Windows machine:
-```powershell
-# This should succeed (connection) not hang or refuse
-Test-NetConnection -ComputerName 185.208.207.100 -Port 1883
-```
-Expected: `TcpTestSucceeded : True`
-
----
-
-## STEP 11 — AUTO-RESTART ON SERVER REBOOT
-
-Docker containers already have `restart: unless-stopped` in docker-compose.yml,
-so they restart automatically after a reboot. Verify Docker itself starts on boot:
+## STEP 7 — ENABLE AUTO-RESTART ON REBOOT
 
 ```bash
 sudo systemctl enable docker
 sudo systemctl enable nginx
 ```
 
-Test it:
+Docker containers already have `restart: unless-stopped` so they come back
+automatically after a reboot. Test it:
+
 ```bash
 sudo reboot
 ```
 
-Wait 2 minutes, then reconnect and check:
+Wait 2 minutes, reconnect, and check:
 ```bash
-ssh -i "$env:USERPROFILE\.ssh\artic_vms" articadmin@185.208.207.100
+ssh -i ~/.ssh/artic_vms articadmin@185.208.207.100
 docker compose -f /home/articadmin/artic-vms/docker-compose.yml ps
 ```
 
-All containers should be running again.
+All containers should be `Up` again.
 
 ---
 
-## STEP 12 — CONFIGURE ESP32 DEVICES
+## STEP 8 — ESP32 FIRMWARE UPDATE
 
-In the ESP32 firmware, update the MQTT host:
+Update the MQTT host in the ESP32 sketch:
 
 ```cpp
-const char MQTT_HOST[] = "185.208.207.100";
+const char MQTT_HOST[] = "articvms.ddnsgeek.com";
 const int  MQTT_PORT   = 1883;
 ```
 
-The `deviceToken` for each vehicle comes from the ARTIC VMS dashboard under
-the vehicle's GPS device settings.
+The `deviceToken` for each vehicle is shown in the ARTIC VMS dashboard under
+each vehicle's GPS device settings.
 
 ---
 
-## STEP 13 — DAILY AUTOMATED BACKUPS
+## STEP 9 — AUTOMATED DAILY BACKUPS
 
 ```bash
 sudo mkdir -p /var/backups/artic
@@ -429,7 +391,7 @@ sudo tee /etc/cron.daily/backup-artic > /dev/null << 'EOF'
 set -e
 DATE=$(date +%Y%m%d_%H%M)
 BACKUP_DIR=/var/backups/artic
-DB_CONTAINER=$(docker ps --filter name=artic-vms-postgres --format "{{.Names}}" | head -1)
+DB_CONTAINER=$(docker ps --filter name=postgres --format "{{.Names}}" | head -1)
 
 mkdir -p "$BACKUP_DIR"
 
@@ -439,7 +401,7 @@ docker exec "$DB_CONTAINER" pg_dump -U artic_user fleet_management \
 # Keep last 30 backups only
 ls -t "$BACKUP_DIR"/*.sql.gz | tail -n +31 | xargs rm -f 2>/dev/null || true
 
-echo "Backup: fleet_management_$DATE.sql.gz"
+echo "Backup complete: fleet_management_$DATE.sql.gz"
 EOF
 
 sudo chmod +x /etc/cron.daily/backup-artic
@@ -451,7 +413,7 @@ ls -lh /var/backups/artic/
 
 ---
 
-## STEP 14 — UPDATING THE APPLICATION
+## UPDATING THE APPLICATION
 
 When you push new code to GitHub:
 
@@ -459,96 +421,60 @@ When you push new code to GitHub:
 cd /home/articadmin/artic-vms
 
 # Pull latest code
-git pull
+git pull origin master
 
-# Rebuild and restart changed containers only
+# Rebuild changed containers (only rebuilds what changed)
 docker compose up -d --build
 
-# Run any new database migrations
+# Apply any new database migrations
 docker compose exec backend npx prisma migrate deploy
 ```
 
 ---
 
-## ADDING A DOMAIN AND HTTPS (LATER)
-
-When you register a domain (e.g., fleet.yourcompany.rw):
-
-1. Point the domain's DNS A record to `185.208.207.100`
-
-2. Install Certbot:
-   ```bash
-   sudo apt install -y certbot python3-certbot-nginx
-   ```
-
-3. Update `/etc/nginx/sites-available/artic-vms`:
-   - Change `server_name 185.208.207.100;` to `server_name fleet.yourcompany.rw;`
-   - Reload Nginx
-
-4. Get a free SSL certificate:
-   ```bash
-   sudo certbot --nginx -d fleet.yourcompany.rw
-   sudo certbot renew --dry-run  # test auto-renewal
-   ```
-
-5. Update the `.env` file to use HTTPS:
-   ```env
-   NEXT_PUBLIC_API_URL=https://fleet.yourcompany.rw
-   NEXT_PUBLIC_WS_URL=wss://fleet.yourcompany.rw
-   CORS_ORIGIN=https://fleet.yourcompany.rw
-   ```
-
-6. Rebuild the frontend (the HTTPS URLs are baked in at build time):
-   ```bash
-   docker compose up -d --build frontend
-   ```
-
----
-
-## QUICK REFERENCE — USEFUL COMMANDS
+## USEFUL COMMANDS
 
 ```bash
-# See all running containers
+# All container status
 docker compose -f /home/articadmin/artic-vms/docker-compose.yml ps
 
-# View backend logs live
+# Backend logs live
 docker compose -f /home/articadmin/artic-vms/docker-compose.yml logs -f backend
 
-# View frontend logs live
+# Frontend logs live
 docker compose -f /home/articadmin/artic-vms/docker-compose.yml logs -f frontend
 
-# Restart backend only (after a hot fix without rebuild)
+# Restart backend only (no rebuild)
 docker compose -f /home/articadmin/artic-vms/docker-compose.yml restart backend
 
-# Connect to the PostgreSQL database
-docker compose -f /home/articadmin/artic-vms/docker-compose.yml exec postgres psql -U artic_user fleet_management
+# Open PostgreSQL CLI
+docker compose -f /home/articadmin/artic-vms/docker-compose.yml exec postgres \
+  psql -U artic_user fleet_management
 
-# Check disk space
-df -h
+# Nginx logs
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
 
-# Check RAM usage
-free -h
-
-# Check CPU usage
-htop
+# System resources
+free -h && df -h
 ```
 
 ---
 
 ## PRODUCTION CHECKLIST
 
-Before sharing access with anyone:
-
-- [ ] Changed the default admin password (admin@artic.io / Admin1234!)
-- [ ] Created a real organization in the dashboard
-- [ ] JWT_SECRET is a random 64-character hex string (not the example)
-- [ ] JWT_REFRESH_SECRET is a different 64-character hex string
+- [ ] Default admin password changed (admin@artic.io / Admin1234!)
+- [ ] Real organisation created in dashboard
+- [ ] JWT_SECRET is a random 64-char hex string
+- [ ] JWT_REFRESH_SECRET is a different 64-char hex string
 - [ ] Database password is strong and unique
-- [ ] UFW firewall is enabled (`sudo ufw status` shows `Status: active`)
-- [ ] SSH root login is disabled
-- [ ] Daily backup has been tested (`ls /var/backups/artic/` shows a .sql.gz file)
-- [ ] `docker compose ps` shows all services as `Up`
-- [ ] Dashboard loads at http://185.208.207.100
-- [ ] API health check returns ok at http://185.208.207.100/health
-- [ ] MQTT port 1883 is reachable (Test-NetConnection from Windows)
-- [ ] ESP32 firmware updated with server IP 185.208.207.100
+- [ ] `docker compose ps` — all services `Up`
+- [ ] `curl https://articvms.ddnsgeek.com/health` returns ok
+- [ ] Dashboard loads at https://articvms.ddnsgeek.com
+- [ ] HTTPS padlock shown in browser (valid Let's Encrypt cert)
+- [ ] HTTP redirects to HTTPS automatically
+- [ ] MQTT reachable: `Test-NetConnection articvms.ddnsgeek.com -Port 1883` → True
+- [ ] Certbot dry-run renewal passed
+- [ ] Daily backup tested — file exists in `/var/backups/artic/`
+- [ ] `sudo systemctl enable docker nginx` done (auto-start on reboot)
+- [ ] ESP32 firmware updated with `articvms.ddnsgeek.com`
