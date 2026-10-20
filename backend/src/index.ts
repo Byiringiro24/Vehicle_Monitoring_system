@@ -4,6 +4,7 @@ import app from './app';
 import { initSocketServer } from './websocket/socketServer';
 import { initMqttBroker } from './services/mqttBroker';
 import { initMqttClient } from './services/mqttClient';
+import { verifySmtpConnection } from './services/email.service';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
 import logger from './utils/logger';
@@ -19,6 +20,9 @@ async function bootstrap() {
   // Test Redis
   await redis.ping();
   logger.info('Redis connected');
+
+  // Verify SMTP (non-blocking — a misconfigured SMTP should not prevent startup)
+  verifySmtpConnection().catch(() => {});
 
   // HTTP + Socket.IO server
   const httpServer = createServer(app);

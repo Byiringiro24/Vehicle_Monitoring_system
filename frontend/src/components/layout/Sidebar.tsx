@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User, X,
-  DollarSign, Activity, ChevronRight,
+  DollarSign, Activity, ChevronRight, Wrench,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 
@@ -17,6 +17,7 @@ const navItems = [
   { href: '/alerts',    label: 'Alerts',        icon: Bell },
   { href: '/geofences', label: 'Geofences',     icon: MapPin },
   { href: '/telemetry', label: 'Telemetry',     icon: Activity },
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/finance',   label: 'Finance',       icon: DollarSign },
   { href: '/reports',   label: 'Reports',       icon: BarChart3 },
   // Users is restricted — only shown to ADMIN and SUPER_ADMIN (see filter below)

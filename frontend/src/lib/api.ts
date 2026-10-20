@@ -44,6 +44,9 @@ export const authApi = {
   me:             () => apiClient.get('/auth/me').then(r => r.data),
   logout:         (refreshToken: string) => apiClient.post('/auth/logout', { refreshToken }),
   changePassword: (data: object) => apiClient.post('/auth/change-password', data).then(r => r.data),
+  forgotPassword: (email: string) => apiClient.post('/auth/forgot-password', { email }).then(r => r.data),
+  resetPassword:  (token: string, newPassword: string) =>
+    apiClient.post('/auth/reset-password', { token, newPassword }).then(r => r.data),
 };
 
 // ─── Vehicles ─────────────────────────────────────────────────────────────────
@@ -175,4 +178,14 @@ export const userApi = {
   // Activate or deactivate a user account
   setStatus:     (id: string, isActive: boolean) =>
     apiClient.patch(`/users/${id}/status`, { isActive }).then(r => r.data),
+};
+
+// ─── Maintenance ──────────────────────────────────────────────────────────────
+export const maintenanceApi = {
+  list:   (params?: object) => apiClient.get('/maintenance', { params }).then(r => r.data),
+  get:    (id: string)      => apiClient.get(`/maintenance/${id}`).then(r => r.data),
+  create: (data: object)    => apiClient.post('/maintenance', data).then(r => r.data),
+  update: (id: string, data: object) => apiClient.put(`/maintenance/${id}`, data).then(r => r.data),
+  delete: (id: string)      => apiClient.delete(`/maintenance/${id}`),
+  upcoming: (params?: object) => apiClient.get('/maintenance/upcoming', { params }).then(r => r.data),
 };

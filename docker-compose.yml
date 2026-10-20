@@ -49,6 +49,14 @@
       MQTT_INTERNAL_PORT: "1884"
       NODE_ENV: "production"
       CORS_ORIGIN: "${CORS_ORIGIN}"
+      # SMTP — email delivery
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT}"
+      SMTP_SECURE: "${SMTP_SECURE}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASS: "${SMTP_PASS}"
+      SMTP_FROM: "${SMTP_FROM}"
+      APP_URL: "${APP_URL}"
     depends_on:
       postgres:
         condition: service_healthy

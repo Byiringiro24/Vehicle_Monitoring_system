@@ -20,9 +20,9 @@ import organizationRoutes from './routes/organization.routes';
 import financialRoutes    from './routes/financial.routes';
 import contractRoutes     from './routes/contracts.routes';
 import expenseRoutes      from './routes/expenses.routes';
-import deviceRoutes       from './routes/device.routes';
+import maintenanceRoutes    from './routes/maintenance.routes';
 
-const app = express();
+import deviceRoutes       from './routes/device.routes';
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
@@ -75,6 +75,7 @@ app.use(`${api}/financial`,     apiLimiter,  financialRoutes);
 app.use(`${api}/contracts`,     apiLimiter,  contractRoutes);
 app.use(`${api}/expenses`,      apiLimiter,  expenseRoutes);
 app.use(`${api}/devices`,       apiLimiter,  deviceRoutes);
+app.use(`${api}/maintenance`,   apiLimiter,  maintenanceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
