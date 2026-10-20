@@ -160,3 +160,19 @@ export const expenseApi = {
   delete:  (id: string)      => apiClient.delete(`/expenses/${id}`),
   summary: (params?: object) => apiClient.get('/expenses/summary', { params }).then(r => r.data),
 };
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+export const userApi = {
+  // All authenticated users: list users in own organisation
+  list:          () => apiClient.get('/users').then(r => r.data),
+  // SUPER_ADMIN only: list all users across every organisation
+  listAll:       () => apiClient.get('/users/all').then(r => r.data),
+  create:        (data: object)    => apiClient.post('/users', data).then(r => r.data),
+  update:        (id: string, data: object) => apiClient.put(`/users/${id}`, data).then(r => r.data),
+  // SUPER_ADMIN only: force-reset any user's password (no current password needed)
+  resetPassword: (id: string, newPassword: string) =>
+    apiClient.post(`/users/${id}/reset-password`, { newPassword }).then(r => r.data),
+  // Activate or deactivate a user account
+  setStatus:     (id: string, isActive: boolean) =>
+    apiClient.patch(`/users/${id}/status`, { isActive }).then(r => r.data),
+};

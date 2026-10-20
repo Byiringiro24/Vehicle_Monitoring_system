@@ -19,7 +19,8 @@ const navItems = [
   { href: '/telemetry', label: 'Telemetry',     icon: Activity },
   { href: '/finance',   label: 'Finance',       icon: DollarSign },
   { href: '/reports',   label: 'Reports',       icon: BarChart3 },
-  { href: '/users',     label: 'Users',         icon: Users },
+  // Users is restricted — only shown to ADMIN and SUPER_ADMIN (see filter below)
+  { href: '/users',     label: 'Users',         icon: Users,    roles: ['SUPER_ADMIN', 'ADMIN'] },
   { href: '/settings',  label: 'Settings',      icon: Settings },
 ];
 
@@ -52,7 +53,9 @@ export function Sidebar({ onClose }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-3">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {navItems
+          .filter(item => !item.roles || item.roles.includes(user?.role ?? ''))
+          .map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
           return (
             <Link key={href} href={href}
