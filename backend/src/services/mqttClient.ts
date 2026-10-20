@@ -28,8 +28,9 @@ export function onPong(handler: (topic: string, msg: Buffer) => void) {
 }
 
 export function initMqttClient() {
-  const host = process.env.MQTT_HOST ?? 'localhost';
-  const port = parseInt(process.env.MQTT_PORT ?? '1883', 10);
+  const host = process.env.MQTT_HOST ?? '127.0.0.1';
+  // Internal port = Aedes broker port (1884). External port 1883 is what ESP32 devices use.
+  const port = parseInt(process.env.MQTT_INTERNAL_PORT ?? process.env.AEDES_PORT ?? '1884', 10);
   const url  = `mqtt://${host}:${port}`;
 
   client = mqtt.connect(url, {

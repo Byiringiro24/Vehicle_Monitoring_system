@@ -44,6 +44,9 @@
       JWT_REFRESH_EXPIRES_IN: "7d"
       PORT: "4000"
       MQTT_PORT: "1883"
+      AEDES_PORT: "1884"
+      MQTT_HOST: "127.0.0.1"
+      MQTT_INTERNAL_PORT: "1884"
       NODE_ENV: "production"
       CORS_ORIGIN: "${CORS_ORIGIN}"
     depends_on:
