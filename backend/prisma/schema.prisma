@@ -239,6 +239,9 @@ model Organization {
   expenses      VehicleExpense[]
   cashFlows     CashFlow[]
   fuelRecords   FuelRecord[]
+  memberships   Membership[]    @relation("OrgMemberships")
+  subscription  Subscription?   @relation("OrgSubscription")
+  entitlements  Entitlement[]   @relation("OrgEntitlements")
 
   @@map("organizations")
 }
@@ -270,6 +273,8 @@ model User {
   refreshTokens      RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   acknowledgedAlerts Alert[]         @relation("AcknowledgedBy")
+  memberships        Membership[]    @relation("UserMemberships")
+  sentInvitations    Membership[]    @relation("MembershipInviter")
 
   @@map("users")
 }
@@ -1082,4 +1087,208 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// =============================================================================
+//  BUILD 1 — UNIFIED IDENTITY: MEMBERSHIPS, PLANS, SUBSCRIPTIONS, ENTITLEMENTS
+//  Added additively — zero breaking changes to existing tables.
+// =============================================================================
+
+// ─── Membership status ────────────────────────────────────────────────────────
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  ENDED
+}
+
+// ─── Membership role (company-scoped, separate from legacy UserRole) ──────────
+enum MembershipRole {
+  COMPANY_OWNER
+  COMPANY_ADMIN
+  FLEET_MANAGER
+  DISPATCHER
+  FINANCE_MANAGER
+  ACCOUNTANT
+  HR_MANAGER
+  MECHANIC
+  DRIVER
+  SAFETY_OFFICER
+  AUDITOR
+  CUSTOMER
+  SUPPLIER
+  VIEWER
+}
+
+// ─── Subscription plan tier ───────────────────────────────────────────────────
+enum PlanTier {
+  FREE
+  STARTER
+  BUSINESS
+  ENTERPRISE
+  CUSTOM
+}
+
+// ─── Subscription status ──────────────────────────────────────────────────────
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+  EXPIRED
+}
+
+// ─── Entitlement (feature access) status ────────────────────────────────────
+enum EntitlementStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REVOKED
+}
+
+// =============================================================================
+//  MEMBERSHIP — one User may belong to multiple Organizations
+// =============================================================================
+// This coexists with the legacy User.organizationId field.
+// New code should use Membership; legacy code still works via organizationId.
+
+model Membership {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation("UserMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization     @relation("OrgMemberships", fields: [organizationId], references: [id], onDelete: Cascade)
+  role           MembershipRole   @default(VIEWER)
+  status         MembershipStatus @default(INVITED)
+
+  // Invite tracking
+  invitedById    String?
+  invitedBy      User?            @relation("MembershipInviter", fields: [invitedById], references: [id])
+  invitedAt      DateTime         @default(now())
+  acceptedAt     DateTime?
+  endedAt        DateTime?
+  suspendedAt    DateTime?
+  suspendReason  String?
+  notes          String?
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+// =============================================================================
+//  SUBSCRIPTION PLAN — platform-level plan catalogue (Super Admin manages)
+// =============================================================================
+
+model Plan {
+  id               String    @id @default(uuid())
+  name             String    @unique
+  slug             String    @unique
+  tier             PlanTier  @default(STARTER)
+  description      String?
+  monthlyPriceUsd  Float     @default(0)
+  annualPriceUsd   Float     @default(0)
+  includedSeats    Int       @default(5)
+  extraSeatPriceUsd Float    @default(0)
+  isPublic         Boolean   @default(true)
+  isActive         Boolean   @default(true)
+  trialDays        Int       @default(14)
+  features         Json      @default("[]")   // array of feature keys included
+  limits           Json      @default("{}")   // e.g. { maxVehicles: 50, maxApiCalls: 1000 }
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  subscriptions    Subscription[]
+
+  @@map("plans")
+}
+
+// =============================================================================
+//  SUBSCRIPTION — one Organization subscribes to one Plan at a time
+// =============================================================================
+
+model Subscription {
+  id               String             @id @default(uuid())
+  organizationId   String             @unique  // one active subscription per org
+  organization     Organization       @relation("OrgSubscription", fields: [organizationId], references: [id])
+  planId           String
+  plan             Plan               @relation(fields: [planId], references: [id])
+  status           SubscriptionStatus @default(TRIAL)
+  seats            Int                @default(5)    // purchased seats
+  seatsUsed        Int                @default(0)   // tracked count
+
+  trialEndsAt      DateTime?
+  currentPeriodStart DateTime         @default(now())
+  currentPeriodEnd DateTime?
+  cancelledAt      DateTime?
+  notes            String?            // Super Admin notes
+
+  // Billing reference (for future payment provider integration)
+  externalRef      String?
+  currency         String             @default("USD")
+  billingInterval  String             @default("monthly") // monthly | annual
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  entitlements     Entitlement[]
+
+  @@map("subscriptions")
+}
+
+// =============================================================================
+//  ENTITLEMENT — specific feature enabled for an organization
+// =============================================================================
+// Super Admin grants/revokes features independently of the plan.
+// This allows per-company overrides and add-ons.
+
+model Entitlement {
+  id               String            @id @default(uuid())
+  organizationId   String
+  organization     Organization      @relation("OrgEntitlements", fields: [organizationId], references: [id])
+  subscriptionId   String?
+  subscription     Subscription?     @relation(fields: [subscriptionId], references: [id])
+
+  featureKey       String            // e.g. "fleet.gps", "finance.accounting", "ai.assistant"
+  status           EntitlementStatus @default(ACTIVE)
+  grantedById      String?           // Super Admin who granted it
+  expiresAt        DateTime?
+  usageLimit       Int?              // null = unlimited
+  usageCount       Int               @default(0)
+  metadata         Json?             // extra config e.g. { maxVehicles: 100 }
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([organizationId, featureKey])
+  @@index([organizationId])
+  @@map("entitlements")
+}
+
+// =============================================================================
+//  AUDIT LOG — platform-level sensitive event tracking
+// =============================================================================
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String?
+  userId         String?
+  action         String   // e.g. "membership.invite", "subscription.activate", "entitlement.grant"
+  targetType     String?  // e.g. "User", "Organization", "Subscription"
+  targetId       String?
+  before         Json?    // previous value
+  after          Json?    // new value
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

@@ -21,6 +21,8 @@ import financialRoutes    from './routes/financial.routes';
 import contractRoutes     from './routes/contracts.routes';
 import expenseRoutes      from './routes/expenses.routes';
 import maintenanceRoutes    from './routes/maintenance.routes';
+import membershipRoutes    from './routes/membership.routes';
+import platformRoutes      from './routes/platform.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
@@ -76,6 +78,8 @@ app.use(`${api}/contracts`,     apiLimiter,  contractRoutes);
 app.use(`${api}/expenses`,      apiLimiter,  expenseRoutes);
 app.use(`${api}/devices`,       apiLimiter,  deviceRoutes);
 app.use(`${api}/maintenance`,   apiLimiter,  maintenanceRoutes);
+app.use(`${api}/memberships`,   apiLimiter,  membershipRoutes);
+app.use(`${api}/platform`,      apiLimiter,  platformRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

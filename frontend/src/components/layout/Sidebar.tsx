@@ -5,8 +5,9 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User, X,
-  DollarSign, Activity, ChevronRight, Wrench,
+  DollarSign, Activity, ChevronRight, Wrench, Globe,
 } from 'lucide-react';
+import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import { useAuthStore } from '@/store/authStore';
 
 const navItems = [
@@ -23,6 +24,7 @@ const navItems = [
   // Users is restricted — only shown to ADMIN and SUPER_ADMIN (see filter below)
   { href: '/users',     label: 'Users',         icon: Users,    roles: ['SUPER_ADMIN', 'ADMIN'] },
   { href: '/settings',  label: 'Settings',      icon: Settings },
+  { href: '/platform',  label: 'Platform',      icon: Globe,    roles: ['SUPER_ADMIN'] },
 ];
 
 interface SidebarProps {
@@ -74,6 +76,11 @@ export function Sidebar({ onClose }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* Workspace switcher (shown when user has multiple memberships) */}
+      <div className="px-1 border-t border-brand-700/50 pt-2">
+        <WorkspaceSwitcher />
+      </div>
 
       {/* User card */}
       <div className="p-3 border-t border-brand-700/50">

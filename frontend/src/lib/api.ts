@@ -189,3 +189,32 @@ export const maintenanceApi = {
   delete: (id: string)      => apiClient.delete(`/maintenance/${id}`),
   upcoming: (params?: object) => apiClient.get('/maintenance/upcoming', { params }).then(r => r.data),
 };
+
+// ─── Memberships ──────────────────────────────────────────────────────────────
+export const membershipApi = {
+  me:            () => apiClient.get('/memberships/me').then(r => r.data),
+  list:          () => apiClient.get('/memberships').then(r => r.data),
+  invite:        (data: object) => apiClient.post('/memberships/invite', data).then(r => r.data),
+  accept:        (id: string)   => apiClient.post(`/memberships/${id}/accept`).then(r => r.data),
+  updateStatus:  (id: string, status: string, reason?: string) =>
+    apiClient.patch(`/memberships/${id}`, { status, reason }).then(r => r.data),
+};
+
+// ─── Platform (Super Admin) ───────────────────────────────────────────────────
+export const platformApi = {
+  stats:          () => apiClient.get('/platform/stats').then(r => r.data),
+  organizations:  (params?: object) => apiClient.get('/platform/organizations', { params }).then(r => r.data),
+  organization:   (id: string)      => apiClient.get(`/platform/organizations/${id}`).then(r => r.data),
+  activateSub:    (orgId: string, data: object) =>
+    apiClient.post(`/platform/organizations/${orgId}/subscription`, data).then(r => r.data),
+  updateSub:      (orgId: string, data: object) =>
+    apiClient.patch(`/platform/organizations/${orgId}/subscription`, data).then(r => r.data),
+  grantFeature:   (orgId: string, data: object) =>
+    apiClient.post(`/platform/organizations/${orgId}/entitlements`, data).then(r => r.data),
+  revokeFeature:  (orgId: string, key: string) =>
+    apiClient.delete(`/platform/organizations/${orgId}/entitlements/${key}`).then(r => r.data),
+  plans:          () => apiClient.get('/platform/plans').then(r => r.data),
+  createPlan:     (data: object) => apiClient.post('/platform/plans', data).then(r => r.data),
+  updatePlan:     (id: string, data: object) => apiClient.put(`/platform/plans/${id}`, data).then(r => r.data),
+  auditLogs:      (params?: object) => apiClient.get('/platform/audit-logs', { params }).then(r => r.data),
+};
