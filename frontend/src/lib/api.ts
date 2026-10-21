@@ -40,6 +40,7 @@ apiClient.interceptors.response.use(
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authApi = {
+  register:       (data: object) => apiClient.post('/auth/register', data).then(r => r.data),
   login:          (email: string, password: string) => apiClient.post('/auth/login', { email, password }).then(r => r.data),
   me:             () => apiClient.get('/auth/me').then(r => r.data),
   logout:         (refreshToken: string) => apiClient.post('/auth/logout', { refreshToken }),

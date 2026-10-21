@@ -1,19 +1,20 @@
 import { Router } from 'express';
 import {
   login, refresh, logout, me, changePassword,
-  forgotPassword, resetPassword,
+  forgotPassword, resetPassword, register,
 } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
+router.post('/register',        register);       // public — new org + admin account
 router.post('/login',           login);
 router.post('/refresh',         refresh);
 router.post('/logout',          logout);
 router.get('/me',               authenticate, me);
 router.post('/change-password', authenticate, changePassword);
 
-// Password recovery — no authentication required (user doesn't have a token yet)
+// Password recovery
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password',  resetPassword);
 

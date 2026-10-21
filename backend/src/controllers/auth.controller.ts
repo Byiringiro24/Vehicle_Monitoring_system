@@ -2,11 +2,82 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { loginUser, refreshAccessToken, logoutUser } from '../services/auth.service';
-import { sendPasswordResetEmail, sendPasswordChangedEmail } from '../services/email.service';
+import { sendPasswordResetEmail, sendPasswordChangedEmail, sendWelcomeEmail } from '../services/email.service';
 import { AuthenticatedRequest } from '../types';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import logger from '../utils/logger';
+
+// ── Register — create a new organization + admin account ─────────────────────
+export async function register(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { orgName, firstName, lastName, email, password, country, currency } = req.body;
+
+    if (!orgName || !firstName || !lastName || !email || !password) {
+      throw new AppError(400, 'orgName, firstName, lastName, email and password are required');
+    }
+    if (password.length < 8) throw new AppError(400, 'Password must be at least 8 characters');
+
+    // Check email not already taken
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (existing) throw new AppError(409, 'An account with this email already exists');
+
+    // Generate a slug from org name
+    const slug = orgName.toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .slice(0, 50)
+      + '-' + crypto.randomBytes(3).toString('hex');
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Create org + admin user in a transaction
+    const { org, user } = await prisma.$transaction(async tx => {
+      const org = await tx.organization.create({
+        data: {
+          name:     orgName.trim(),
+          slug,
+          country:  country  ?? 'Rwanda',
+          currency: currency ?? 'RWF',
+          email:    email.toLowerCase(),
+        },
+      });
+      const user = await tx.user.create({
+        data: {
+          email:        email.toLowerCase(),
+          passwordHash,
+          firstName:    firstName.trim(),
+          lastName:     lastName.trim(),
+          role:         'ADMIN',
+          organizationId: org.id,
+        },
+      });
+      // Create active membership in the new identity system
+      await tx.membership.create({
+        data: {
+          userId:         user.id,
+          organizationId: org.id,
+          role:           'COMPANY_ADMIN',
+          status:         'ACTIVE',
+          acceptedAt:     new Date(),
+        },
+      });
+      return { org, user };
+    });
+
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(user.email, user.firstName).catch(err =>
+      logger.warn(`[AUTH] Welcome email failed: ${err.message}`)
+    );
+
+    // Auto-login after registration
+    const { loginUser: doLogin } = await import('../services/auth.service');
+    const result = await doLogin(email, password);
+
+    logger.info(`[AUTH] New organization registered: ${org.name} (${org.id})`);
+    res.status(201).json(result);
+  } catch (err) { next(err); }
+}
 
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
