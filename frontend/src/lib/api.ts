@@ -218,3 +218,34 @@ export const platformApi = {
   updatePlan:     (id: string, data: object) => apiClient.put(`/platform/plans/${id}`, data).then(r => r.data),
   auditLogs:      (params?: object) => apiClient.get('/platform/audit-logs', { params }).then(r => r.data),
 };
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+export const documentApi = {
+  list:       (params?: object) => apiClient.get('/documents', { params }).then(r => r.data),
+  compliance: () => apiClient.get('/documents/compliance').then(r => r.data),
+  get:        (id: string) => apiClient.get(`/documents/${id}`).then(r => r.data),
+  create:     (data: object) => apiClient.post('/documents', data).then(r => r.data),
+  update:     (id: string, data: object) => apiClient.put(`/documents/${id}`, data).then(r => r.data),
+  verify:     (id: string) => apiClient.post(`/documents/${id}/verify`).then(r => r.data),
+  reject:     (id: string, reason: string) => apiClient.post(`/documents/${id}/reject`, { reason }).then(r => r.data),
+  delete:     (id: string) => apiClient.delete(`/documents/${id}`),
+  // Upload a file to an existing document slot
+  uploadFile: (id: string, file: File, onProgress?: (pct: number) => void) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post(`/documents/${id}/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: e => onProgress?.(Math.round((e.loaded * 100) / (e.total ?? 1))),
+    }).then(r => r.data);
+  },
+  // Create slot + upload file in one step
+  uploadAndCreate: (data: object, file: File, onProgress?: (pct: number) => void) => {
+    const form = new FormData();
+    form.append('file', file);
+    Object.entries(data).forEach(([k, v]) => { if (v != null) form.append(k, String(v)); });
+    return apiClient.post('/documents/upload-and-create', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: e => onProgress?.(Math.round((e.loaded * 100) / (e.total ?? 1))),
+    }).then(r => r.data);
+  },
+};

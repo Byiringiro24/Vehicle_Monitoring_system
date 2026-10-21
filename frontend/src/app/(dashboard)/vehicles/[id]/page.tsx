@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { DocumentUploader } from '@/components/documents/DocumentUploader';
 import dynamic from 'next/dynamic';
 import { format, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -28,7 +29,7 @@ const GpsHistoryMapSatellite = dynamic(() => import('@/components/maps/GpsHistor
   loading: () => <div className="flex items-center justify-center h-full bg-gray-900 rounded-xl text-gray-400">Loading satellite…</div>,
 });
 
-type Tab = 'overview' | 'history' | 'trips' | 'telemetry' | 'commands';
+type Tab = 'overview' | 'history' | 'trips' | 'telemetry' | 'commands' | 'documents';
 
 // ─── Relative time helper ─────────────────────────────────────────────────────
 function timeAgo(dateStr: string | undefined | null): string {
@@ -655,10 +656,11 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const status = getStatus();
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview',  label: 'Overview',    icon: <Info size={14} /> },
-    { id: 'history',   label: 'GPS History', icon: <Route size={14} /> },
-    { id: 'telemetry', label: 'Telemetry',   icon: <BarChart2 size={14} /> },
-    { id: 'commands',  label: 'Device Commands', icon: <Terminal size={14} /> },
+    { id: 'overview',   label: 'Overview',        icon: <Info size={14} /> },
+    { id: 'history',    label: 'GPS History',     icon: <Route size={14} /> },
+    { id: 'telemetry',  label: 'Telemetry',       icon: <BarChart2 size={14} /> },
+    { id: 'commands',   label: 'Device Commands', icon: <Terminal size={14} /> },
+    { id: 'documents',  label: 'Documents',       icon: <History size={14} /> },
   ];
 
   return (
@@ -1124,6 +1126,17 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── DOCUMENTS TAB ───────────────────────────────────────────────────── */}
+      {tab === 'documents' && (
+        <div className="max-w-2xl">
+          <DocumentUploader
+            ownerType="VEHICLE"
+            ownerId={params.id}
+            canReview={true}
+          />
         </div>
       )}
 

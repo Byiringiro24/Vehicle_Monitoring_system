@@ -242,6 +242,7 @@ model Organization {
   memberships   Membership[]    @relation("OrgMemberships")
   subscription  Subscription?   @relation("OrgSubscription")
   entitlements  Entitlement[]   @relation("OrgEntitlements")
+  documents     Document[]      @relation("OrgDocuments")
 
   @@map("organizations")
 }
@@ -1291,4 +1292,102 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// =============================================================================
+//  BUILD 2 — DOCUMENT MANAGEMENT
+// =============================================================================
+
+enum DocumentOwnerType {
+  VEHICLE
+  DRIVER
+  USER
+  ORGANIZATION
+  CUSTOMER
+  SUPPLIER
+}
+
+enum DocumentStatus {
+  PENDING_UPLOAD    // slot created but file not yet uploaded
+  PENDING_REVIEW    // uploaded, awaiting verification
+  VERIFIED          // reviewed and accepted
+  REJECTED          // reviewed and rejected
+  EXPIRED           // passed expiry date
+  SUPERSEDED        // replaced by a newer version
+}
+
+enum DocumentCategory {
+  REGISTRATION_CARD
+  INSURANCE
+  INSPECTION_CERTIFICATE
+  ROAD_TAX
+  TRANSPORT_PERMIT
+  COMMERCIAL_LICENSE
+  TAXI_PERMIT
+  ROADWORTHINESS
+  EMISSION_CERTIFICATE
+  PURCHASE_INVOICE
+  OWNERSHIP_CERTIFICATE
+  DRIVING_LICENSE
+  NATIONAL_ID
+  PASSPORT
+  MEDICAL_CERTIFICATE
+  POLICE_CLEARANCE
+  EMPLOYMENT_CONTRACT
+  PHOTO
+  YELLOW_CARD
+  OTHER
+}
+
+model Document {
+  id             String              @id @default(uuid())
+  organizationId String
+  organization   Organization        @relation("OrgDocuments", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Polymorphic owner — what this document belongs to
+  ownerType      DocumentOwnerType
+  ownerId        String              // vehicleId, driverId, userId, etc.
+
+  // Classification
+  category       DocumentCategory    @default(OTHER)
+  label          String              // human-readable e.g. "Insurance Certificate 2026"
+
+  // File storage
+  fileUrl        String?             // path/URL to the stored file
+  fileName       String?
+  fileMimeType   String?
+  fileSizeBytes  Int?
+  fileHash       String?             // SHA-256 of the file content
+
+  // Document metadata
+  documentNumber String?             // policy number, ID number, etc.
+  issuer         String?             // issuing authority / company
+  issuedAt       DateTime?
+  expiresAt      DateTime?           // null = does not expire
+
+  // Review workflow
+  status         DocumentStatus      @default(PENDING_UPLOAD)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  rejectionReason String?
+  notes          String?
+
+  // Version tracking
+  version        Int                 @default(1)
+  supersededById String?             // points to the newer document that replaced this
+
+  // Reminder tracking
+  reminderSent30d Boolean            @default(false)
+  reminderSent7d  Boolean            @default(false)
+  reminderSentExpired Boolean        @default(false)
+
+  uploadedById   String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([ownerType, ownerId])
+  @@index([expiresAt])
+  @@index([status])
+  @@map("documents")
 }

@@ -106,8 +106,73 @@ async function bootstrap() {
     }
   }, 60_000);
 
-  // ── Data plan expiry alert job — runs every hour ──────────────────────────
-  // Sends alerts when a vehicle's SIM data plan is about to expire:
+  // ── Document expiry monitoring — runs every 6 hours ──────────────────────
+  // Marks expired documents, sends 30-day, 7-day and expiry email alerts.
+  setInterval(async () => {
+    try {
+      const now   = new Date();
+      const in30d = new Date(Date.now() + 30 * 86400000);
+      const in7d  = new Date(Date.now() +  7 * 86400000);
+
+      // 1. Auto-mark expired documents
+      await prisma.document.updateMany({
+        where: { expiresAt: { lt: now }, status: { in: ['VERIFIED', 'PENDING_REVIEW', 'PENDING_UPLOAD'] } },
+        data:  { status: 'EXPIRED' },
+      });
+
+      // 2. Find docs expiring in 30d that haven't been alerted yet
+      const expiring30 = await prisma.document.findMany({
+        where: { expiresAt: { gte: now, lte: in30d }, status: 'VERIFIED', reminderSent30d: false },
+        select: { id: true, label: true, category: true, expiresAt: true, ownerId: true, ownerType: true, organizationId: true },
+        take: 50,
+      });
+
+      // 3. Find docs expiring in 7d that haven't been alerted yet
+      const expiring7 = await prisma.document.findMany({
+        where: { expiresAt: { gte: now, lte: in7d }, status: 'VERIFIED', reminderSent7d: false },
+        select: { id: true, label: true, category: true, expiresAt: true, ownerId: true, ownerType: true, organizationId: true },
+        take: 50,
+      });
+
+      // Group by org and send one email per org per batch
+      const { sendDocumentExpiryEmail } = await import('./services/email.service');
+      const orgMap = new Map<string, typeof expiring30>();
+
+      for (const doc of [...expiring30, ...expiring7]) {
+        const existing = orgMap.get(doc.organizationId) ?? [];
+        existing.push(doc);
+        orgMap.set(doc.organizationId, existing);
+      }
+
+      for (const [orgId, docs] of orgMap.entries()) {
+        const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { email: true, name: true } });
+        if (!org?.email) continue;
+
+        const docItems = docs.map(d => ({
+          label:      d.label,
+          identifier: d.ownerType + ':' + d.ownerId.slice(0, 8),
+          expiryDate: d.expiresAt ? new Date(d.expiresAt).toLocaleDateString() : '—',
+          daysLeft:   d.expiresAt ? Math.ceil((new Date(d.expiresAt).getTime() - Date.now()) / 86400000) : 0,
+        }));
+
+        sendDocumentExpiryEmail(org.email, org.name, docItems).catch(() => {});
+
+        // Mark reminders sent
+        const ids30 = expiring30.filter(d => d.organizationId === orgId).map(d => d.id);
+        const ids7  = expiring7.filter(d => d.organizationId === orgId).map(d => d.id);
+        if (ids30.length) await prisma.document.updateMany({ where: { id: { in: ids30 } }, data: { reminderSent30d: true } });
+        if (ids7.length)  await prisma.document.updateMany({ where: { id: { in: ids7  } }, data: { reminderSent7d:  true } });
+      }
+
+      if (expiring30.length + expiring7.length > 0) {
+        logger.info(`[DOCS] Expiry check: ${expiring30.length} 30d alerts, ${expiring7.length} 7d alerts sent`);
+      }
+    } catch (err) {
+      logger.error('Document expiry check error', err);
+    }
+  }, 6 * 60 * 60 * 1000); // every 6 hours
+
+  // ── Data plan expiry alert job — runs every hour ──────────────────────────  // Sends alerts when a vehicle's SIM data plan is about to expire:
   //   Monthly plan → alert 3 days before
   //   Weekly plan  → alert 1 day before
   //   Daily plan   → alert 3 hours before

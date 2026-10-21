@@ -1,3 +1,4 @@
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -23,6 +24,7 @@ import expenseRoutes      from './routes/expenses.routes';
 import maintenanceRoutes    from './routes/maintenance.routes';
 import membershipRoutes    from './routes/membership.routes';
 import platformRoutes      from './routes/platform.routes';
+import documentRoutes      from './routes/document.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
@@ -80,6 +82,10 @@ app.use(`${api}/devices`,       apiLimiter,  deviceRoutes);
 app.use(`${api}/maintenance`,   apiLimiter,  maintenanceRoutes);
 app.use(`${api}/memberships`,   apiLimiter,  membershipRoutes);
 app.use(`${api}/platform`,      apiLimiter,  platformRoutes);
+app.use(`${api}/documents`,     apiLimiter,  documentRoutes);
+
+// Serve uploaded files — in production replace with a CDN / object storage signed URL
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use(notFound);
 app.use(errorHandler);
