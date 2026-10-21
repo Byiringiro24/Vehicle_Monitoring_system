@@ -108,6 +108,7 @@ async function bootstrap() {
 
   // ── Payment overdue escalation — runs daily at midnight UTC ──────────────
   // Marks PENDING scheduled payments as OVERDUE when dueDate has passed.
+  // Also sends overdue payment reminder emails to customers.
   setInterval(async () => {
     try {
       const now = new Date();
@@ -117,6 +118,7 @@ async function bootstrap() {
       });
       if (result.count > 0) {
         logger.info(`[AGREEMENTS] Marked ${result.count} payment(s) OVERDUE`);
+
         // Update overdueAmount on affected agreements
         const overdueSPs = await prisma.scheduledPayment.findMany({
           where: { status: 'OVERDUE' },
@@ -131,6 +133,28 @@ async function bootstrap() {
             prisma.agreement.update({ where: { id }, data: { overdueAmount } })
           )
         );
+
+        // Send overdue email reminders
+        const { sendOverduePaymentEmail } = await import('./services/email.service');
+        const overdueAgreements = await prisma.agreement.findMany({
+          where: { overdueAmount: { gt: 0 }, status: 'ACTIVE' },
+          include: {
+            customer: { select: { name: true, email: true } },
+            vehicle:  { select: { licensePlate: true } },
+          },
+          take: 50,
+        });
+        for (const ag of overdueAgreements) {
+          if (!ag.customer.email) continue;
+          const daysOverdue = Math.ceil((now.getTime() - new Date(ag.startDate).getTime()) / 86400000);
+          sendOverduePaymentEmail(ag.customer.email, ag.customer.name, {
+            vehiclePlate:    ag.vehicle.licensePlate,
+            amount:          ag.overdueAmount,
+            currency:        ag.currency,
+            daysOverdue,
+            contractNumber:  ag.agreementNumber.slice(0, 8).toUpperCase(),
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       logger.error('Payment overdue escalation error', err);
