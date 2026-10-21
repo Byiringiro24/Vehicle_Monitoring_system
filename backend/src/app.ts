@@ -25,6 +25,7 @@ import maintenanceRoutes    from './routes/maintenance.routes';
 import membershipRoutes    from './routes/membership.routes';
 import platformRoutes      from './routes/platform.routes';
 import documentRoutes      from './routes/document.routes';
+import agreementRoutes     from './routes/agreement.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
@@ -83,6 +84,7 @@ app.use(`${api}/maintenance`,   apiLimiter,  maintenanceRoutes);
 app.use(`${api}/memberships`,   apiLimiter,  membershipRoutes);
 app.use(`${api}/platform`,      apiLimiter,  platformRoutes);
 app.use(`${api}/documents`,     apiLimiter,  documentRoutes);
+app.use(`${api}/agreements`,    apiLimiter,  agreementRoutes);
 
 // Serve uploaded files — in production replace with a CDN / object storage signed URL
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

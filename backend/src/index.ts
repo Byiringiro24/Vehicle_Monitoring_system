@@ -106,8 +106,38 @@ async function bootstrap() {
     }
   }, 60_000);
 
-  // ── Document expiry monitoring — runs every 6 hours ──────────────────────
-  // Marks expired documents, sends 30-day, 7-day and expiry email alerts.
+  // ── Payment overdue escalation — runs daily at midnight UTC ──────────────
+  // Marks PENDING scheduled payments as OVERDUE when dueDate has passed.
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const result = await prisma.scheduledPayment.updateMany({
+        where: { status: 'PENDING', dueDate: { lt: now } },
+        data:  { status: 'OVERDUE' },
+      });
+      if (result.count > 0) {
+        logger.info(`[AGREEMENTS] Marked ${result.count} payment(s) OVERDUE`);
+        // Update overdueAmount on affected agreements
+        const overdueSPs = await prisma.scheduledPayment.findMany({
+          where: { status: 'OVERDUE' },
+          select: { agreementId: true, amountDue: true, amountPaid: true },
+        });
+        const overdueByAgreement = overdueSPs.reduce((acc: Record<string, number>, sp) => {
+          acc[sp.agreementId] = (acc[sp.agreementId] ?? 0) + (sp.amountDue - sp.amountPaid);
+          return acc;
+        }, {});
+        await Promise.all(
+          Object.entries(overdueByAgreement).map(([id, overdueAmount]) =>
+            prisma.agreement.update({ where: { id }, data: { overdueAmount } })
+          )
+        );
+      }
+    } catch (err) {
+      logger.error('Payment overdue escalation error', err);
+    }
+  }, 24 * 60 * 60 * 1000); // every 24 hours
+
+  // ── Document expiry monitoring — runs every 6 hours ──────────────────────  // Marks expired documents, sends 30-day, 7-day and expiry email alerts.
   setInterval(async () => {
     try {
       const now   = new Date();

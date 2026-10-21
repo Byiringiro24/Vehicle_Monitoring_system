@@ -243,6 +243,8 @@ model Organization {
   subscription  Subscription?   @relation("OrgSubscription")
   entitlements  Entitlement[]   @relation("OrgEntitlements")
   documents     Document[]      @relation("OrgDocuments")
+  businessModels BusinessModel[] @relation("OrgBusinessModels")
+  agreements    Agreement[]     @relation("OrgAgreements")
 
   @@map("organizations")
 }
@@ -481,6 +483,7 @@ model Vehicle {
   expenses        VehicleExpense[]
   contracts       VehicleContract[]
   maintenance     MaintenanceRecord[]
+  vehicleAgreements Agreement[]  @relation("VehicleAgreements")
 
   @@map("vehicles")
 }
@@ -628,6 +631,7 @@ model Customer {
 
   contracts       VehicleContract[]
   payments        ContractPayment[]
+  customerAgreements Agreement[] @relation("CustomerAgreements")
 
   @@map("customers")
 }
@@ -1390,4 +1394,199 @@ model Document {
   @@index([expiresAt])
   @@index([status])
   @@map("documents")
+}
+
+// =============================================================================
+//  BUILD 3 — VEHICLE BUSINESS MODEL BUILDER
+//  Configurable agreement types, pricing rules, payment schedules.
+// =============================================================================
+
+enum BusinessModelType {
+  DAILY_RENTAL
+  WEEKLY_RENTAL
+  MONTHLY_RENTAL
+  ANNUAL_RENTAL
+  LEASE_TO_OWN       // hire-purchase / installment sale
+  VEHICLE_SALE
+  DRIVER_SERVICE
+  TRANSPORT_CONTRACT
+  FLEET_MANAGEMENT   // manage vehicle for owner, collect fees
+  CUSTOM
+}
+
+enum AgreementStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+  TERMINATED
+  SUSPENDED
+  PENDING_SIGNATURE
+}
+
+enum ScheduledPaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+  WAIVED
+  CANCELLED
+}
+
+// ─── BusinessModel — company-configurable template ───────────────────────────
+// Super Admin sets defaults; Company Admin can create their own within limits.
+model BusinessModel {
+  id             String             @id @default(uuid())
+  organizationId String?            // null = platform default (Super Admin)
+  organization   Organization?      @relation("OrgBusinessModels", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  modelType      BusinessModelType  @default(CUSTOM)
+  name           String
+  description    String?
+  isActive       Boolean            @default(true)
+  isPublic       Boolean            @default(false)  // visible in marketplace
+
+  // Default pricing rule (overridable per agreement)
+  currency       String             @default("RWF")
+  rateAmount     Float              @default(0)
+  ratePeriod     String             @default("daily") // hourly|daily|weekly|monthly|per_trip|custom
+  depositAmount  Float              @default(0)
+
+  // Responsibilities
+  maintenancePaidBy  String         @default("company")  // company|customer|shared
+  fuelPaidBy         String         @default("customer")
+  insurancePaidBy    String         @default("company")
+
+  // Late payment
+  gracePeriodDays  Int              @default(3)
+  lateFeeAmount    Float            @default(0)
+  lateFeePercent   Float            @default(0)  // % of overdue amount
+
+  // Ownership transfer (for lease-to-own)
+  transferCondition String?        // description of when ownership transfers
+
+  metadata       Json?
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  agreements     Agreement[]
+
+  @@index([organizationId])
+  @@map("business_models")
+}
+
+// ─── Agreement — one signed arrangement between company and customer ──────────
+model Agreement {
+  id               String          @id @default(uuid())
+  organizationId   String
+  organization     Organization    @relation("OrgAgreements", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  businessModelId  String?
+  businessModel    BusinessModel?  @relation(fields: [businessModelId], references: [id])
+
+  vehicleId        String
+  vehicle          Vehicle         @relation("VehicleAgreements", fields: [vehicleId], references: [id])
+
+  customerId       String
+  customer         Customer        @relation("CustomerAgreements", fields: [customerId], references: [id])
+
+  driverId         String?         // optional — driver assigned under this agreement
+
+  // Agreement identity
+  agreementNumber  String          @unique @default(uuid())
+  title            String
+  modelType        BusinessModelType @default(CUSTOM)
+  status           AgreementStatus @default(DRAFT)
+
+  // Financial terms (snapshot at signing — not changed by later BusinessModel edits)
+  currency         String          @default("RWF")
+  rateAmount       Float
+  ratePeriod       String          @default("daily")
+  depositAmount    Float           @default(0)
+  depositPaid      Float           @default(0)
+  totalValue       Float?          // for fixed-value agreements (lease-to-own, sale)
+  installmentCount Int?            // for hire-purchase
+
+  // Dates
+  startDate        DateTime
+  endDate          DateTime?
+  expectedEndDate  DateTime?
+
+  // Running totals (calculated from payments, not editable)
+  totalPaid        Float           @default(0)
+  totalBalance     Float           @default(0)
+  overdueAmount    Float           @default(0)
+
+  // Signed contract
+  contractFileUrl  String?
+  signedAt         DateTime?
+  notes            String?
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  scheduledPayments ScheduledPayment[]
+  paymentRecords    PaymentRecord[]
+
+  @@index([organizationId])
+  @@index([vehicleId])
+  @@index([customerId])
+  @@index([status])
+  @@map("agreements")
+}
+
+// ─── ScheduledPayment — one payment obligation in a payment schedule ──────────
+// Generated automatically when an agreement is activated.
+// Balances derive from records — never edited directly.
+model ScheduledPayment {
+  id           String                  @id @default(uuid())
+  agreementId  String
+  agreement    Agreement               @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  periodLabel  String                  // e.g. "Day 1", "Week 3", "Installment 5"
+  dueDate      DateTime
+  amountDue    Float
+  currency     String                  @default("RWF")
+  status       ScheduledPaymentStatus  @default(PENDING)
+
+  amountPaid   Float                   @default(0)
+  paidAt       DateTime?
+  lateFee      Float                   @default(0)
+  notes        String?
+  reminderSent Boolean                 @default(false)
+
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  paymentRecords PaymentRecord[]
+
+  @@index([agreementId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("scheduled_payments")
+}
+
+// ─── PaymentRecord — one actual payment received ─────────────────────────────
+model PaymentRecord {
+  id                  String   @id @default(uuid())
+  organizationId      String
+  agreementId         String
+  agreement           Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  scheduledPaymentId  String?
+  scheduledPayment    ScheduledPayment? @relation(fields: [scheduledPaymentId], references: [id])
+
+  amount              Float
+  currency            String   @default("RWF")
+  paidAt              DateTime @default(now())
+  method              String   @default("CASH")  // CASH|MOBILE_MONEY|BANK|CARD|OTHER
+  reference           String?  // mobile money tx, bank ref, receipt #
+  notes               String?
+  recordedById        String?  // user who recorded this payment
+
+  createdAt           DateTime @default(now())
+
+  @@index([agreementId])
+  @@index([organizationId])
+  @@map("payment_records")
 }

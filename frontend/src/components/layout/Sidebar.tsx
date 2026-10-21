@@ -5,8 +5,10 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User, X,
-  DollarSign, Activity, ChevronRight, Wrench, Globe, FileText,
+  DollarSign, Activity, ChevronRight, Wrench, Globe, FileText, Handshake,
 } from 'lucide-react';
+// FileText2 alias so both document and agreement icons are distinct
+const FileText2 = FileText;
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import { useAuthStore } from '@/store/authStore';
 
@@ -21,7 +23,9 @@ const navItems = [
   { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/finance',   label: 'Finance',       icon: DollarSign },
   { href: '/reports',   label: 'Reports',       icon: BarChart3 },
-  { href: '/documents', label: 'Documents',     icon: FileText },
+  { href: '/customers', label: 'Customers',     icon: UserCheck },
+  { href: '/agreements',label: 'Agreements',    icon: FileText },
+  { href: '/documents', label: 'Documents',     icon: FileText2 },
   // Users is restricted — only shown to ADMIN and SUPER_ADMIN (see filter below)
   { href: '/users',     label: 'Users',         icon: Users,    roles: ['SUPER_ADMIN', 'ADMIN'] },
   { href: '/settings',  label: 'Settings',      icon: Settings },

@@ -249,3 +249,16 @@ export const documentApi = {
     }).then(r => r.data);
   },
 };
+
+// ─── Agreements (Business Model Builder) ─────────────────────────────────────
+export const agreementApi = {
+  businessModels: () => apiClient.get('/agreements/business-models').then(r => r.data),
+  createModel:    (data: object) => apiClient.post('/agreements/business-models', data).then(r => r.data),
+  list:           (params?: object) => apiClient.get('/agreements', { params }).then(r => r.data),
+  get:            (id: string)   => apiClient.get(`/agreements/${id}`).then(r => r.data),
+  create:         (data: object) => apiClient.post('/agreements', data).then(r => r.data),
+  activate:       (id: string)   => apiClient.post(`/agreements/${id}/activate`).then(r => r.data),
+  update:         (id: string, data: object) => apiClient.patch(`/agreements/${id}`, data).then(r => r.data),
+  payments:       (id: string)   => apiClient.get(`/agreements/${id}/payments`).then(r => r.data),
+  recordPayment:  (id: string, data: object) => apiClient.post(`/agreements/${id}/payments`, data).then(r => r.data),
+};
