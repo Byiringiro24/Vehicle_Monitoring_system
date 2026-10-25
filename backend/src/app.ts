@@ -66,6 +66,8 @@ app.get('/health', (_req, res) => {
 
 const api = '/api/v1';
 app.use(`${api}/auth`,          authLimiter, authRoutes);
+// Register has its own stricter limit (5 per hour per IP)
+app.use(`${api}/auth/register`, rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: { error: 'Too many registration attempts' }, standardHeaders: true, legacyHeaders: false }));
 app.use(`${api}/organizations`, apiLimiter,  organizationRoutes);
 app.use(`${api}/users`,         apiLimiter,  userRoutes);
 app.use(`${api}/fleets`,        apiLimiter,  fleetRoutes);

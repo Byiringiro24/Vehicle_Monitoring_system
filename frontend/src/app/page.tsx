@@ -20,8 +20,12 @@ export default function LandingPage() {
             </div>
           </div>
           <Link href="/login"
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition">
-            Sign In <ArrowRight size={15} />
+            className="flex items-center gap-1.5 bg-white/10 border border-white/30 hover:bg-white/20 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition">
+            Sign In
+          </Link>
+          <Link href="/register"
+            className="flex items-center gap-1.5 bg-white text-blue-700 hover:bg-blue-50 text-sm font-semibold px-5 py-2.5 rounded-xl transition">
+            Get Started <ArrowRight size={15} />
           </Link>
         </div>
       </nav>
@@ -40,9 +44,13 @@ export default function LandingPage() {
             geofencing, driver management and full financial oversight — all in one place.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <Link href="/login"
+            <Link href="/register"
               className="flex items-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold px-8 py-4 rounded-2xl text-base transition shadow-lg">
-              <ArrowRight size={18} /> Sign In to Dashboard
+              <ArrowRight size={18} /> Register Your Organization
+            </Link>
+            <Link href="/login"
+              className="flex items-center gap-2 bg-white/10 border border-white/30 hover:bg-white/20 text-white font-semibold px-6 py-4 rounded-2xl text-base transition">
+              Sign In
             </Link>
           </div>
         </div>
@@ -177,10 +185,16 @@ export default function LandingPage() {
         <div className="max-w-2xl mx-auto space-y-6">
           <h2 className="text-3xl font-bold">Ready to take control of your fleet?</h2>
           <p className="text-blue-100">Sign in to your ARTIC VMS dashboard and start monitoring your vehicles in real time.</p>
-          <Link href="/login"
-            className="inline-flex items-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold px-8 py-4 rounded-2xl text-base transition shadow-lg">
-            <ArrowRight size={18} /> Go to Dashboard
-          </Link>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link href="/register"
+              className="inline-flex items-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold px-8 py-4 rounded-2xl text-base transition shadow-lg">
+              <ArrowRight size={18} /> Register Free
+            </Link>
+            <Link href="/login"
+              className="inline-flex items-center gap-2 bg-white/10 border border-white/30 hover:bg-white/20 text-white font-semibold px-6 py-4 rounded-2xl text-base transition">
+              Sign In
+            </Link>
+          </div>
         </div>
       </section>
 
