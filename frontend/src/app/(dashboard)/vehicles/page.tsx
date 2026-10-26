@@ -128,9 +128,12 @@ export default function VehiclesPage() {
   // Lock confirmation state
   const [lockTarget, setLockTarget] = useState<{ id: string; plate: string; action: 'lock' | 'unlock' } | null>(null);
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['vehicles', search, statusFilter],
-    queryFn: () => vehicleApi.list({ search, status: statusFilter || undefined }),
+    queryKey: ['vehicles', search, statusFilter, page],
+    queryFn: () => vehicleApi.list({ search, status: statusFilter || undefined, page, limit: PAGE_SIZE }),
     refetchInterval: 30_000,
   });
 
@@ -365,6 +368,52 @@ export default function VehiclesPage() {
             <p className="text-sm mt-1">Add your first vehicle to get started</p>
           </div>
         )}
+
+        {/* Pagination */}
+        {!isLoading && (data?.pagination?.pages ?? 0) > 1 && (() => {
+          const total = data?.pagination?.total ?? 0;
+          const pages = data?.pagination?.pages ?? 1;
+          const from  = (page - 1) * PAGE_SIZE + 1;
+          const to    = Math.min(page * PAGE_SIZE, total);
+          return (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+              <p className="text-xs text-gray-500">
+                Showing {from}–{to} of {total} vehicles
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  ← Prev
+                </button>
+                {Array.from({ length: Math.min(pages, 7) }, (_, i) => {
+                  // Show pages around current page
+                  const p = pages <= 7 ? i + 1 : page <= 4 ? i + 1 : page + i - 3;
+                  if (p < 1 || p > pages) return null;
+                  return (
+                    <button key={p} onClick={() => setPage(p)}
+                      className={`px-3 py-1.5 text-xs rounded-lg transition ${
+                        p === page
+                          ? 'bg-brand-600 text-white font-semibold'
+                          : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                      }`}>
+                      {p}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setPage(p => Math.min(pages, p + 1))}
+                  disabled={page >= pages}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Plate confirmation modal */}
