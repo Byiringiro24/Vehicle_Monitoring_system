@@ -35,6 +35,8 @@
     ports:
       - '4000:4000'   # REST API + Socket.IO
       - '1883:1883'   # MQTT (ESP32 devices connect here)
+    volumes:
+      - uploads_data:/app/uploads   # ← persist uploaded documents across rebuilds
     environment:
       DATABASE_URL: "postgresql://artic_user:${POSTGRES_PASSWORD}@postgres:5432/fleet_management?schema=public&sslmode=disable"
       REDIS_URL: "redis://redis:6379"
@@ -82,3 +84,4 @@
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:    # persists uploaded files (documents, photos) across container rebuilds

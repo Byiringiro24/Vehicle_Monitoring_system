@@ -28,12 +28,93 @@
     --border: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
   }
-}
 
-@layer base {
+  html { -webkit-font-smoothing: antialiased; }
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
+
+  /* Tabular/monospaced numbers — apply to speed, amounts, distances, odometer */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-family: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+  }
+
+  /* Accessible focus ring */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(37,99,235,0.6);
+    border-radius: 6px;
+  }
 }
 
-/* Leaflet fixes */
+@layer components {
+  /* ── Hero dark gradient (landing page) ──────────────────────────── */
+  .hero-bg {
+    background:
+      radial-gradient(1200px 600px at 15% 10%, rgba(37,99,235,0.28), transparent 60%),
+      radial-gradient(900px 500px at 85% 0%, rgba(6,182,212,0.18), transparent 55%),
+      linear-gradient(165deg, #0A1228 0%, #101B36 45%, #17264A 100%);
+  }
+
+  /* ── Vignette overlay for hero (keeps text readable over animation) */
+  .hero-vignette {
+    background: radial-gradient(ellipse at center, transparent 35%, rgba(6,11,26,0.55) 100%);
+  }
+
+  /* ── Glass nav (applied after scroll) ───────────────────────────── */
+  .glass-nav {
+    background: rgba(10, 18, 40, 0.80);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  /* ── Skeleton shimmer ────────────────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+    background-size: 500px 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  /* ── Context banners ─────────────────────────────────────────────── */
+  .banner-auditor {
+    background: #F5F3FF;
+    border-bottom: 2px solid #8B5CF6;
+    color: #5B21B6;
+  }
+  .banner-impersonate {
+    background: #FEF9C3;
+    border-bottom: 2px solid #EAB308;
+    color: #713F12;
+  }
+}
+
+/* ── Reduced motion — turn off all non-essential animation ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Leaflet fixes ──────────────────────────────────────────────────── */
 .leaflet-container { width: 100%; height: 100%; z-index: 0; }
+
+/* ── Vehicle marker animation (used by LiveMap divIcon) ─────────────── */
+@keyframes lm-ping {
+  0%   { transform: scale(0.5); opacity: 0.7; }
+  100% { transform: scale(2.4); opacity: 0;   }
+}
+.vehicle-marker-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: lm-ping 2s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vehicle-marker-pulse { animation: none; }
+}

@@ -9,6 +9,15 @@ import { reverseGeocode } from '@/lib/geocode';
 
 export { getLiveStatus, SPEED_THRESHOLD } from '@/lib/liveStatus';
 
+// ── Format how long ago a timestamp was ──────────────────────────────────────
+function formatAge(updatedAt: string): string {
+  const secs = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 1000);
+  if (secs < 10)  return 'just now';
+  if (secs < 60)  return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  return `${Math.floor(secs / 3600)}h ago`;
+}
+
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -19,7 +28,7 @@ L.Icon.Default.mergeOptions({
 type MapLayer = 'street' | 'satellite' | 'hybrid';
 
 const LAYERS: { id: MapLayer; icon: string; label: string }[] = [
-  { id: 'street',    icon: '🗺️', label: 'Street' },
+  { id: 'street',    icon: '🌑', label: 'Dark' },
   { id: 'satellite', icon: '🛰️', label: 'Satellite' },
   { id: 'hybrid',    icon: '🌍', label: 'Hybrid' },
 ];
@@ -149,16 +158,18 @@ function createIcon(status: string, plate: string, selected: boolean) {
   return L.divIcon({
     html: `
       <div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none">
-        <div style="background:white;border:2.5px solid ${color};color:${color};font-size:9px;font-weight:800;
-             padding:1px 6px;border-radius:5px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.2);letter-spacing:.5px">
+        <div style="background:rgba(10,18,40,0.85);border:1.5px solid ${color};color:${color};font-size:9px;font-weight:800;
+             padding:1px 6px;border-radius:5px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4);letter-spacing:.5px;
+             backdrop-filter:blur(4px)">
           ${plate.replace(/\s+/g, '').slice(-8)}
         </div>
         <div style="position:relative;width:${dot + 10}px;height:${dot + 10}px;display:flex;align-items:center;justify-content:center">
-          ${pulse ? `<div style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:.2;animation:lm-ping 1.5s ease-out infinite"></div>` : ''}
-          <div style="width:${dot}px;height:${dot}px;background:${color};border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.25)"></div>
+          ${pulse ? `<div class="vehicle-marker-pulse" style="border:2px solid ${color};background:${color}10"></div>` : ''}
+          <div style="width:${dot}px;height:${dot}px;background:${color};border:2.5px solid rgba(10,18,40,0.9);border-radius:50%;
+               box-shadow:0 0 ${pulse ? 10 : 4}px 2px ${color}60;
+               transition:background 240ms ease,box-shadow 240ms ease"></div>
         </div>
       </div>
-      <style>@keyframes lm-ping{0%{transform:scale(1);opacity:.3}100%{transform:scale(2.5);opacity:0}}</style>
     `,
     className: '',
     iconSize:   [60, selected ? 42 : 34],
@@ -270,15 +281,16 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
-      {/* Legend — top-right */}
+      {/* Legend — top-right, dark-themed */}
       <div style={{
         position: 'absolute', top: 12, right: 12, zIndex: 1000,
-        background: 'white', borderRadius: 10, padding: '10px 14px',
-        boxShadow: '0 2px 12px rgba(0,0,0,.15)', fontSize: 11,
-        display: 'flex', flexDirection: 'column', gap: 5, minWidth: 160,
-        border: '1px solid #e5e7eb',
+        background: 'rgba(10,18,40,0.88)', borderRadius: 10, padding: '10px 14px',
+        boxShadow: '0 4px 20px rgba(0,0,0,.5)', fontSize: 11,
+        display: 'flex', flexDirection: 'column', gap: 5, minWidth: 170,
+        border: '1px solid rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(8px)',
       }}>
-        <div style={{ fontWeight: 700, color: '#111', fontSize: 12 }}>
+        <div style={{ fontWeight: 700, color: '#fff', fontSize: 12 }}>
           {valid.length} vehicle{valid.length !== 1 ? 's' : ''} on map
         </div>
         {[
@@ -288,14 +300,47 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
         ].map(({ color, label }) => (
           <div key={label} style={{ color, fontWeight: 600 }}>{label}</div>
         ))}
-        <div style={{ color: '#9ca3af', fontSize: 9, borderTop: '1px solid #f3f4f6', paddingTop: 4, marginTop: 2 }}>
+        <div style={{ color: '#6b7280', fontSize: 9, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 4, marginTop: 2 }}>
           Live · updates every 2s
         </div>
       </div>
 
       <MapContainer center={center} zoom={13} maxZoom={21} style={{ width: '100%', height: '100%' }} zoomControl>
         {/* Tile layers — switch instantly via React state */}
-        <ActiveTiles layer={mapLayer} />
+        {mapLayer === 'street' && (
+          <TileLayer
+            key="dark"
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+            maxZoom={21}
+            maxNativeZoom={19}
+          />
+        )}
+        {mapLayer === 'satellite' && (
+          <TileLayer
+            key="satellite"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            attribution="Tiles &copy; Esri &mdash; Esri, Maxar, GeoEye, Earthstar Geographics"
+            maxZoom={21}
+            maxNativeZoom={18}
+          />
+        )}
+        {mapLayer === 'hybrid' && (
+          <>
+            <TileLayer
+              key="hybrid-sat"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution="Tiles &copy; Esri"
+              maxZoom={21} maxNativeZoom={18} zIndex={1}
+            />
+            <TileLayer
+              key="hybrid-labels"
+              url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+              attribution=""
+              maxZoom={21} maxNativeZoom={19} zIndex={2} opacity={0.8}
+            />
+          </>
+        )}
 
         {/* Fly to searched location */}
         <FlyTo coords={flyToCoords} />
@@ -351,15 +396,21 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
                         ['Lat',      pos[0].toFixed(6)],
                         ['Lon',      pos[1].toFixed(6)],
                       ] as [string, string][]).map(([label, val]) => (
-                        <div key={label} style={{ background: '#f9fafb', borderRadius: 6, padding: '5px 8px' }}>
-                          <div style={{ color: '#9ca3af', fontSize: 10 }}>{label}</div>
-                          <div style={{ fontWeight: 600, fontSize: 12 }}>{val}</div>
+                        <div key={label} style={{ background: '#f1f5f9', borderRadius: 6, padding: '5px 8px' }}>
+                          <div style={{ color: '#94a3b8', fontSize: 10 }}>{label}</div>
+                          <div style={{ fontWeight: 600, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{val}</div>
                         </div>
                       ))}
                     </div>
-                    <p style={{ color: '#9ca3af', fontSize: 10, marginTop: 6, textAlign: 'right' }}>
-                      {formatDate(loc.updatedAt)}
-                    </p>
+                    {/* Last seen + accuracy freshness */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 6, borderTop: '1px solid #e2e8f0' }}>
+                      <span style={{ color: '#94a3b8', fontSize: 10 }}>
+                        🕐 {formatAge(loc.updatedAt)}
+                      </span>
+                      <span style={{ color: '#94a3b8', fontSize: 10 }}>
+                        {loc.accuracy ? `±${loc.accuracy.toFixed(0)}m` : ''} · {formatDate(loc.updatedAt)}
+                      </span>
+                    </div>
                   </div>
                 </Popup>
               </Marker>

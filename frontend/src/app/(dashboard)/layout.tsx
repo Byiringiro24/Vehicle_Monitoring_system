@@ -1,10 +1,17 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/authStore';
 import { canAccess, ROLE_HOME, type AppRole } from '@/lib/roles';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
+
+const pageVariants = {
+  hidden: { opacity: 0, y: 6 },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
+  exit:   { opacity: 0,       transition: { duration: 0.1 } },
+};
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -70,7 +77,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
-          {children}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={pathname}
+              variants={pageVariants}
+              initial="hidden"
+              animate="show"
+              exit="exit"
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>
