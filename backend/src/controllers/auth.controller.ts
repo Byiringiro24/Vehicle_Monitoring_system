@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { loginUser, refreshAccessToken, logoutUser } from '../services/auth.service';
-import { sendPasswordResetEmail, sendPasswordChangedEmail, sendWelcomeEmail } from '../services/email.service';
+import { sendPasswordResetEmail, sendPasswordChangedEmail, sendWelcomeEmail, sendNewRegistrationAlert } from '../services/email.service';
 import { AuthenticatedRequest } from '../types';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
@@ -71,12 +71,88 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       logger.warn(`[AUTH] Welcome email failed: ${err.message}`)
     );
 
+    // Notify Super Admin about new pending registration
+    const superAdmin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' }, select: { email: true } });
+    if (superAdmin) {
+      sendNewRegistrationAlert(superAdmin.email, org.name, `${user.firstName} ${user.lastName}`, org.id)
+        .catch(err => logger.warn(`[AUTH] Super Admin notification failed: ${err.message}`));
+    }
+
     // Auto-login after registration
     const { loginUser: doLogin } = await import('../services/auth.service');
     const result = await doLogin(email, password);
 
     logger.info(`[AUTH] New organization registered (PENDING approval): ${org.name} (${org.id})`);
     res.status(201).json({ ...result, orgStatus: 'PENDING' });
+  } catch (err) { next(err); }
+}
+
+// ── Register personal — no org required ──────────────────────────────────────
+// Creates a standalone user with no organizationId.
+// intendedRole: 'owner' | 'driver' | 'customer' — stored for onboarding flow.
+export async function registerPersonal(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { firstName, lastName, email, password, phone, intendedRole } = req.body;
+
+    if (!firstName || !lastName || !email || !password) {
+      throw new AppError(400, 'firstName, lastName, email and password are required');
+    }
+    if (password.length < 8) throw new AppError(400, 'Password must be at least 8 characters');
+
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (existing) throw new AppError(409, 'An account with this email already exists');
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Map intendedRole to a UserRole — personal users get VIEWER by default
+    // until they complete onboarding and get assigned to an org/fleet
+    const roleMap: Record<string, string> = {
+      owner:    'VIEWER',
+      driver:   'DRIVER',
+      customer: 'VIEWER',
+    };
+    const userRole = roleMap[intendedRole] ?? 'VIEWER';
+
+    // Personal users need a "personal" org — or we allow null organizationId.
+    // Current schema requires organizationId so we create a placeholder personal org.
+    const slug = `personal-${email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')}-${crypto.randomBytes(3).toString('hex')}`;
+
+    const { user } = await prisma.$transaction(async tx => {
+      // Create a minimal personal org (not shown in platform list, status=ACTIVE)
+      const org = await tx.organization.create({
+        data: {
+          name:   `${firstName} ${lastName}`,
+          slug,
+          country: 'Rwanda',
+          currency: 'RWF',
+          email:  email.toLowerCase(),
+          status: 'ACTIVE',  // personal accounts are immediately active
+        },
+      });
+      const user = await tx.user.create({
+        data: {
+          email:         email.toLowerCase(),
+          passwordHash,
+          firstName:     firstName.trim(),
+          lastName:      lastName.trim(),
+          phone:         phone ?? null,
+          role:          userRole as any,
+          organizationId: org.id,
+        },
+      });
+      return { user, org };
+    });
+
+    // Send welcome email
+    sendWelcomeEmail(user.email, user.firstName).catch(err =>
+      logger.warn(`[AUTH] Welcome email failed: ${err.message}`)
+    );
+
+    // Auto-login
+    const result = await loginUser(email, password);
+    // Store intended role in metadata (used by onboarding page)
+    logger.info(`[AUTH] Personal account registered: ${email} (${intendedRole})`);
+    res.status(201).json({ ...result, intendedRole: intendedRole ?? null });
   } catch (err) { next(err); }
 }
 

@@ -26,34 +26,41 @@ export const ROLE_HOME: Record<AppRole, string> = {
 // ── Nav items per role ────────────────────────────────────────────────────────
 // Format: { href, label, icon (name), allowedRoles }
 // allowedRoles: undefined = all authenticated users; array = only those roles
-export const NAV_ITEMS = [
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  roles?: AppRole[];
+};
+
+export const NAV_ITEMS: NavItem[] = [
   // ── Platform Admin (SUPER_ADMIN only) ──────────────────────────────────────
-  { href: '/platform',    label: 'Platform',      icon: 'Globe',         roles: ['SUPER_ADMIN'] },
+  { href: '/platform',    label: 'Platform',      icon: 'Globe',            roles: ['SUPER_ADMIN'] },
 
   // ── Operations ─────────────────────────────────────────────────────────────
   { href: '/dashboard',   label: 'Dashboard',     icon: 'LayoutDashboard' },
-  { href: '/map',         label: 'Live Map',       icon: 'Map',           roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','VIEWER'] },
-  { href: '/vehicles',    label: 'Vehicles',       icon: 'Truck',         roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','VIEWER'] },
-  { href: '/drivers',     label: 'Drivers',        icon: 'UserCheck',     roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
-  { href: '/alerts',      label: 'Alerts',         icon: 'Bell',          roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','VIEWER'] },
-  { href: '/geofences',   label: 'Geofences',      icon: 'MapPin',        roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
-  { href: '/maintenance', label: 'Maintenance',    icon: 'Wrench',        roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
-  { href: '/telemetry',   label: 'Telemetry',      icon: 'Activity',      roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
+  { href: '/map',         label: 'Live Map',       icon: 'Map',              roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','VIEWER'] },
+  { href: '/vehicles',    label: 'Vehicles',       icon: 'Truck',            roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','VIEWER'] },
+  { href: '/drivers',     label: 'Drivers',        icon: 'UserCheck',        roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
+  { href: '/alerts',      label: 'Alerts',         icon: 'Bell',             roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','VIEWER'] },
+  { href: '/geofences',   label: 'Geofences',      icon: 'MapPin',           roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
+  { href: '/maintenance', label: 'Maintenance',    icon: 'Wrench',           roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
+  { href: '/telemetry',   label: 'Telemetry',      icon: 'Activity',         roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER'] },
 
   // ── Business / Finance ─────────────────────────────────────────────────────
-  { href: '/customers',   label: 'Customers',      icon: 'UserCheck',     roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
-  { href: '/agreements',  label: 'Agreements',     icon: 'FileText',      roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
-  { href: '/finance',     label: 'Finance',        icon: 'DollarSign',    roles: ['SUPER_ADMIN','ADMIN','FINANCE_MANAGER'] },
-  { href: '/reports',     label: 'Reports',        icon: 'BarChart3',     roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
+  { href: '/customers',   label: 'Customers',      icon: 'UserCheck',        roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
+  { href: '/agreements',  label: 'Agreements',     icon: 'FileText',         roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
+  { href: '/finance',     label: 'Finance',        icon: 'DollarSign',       roles: ['SUPER_ADMIN','ADMIN','FINANCE_MANAGER'] },
+  { href: '/reports',     label: 'Reports',        icon: 'BarChart3',        roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
 
   // ── Compliance ─────────────────────────────────────────────────────────────
-  { href: '/documents',   label: 'Documents',      icon: 'FileText',      roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
+  { href: '/documents',   label: 'Documents',      icon: 'FileText',         roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
 
   // ── Administration ─────────────────────────────────────────────────────────
-  { href: '/users',       label: 'Users',          icon: 'Users',         roles: ['SUPER_ADMIN','ADMIN'] },
-  { href: '/settings',    label: 'Settings',      icon: 'Settings' },
-  { href: '/support',     label: 'Support',       icon: 'HeadphonesIcon' },
-] as const;
+  { href: '/users',       label: 'Users',          icon: 'Users',            roles: ['SUPER_ADMIN','ADMIN'] },
+  { href: '/settings',    label: 'Settings',       icon: 'Settings' },
+  { href: '/support',     label: 'Support',        icon: 'Headphones' },
+];
 
 // ── Page-level access rules ───────────────────────────────────────────────────
 // Pages not listed here are accessible to all authenticated users.

@@ -40,13 +40,14 @@ apiClient.interceptors.response.use(
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authApi = {
-  register:       (data: object) => apiClient.post('/auth/register', data).then(r => r.data),
-  login:          (email: string, password: string) => apiClient.post('/auth/login', { email, password }).then(r => r.data),
-  me:             () => apiClient.get('/auth/me').then(r => r.data),
-  logout:         (refreshToken: string) => apiClient.post('/auth/logout', { refreshToken }),
-  changePassword: (data: object) => apiClient.post('/auth/change-password', data).then(r => r.data),
-  forgotPassword: (email: string) => apiClient.post('/auth/forgot-password', { email }).then(r => r.data),
-  resetPassword:  (token: string, newPassword: string) =>
+  register:         (data: object) => apiClient.post('/auth/register', data).then(r => r.data),
+  registerPersonal: (data: object) => apiClient.post('/auth/register-personal', data).then(r => r.data),
+  login:            (email: string, password: string) => apiClient.post('/auth/login', { email, password }).then(r => r.data),
+  me:               () => apiClient.get('/auth/me').then(r => r.data),
+  logout:           (refreshToken: string) => apiClient.post('/auth/logout', { refreshToken }),
+  changePassword:   (data: object) => apiClient.post('/auth/change-password', data).then(r => r.data),
+  forgotPassword:   (email: string) => apiClient.post('/auth/forgot-password', { email }).then(r => r.data),
+  resetPassword:    (token: string, newPassword: string) =>
     apiClient.post('/auth/reset-password', { token, newPassword }).then(r => r.data),
 };
 
@@ -173,6 +174,9 @@ export const userApi = {
   listAll:       () => apiClient.get('/users/all').then(r => r.data),
   create:        (data: object)    => apiClient.post('/users', data).then(r => r.data),
   update:        (id: string, data: object) => apiClient.put(`/users/${id}`, data).then(r => r.data),
+  // Invite by email — creates user if new, links role if existing
+  invite:        (data: { email: string; role: string; firstName?: string; lastName?: string }) =>
+    apiClient.post('/users/invite', data).then(r => r.data),
   // SUPER_ADMIN only: force-reset any user's password (no current password needed)
   resetPassword: (id: string, newPassword: string) =>
     apiClient.post(`/users/${id}/reset-password`, { newPassword }).then(r => r.data),

@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
 import { prisma } from '../config/database';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { sendInvitationEmail } from '../services/email.service';
+import logger from '../utils/logger';
 
 const router = Router();
 router.use(authenticate);
@@ -146,6 +149,87 @@ router.patch('/:id/status', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, 
     }
     res.json(user);
   } catch (err) { next(err); }
+});
+
+// ── POST /users/invite — ADMIN/SUPER_ADMIN: invite user by email ──────────────
+// If user already exists → add membership; if new → create with temp password + send setup link
+router.post('/invite', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) => {
+  try {
+    const { email, role, firstName, lastName } = req.body;
+    if (!email || !role) {
+      res.status(400).json({ error: 'email and role are required' });
+      return;
+    }
+    if (role === 'SUPER_ADMIN') {
+      res.status(403).json({ error: 'SUPER_ADMIN role cannot be invited' });
+      return;
+    }
+
+    const appUrl = process.env.APP_URL ?? 'https://articvms.ddnsgeek.com';
+    const orgId  = req.user.organizationId;
+    const org    = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+
+    // Check if user already exists
+    let targetUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+
+    if (targetUser) {
+      // User exists — update their org if they don't already belong to this org
+      if (targetUser.organizationId !== orgId) {
+        await prisma.user.update({
+          where: { id: targetUser.id },
+          data:  { organizationId: orgId, role: role as any },
+        });
+      } else {
+        // Same org — just update role
+        await prisma.user.update({
+          where: { id: targetUser.id },
+          data:  { role: role as any },
+        });
+      }
+      // Send notification email
+      sendInvitationEmail(targetUser.email, targetUser.firstName, org?.name ?? 'ARTIC VMS', role, `${appUrl}/login`, null)
+        .catch(e => logger.warn(`[INVITE] Email failed: ${e.message}`));
+      logger.info(`[INVITE] Existing user ${email} added to org ${orgId} with role ${role}`);
+      res.json({ message: `${targetUser.firstName} has been added to your organization.`, type: 'existing' });
+    } else {
+      // New user — generate temp password and setup token
+      const rawToken   = crypto.randomBytes(32).toString('hex');
+      const tokenHash  = crypto.createHash('sha256').update(rawToken).digest('hex');
+      const expiresAt  = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72 hours
+      const tempPass   = crypto.randomBytes(12).toString('hex');
+      const passwordHash = await bcrypt.hash(tempPass, 12);
+
+      await prisma.$transaction(async tx => {
+        const newUser = await tx.user.create({
+          data: {
+            email:         email.toLowerCase(),
+            passwordHash,
+            firstName:     firstName ?? email.split('@')[0],
+            lastName:      lastName  ?? '',
+            role:          role as any,
+            organizationId: orgId,
+          },
+        });
+        // Reuse password reset tokens table for setup link
+        await tx.passwordResetToken.create({
+          data: { tokenHash, userId: newUser.id, expiresAt },
+        });
+        return newUser;
+      });
+
+      const setupUrl = `${appUrl}/reset-password?token=${rawToken}&setup=1`;
+      sendInvitationEmail(email, firstName ?? email.split('@')[0], org?.name ?? 'ARTIC VMS', role, setupUrl, rawToken)
+        .catch(e => logger.warn(`[INVITE] Email failed: ${e.message}`));
+      logger.info(`[INVITE] New user invited: ${email} to org ${orgId} as ${role}`);
+      res.status(201).json({ message: `Invitation sent to ${email}. They'll receive an email to set their password.`, type: 'new' });
+    }
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      res.status(409).json({ error: 'This email is already in use' });
+      return;
+    }
+    next(err);
+  }
 });
 
 export default router;

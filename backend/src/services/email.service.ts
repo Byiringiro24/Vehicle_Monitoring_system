@@ -254,6 +254,68 @@ export async function sendVehicleOfflineEmail(
   await send(to, `🚨 Vehicle Offline: ${vehicle.licensePlate}`, layout('Vehicle Offline', body));
 }
 
+// ── Invitation email ──────────────────────────────────────────────────────────
+export async function sendInvitationEmail(
+  to: string,
+  recipientName: string,
+  orgName: string,
+  role: string,
+  actionUrl: string,
+  setupToken: string | null,
+): Promise<void> {
+  const isNew = setupToken !== null;
+  const roleLabel = role.replace(/_/g, ' ');
+  const body = `
+    <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">
+      You've been invited to join ${orgName}
+    </h2>
+    <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Hi ${recipientName}, you have been invited to join <strong>${orgName}</strong> on ARTIC VMS
+      with the role of <strong>${roleLabel}</strong>.
+    </p>
+    ${isNew ? `
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0;color:#1e40af;font-size:13px;">
+        <strong>New account created for you.</strong> Click the button below to set your password and activate your account.
+        This link expires in <strong>72 hours</strong>.
+      </p>
+    </div>` : `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0;color:#166534;font-size:13px;">
+        <strong>Your existing account has been linked.</strong> Sign in with your current credentials to access ${orgName}.
+      </p>
+    </div>`}
+    ${btn(actionUrl, isNew ? 'Set Password & Activate Account' : 'Sign In to Dashboard')}
+    <p style="color:#94a3b8;font-size:13px;margin:16px 0 0;">
+      If you did not expect this invitation, you can ignore this email.
+    </p>`;
+  const subject = isNew
+    ? `You've been invited to ${orgName} — Set up your account`
+    : `You've been added to ${orgName} on ARTIC VMS`;
+  await send(to, subject, layout(subject, body));
+}
+
+// ── New registration notification (to Super Admin) ────────────────────────────
+export async function sendNewRegistrationAlert(
+  adminEmail: string,
+  orgName: string,
+  adminName: string,
+  orgId: string,
+): Promise<void> {
+  const appUrl = process.env.APP_URL ?? 'https://articvms.ddnsgeek.com';
+  const body = `
+    <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">🏢 New Organization Registration</h2>
+    <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      A new organization has registered and is awaiting your approval.
+    </p>
+    <table width="100%" cellpadding="12" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:24px 0;">
+      <tr><td style="color:#475569;font-size:14px;"><strong>Organization:</strong></td><td style="color:#1e293b;font-size:14px;">${orgName}</td></tr>
+      <tr style="background:#f1f5f9;"><td style="color:#475569;font-size:14px;"><strong>Admin contact:</strong></td><td style="color:#1e293b;font-size:14px;">${adminName}</td></tr>
+    </table>
+    ${btn(`${appUrl}/platform`, 'Review Registration', '#059669')}`;
+  await send(adminEmail, `New registration: ${orgName} — Approval required`, layout('New Registration', body));
+}
+
 // ── Verify SMTP config (called at startup) ────────────────────────────────────
 export async function verifySmtpConnection(): Promise<boolean> {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
