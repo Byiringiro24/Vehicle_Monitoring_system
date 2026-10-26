@@ -263,3 +263,21 @@ export const agreementApi = {
   payments:       (id: string)   => apiClient.get(`/agreements/${id}/payments`).then(r => r.data),
   recordPayment:  (id: string, data: object) => apiClient.post(`/agreements/${id}/payments`, data).then(r => r.data),
 };
+
+// ─── Support (contacts + tickets + org approval) ──────────────────────────────
+export const supportApi = {
+  // Public — no auth needed
+  contacts:       () => apiClient.get('/support/contacts').then(r => r.data),
+  submitTicket:   (data: object) => apiClient.post('/support/tickets', data).then(r => r.data),
+
+  // Authenticated
+  myTickets:      () => apiClient.get('/support/my-tickets').then(r => r.data),
+
+  // Super Admin only
+  allTickets:     (params?: object) => apiClient.get('/support/admin/tickets', { params }).then(r => r.data),
+  updateTicket:   (id: string, data: object) => apiClient.patch(`/support/admin/tickets/${id}`, data).then(r => r.data),
+  pendingOrgs:    () => apiClient.get('/support/admin/pending-orgs').then(r => r.data),
+  approveOrg:     (id: string, planId?: string) => apiClient.post(`/support/admin/orgs/${id}/approve`, { planId }).then(r => r.data),
+  rejectOrg:      (id: string, reason: string) => apiClient.post(`/support/admin/orgs/${id}/reject`, { reason }).then(r => r.data),
+  updateContacts: (contacts: object[]) => apiClient.put('/support/admin/contacts', contacts).then(r => r.data),
+};

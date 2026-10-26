@@ -40,6 +40,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
           country:  country  ?? 'Rwanda',
           currency: currency ?? 'RWF',
           email:    email.toLowerCase(),
+          status:   'PENDING',   // awaits Super Admin approval
         },
       });
       const user = await tx.user.create({
@@ -74,8 +75,8 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const { loginUser: doLogin } = await import('../services/auth.service');
     const result = await doLogin(email, password);
 
-    logger.info(`[AUTH] New organization registered: ${org.name} (${org.id})`);
-    res.status(201).json(result);
+    logger.info(`[AUTH] New organization registered (PENDING approval): ${org.name} (${org.id})`);
+    res.status(201).json({ ...result, orgStatus: 'PENDING' });
   } catch (err) { next(err); }
 }
 
@@ -112,7 +113,7 @@ export async function me(req: AuthenticatedRequest, res: Response, next: NextFun
       select: {
         id: true, email: true, firstName: true, lastName: true,
         role: true, phone: true, avatarUrl: true, lastLoginAt: true,
-        organization: { select: { id: true, name: true, slug: true } },
+        organization: { select: { id: true, name: true, slug: true, status: true } },
       },
     });
     if (!user) throw new AppError(404, 'User not found');

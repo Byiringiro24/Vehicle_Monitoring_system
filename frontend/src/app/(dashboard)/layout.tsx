@@ -13,18 +13,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Not logged in → send to login
     if (!isAuthenticated) {
       router.replace('/login');
       return;
     }
-
     if (!user) return;
 
-    const role = user.role as AppRole;
+    const role   = user.role as AppRole;
+    const status = user.organization?.status;
 
-    // Role cannot access this page → redirect to their home
-    if (!canAccess(role, pathname)) {
+    // PENDING orgs see only the pending-approval screen
+    if (status === 'PENDING' && pathname !== '/pending-approval') {
+      router.replace('/pending-approval');
+      return;
+    }
+
+    // REJECTED orgs see only the rejection screen
+    if (status === 'REJECTED' && pathname !== '/rejected') {
+      router.replace('/rejected');
+      return;
+    }
+
+    // Role cannot access this page → redirect to role home
+    if (status === 'ACTIVE' && !canAccess(role, pathname)) {
       const home = ROLE_HOME[role] ?? '/dashboard';
       router.replace(home);
     }

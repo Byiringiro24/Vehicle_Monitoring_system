@@ -7,7 +7,7 @@ interface User {
   firstName: string;
   lastName: string;
   role: string;
-  organization: { id: string; name: string; slug: string };
+  organization: { id: string; name: string; slug: string; status?: string };
 }
 
 interface AuthState {

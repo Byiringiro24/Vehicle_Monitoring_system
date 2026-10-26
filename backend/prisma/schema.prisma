@@ -212,20 +212,22 @@ enum AlertType {
 // =============================================================================
 
 model Organization {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   name        String
-  slug        String   @unique
+  slug        String    @unique
   description String?
   logoUrl     String?
   address     String?
   phone       String?
   email       String?
-  country     String   @default("Rwanda")
-  currency    String   @default("RWF")
+  country     String    @default("Rwanda")
+  currency    String    @default("RWF")
   taxId       String?
   website     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      OrgStatus @default(ACTIVE)   // PENDING until Super Admin approves
+  rejectionReason String?                  // set when status = REJECTED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   users         User[]
   fleets        Fleet[]
@@ -1589,4 +1591,67 @@ model PaymentRecord {
   @@index([agreementId])
   @@index([organizationId])
   @@map("payment_records")
+}
+
+// =============================================================================
+//  REGISTRATION APPROVAL, SUPPORT CONTACTS & TICKETS
+// =============================================================================
+
+enum OrgStatus {
+  PENDING    // just registered, awaiting Super Admin approval
+  ACTIVE     // approved and fully operational
+  REJECTED   // rejected by Super Admin
+  SUSPENDED  // was active, now suspended
+}
+
+// ─── Support Contact — configured by Super Admin, visible to all ──────────────
+model SupportContact {
+  id        String   @id @default(uuid())
+  platform  String   // e.g. "WhatsApp", "Email", "Phone", "Instagram", "TikTok"
+  value     String   // e.g. "+250787585826", "byiringirofabrice6@gmail.com"
+  label     String?  // optional display label e.g. "Call or WhatsApp"
+  icon      String?  // icon name hint for frontend e.g. "whatsapp", "mail"
+  url       String?  // optional link e.g. "https://wa.me/250787585826"
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("support_contacts")
+}
+
+// ─── Support Ticket — submitted by any user, reviewed by Super Admin ─────────
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model SupportTicket {
+  id             String         @id @default(uuid())
+  organizationId String?        // null = from a pending/unattached user
+  userId         String?        // who submitted it
+  userEmail      String         // always stored so we can reply
+  userName       String
+  subject        String
+  message        String
+  status         TicketStatus   @default(OPEN)
+  priority       TicketPriority @default(MEDIUM)
+  category       String         @default("general") // general | billing | technical | feature
+  adminNotes     String?        // internal notes by Super Admin
+  resolvedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("support_tickets")
 }

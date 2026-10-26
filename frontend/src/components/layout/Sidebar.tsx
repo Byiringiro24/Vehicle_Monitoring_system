@@ -9,13 +9,13 @@ import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User, X,
   DollarSign, Activity, ChevronRight, Wrench, Globe, FileText, Handshake,
+  HeadphonesIcon,
 } from 'lucide-react';
 
-// Map icon name → Lucide component
 const ICONS: Record<string, React.ElementType> = {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User,
-  DollarSign, Activity, Wrench, Globe, FileText, Handshake,
+  DollarSign, Activity, Wrench, Globe, FileText, Handshake, HeadphonesIcon,
 };
 
 interface SidebarProps { onClose?: () => void; }

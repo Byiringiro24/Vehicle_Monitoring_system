@@ -51,7 +51,8 @@ export const NAV_ITEMS = [
 
   // ── Administration ─────────────────────────────────────────────────────────
   { href: '/users',       label: 'Users',          icon: 'Users',         roles: ['SUPER_ADMIN','ADMIN'] },
-  { href: '/settings',    label: 'Settings',       icon: 'Settings' },
+  { href: '/settings',    label: 'Settings',      icon: 'Settings' },
+  { href: '/support',     label: 'Support',       icon: 'HeadphonesIcon' },
 ] as const;
 
 // ── Page-level access rules ───────────────────────────────────────────────────
