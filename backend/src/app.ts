@@ -30,6 +30,8 @@ import supportRoutes       from './routes/support.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
+const app = express();
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
   .split(',')
