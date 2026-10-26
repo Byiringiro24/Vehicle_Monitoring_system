@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -100,7 +100,7 @@ function Input({ icon: Icon, type = 'text', ...props }: any) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function RegisterPage() {
+function RegisterForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const { setAuth }  = useAuthStore();
@@ -480,5 +480,18 @@ export default function RegisterPage() {
         </p>
       ) : null}
     </div>
+  );
+}
+
+// Wrap in Suspense — required by Next.js 14 for useSearchParams() during SSG
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }
