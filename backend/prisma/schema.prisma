@@ -18,6 +18,11 @@ enum UserRole {
   DRIVER
   VIEWER
   FINANCE_MANAGER
+  DISPATCHER
+  HR_MANAGER
+  MECHANIC
+  COMPLIANCE_OFFICER
+  RENTAL_MANAGER
 }
 
 // ─── Vehicle ──────────────────────────────────────────────────────────────────
@@ -465,6 +470,9 @@ model Vehicle {
   docPurchaseInvoice   String?
   docPhoto             String?
   docOwnershipCert     String?
+
+  // Owner (for personal owner portal — independent of org ownership)
+  ownerUserId     String?        // links to User who privately owns this vehicle
 
   odometer        Float          @default(0)
   engineHours     Float          @default(0)

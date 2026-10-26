@@ -28,7 +28,7 @@ L.Icon.Default.mergeOptions({
 type MapLayer = 'street' | 'satellite' | 'hybrid';
 
 const LAYERS: { id: MapLayer; icon: string; label: string }[] = [
-  { id: 'street',    icon: '🌑', label: 'Dark' },
+  { id: 'street',    icon: '🗺️', label: 'Street' },
   { id: 'satellite', icon: '🛰️', label: 'Satellite' },
   { id: 'hybrid',    icon: '🌍', label: 'Hybrid' },
 ];
@@ -281,16 +281,15 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
-      {/* Legend — top-right, dark-themed */}
+      {/* Legend — top-right */}
       <div style={{
         position: 'absolute', top: 12, right: 12, zIndex: 1000,
-        background: 'rgba(10,18,40,0.88)', borderRadius: 10, padding: '10px 14px',
-        boxShadow: '0 4px 20px rgba(0,0,0,.5)', fontSize: 11,
-        display: 'flex', flexDirection: 'column', gap: 5, minWidth: 170,
-        border: '1px solid rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(8px)',
+        background: 'white', borderRadius: 10, padding: '10px 14px',
+        boxShadow: '0 2px 12px rgba(0,0,0,.15)', fontSize: 11,
+        display: 'flex', flexDirection: 'column', gap: 5, minWidth: 160,
+        border: '1px solid #e5e7eb',
       }}>
-        <div style={{ fontWeight: 700, color: '#fff', fontSize: 12 }}>
+        <div style={{ fontWeight: 700, color: '#111', fontSize: 12 }}>
           {valid.length} vehicle{valid.length !== 1 ? 's' : ''} on map
         </div>
         {[
@@ -300,7 +299,7 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
         ].map(({ color, label }) => (
           <div key={label} style={{ color, fontWeight: 600 }}>{label}</div>
         ))}
-        <div style={{ color: '#6b7280', fontSize: 9, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 4, marginTop: 2 }}>
+        <div style={{ color: '#9ca3af', fontSize: 9, borderTop: '1px solid #f3f4f6', paddingTop: 4, marginTop: 2 }}>
           Live · updates every 2s
         </div>
       </div>
@@ -309,9 +308,9 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
         {/* Tile layers — switch instantly via React state */}
         {mapLayer === 'street' && (
           <TileLayer
-            key="dark"
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+            key="street"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             maxZoom={21}
             maxNativeZoom={19}
           />
@@ -335,9 +334,9 @@ export default function LiveMap({ locations, selectedId, onSelect, connectedDevi
             />
             <TileLayer
               key="hybrid-labels"
-              url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution=""
-              maxZoom={21} maxNativeZoom={19} zIndex={2} opacity={0.8}
+              maxZoom={21} maxNativeZoom={19} zIndex={2} opacity={0.55}
             />
           </>
         )}

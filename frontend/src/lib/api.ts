@@ -285,3 +285,22 @@ export const supportApi = {
   rejectOrg:      (id: string, reason: string) => apiClient.post(`/support/admin/orgs/${id}/reject`, { reason }).then(r => r.data),
   updateContacts: (contacts: object[]) => apiClient.put('/support/admin/contacts', contacts).then(r => r.data),
 };
+
+// ─── Trips / Dispatch ────────────────────────────────────────────────────────
+export const tripApi = {
+  list:   (params?: object) => apiClient.get('/trips', { params }).then(r => r.data),
+  get:    (id: string)      => apiClient.get(`/trips/${id}`).then(r => r.data),
+  create: (data: object)    => apiClient.post('/trips', data).then(r => r.data),
+  assign: (id: string, data: { driverId?: string; vehicleId?: string }) =>
+    apiClient.patch(`/trips/${id}/assign`, data).then(r => r.data),
+  updateStatus: (id: string, status: string, notes?: string) =>
+    apiClient.patch(`/trips/${id}/status`, { status, notes }).then(r => r.data),
+  cancel: (id: string) => apiClient.delete(`/trips/${id}`).then(r => r.data),
+};
+
+// ─── Owner portal ─────────────────────────────────────────────────────────────
+export const ownerApi = {
+  vehicles:   () => apiClient.get('/owner/vehicles').then(r => r.data),
+  statements: (months?: number) => apiClient.get('/owner/statements', { params: { months } }).then(r => r.data),
+  claim:      (vehicleId: string) => apiClient.patch(`/owner/vehicles/${vehicleId}/claim`).then(r => r.data),
+};

@@ -9,15 +9,16 @@ import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User, X,
   DollarSign, Activity, ChevronRight, Wrench, Globe, FileText, Handshake,
-  Headphones, Lock, Ban,
+  Headphones, Lock, Ban, Navigation, Hammer, ShieldCheck,
+  CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
 } from 'lucide-react';
 
 const ICONS: Record<string, React.ElementType> = {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User,
   DollarSign, Activity, Wrench, Globe, FileText, Handshake,
-  Headphones,
-  // aliases that may appear in roles.ts
+  Headphones, Navigation, Hammer, ShieldCheck,
+  CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
   HeadphonesIcon: Headphones,
 };
 
