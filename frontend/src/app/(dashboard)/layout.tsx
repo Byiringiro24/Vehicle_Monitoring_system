@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { canAccess, ROLE_HOME, type AppRole } from '@/lib/roles';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
+import { authApi } from '@/lib/api';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 6 },
@@ -14,10 +15,26 @@ const pageVariants = {
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, setAuth, accessToken, refreshToken } = useAuthStore();
   const router   = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ── Refresh user from server on every app load ─────────────────────────────
+  // This keeps org.status fresh so PENDING/REJECTED redirects work correctly
+  // even when the status was changed by an admin while the user had a cached session.
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) return;
+    authApi.me().then((fresh) => {
+      if (fresh && accessToken && refreshToken) {
+        setAuth(fresh, accessToken, refreshToken);
+      }
+    }).catch(() => {
+      // /me failed (token expired) — the 401 interceptor in api.ts handles refresh
+    });
+    // Only run once on mount — not on every pathname change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {

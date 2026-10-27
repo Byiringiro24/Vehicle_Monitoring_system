@@ -9,7 +9,7 @@ import { JwtPayload } from '../types';
 export async function loginUser(email: string, password: string) {
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
-    include: { organization: { select: { id: true, name: true, slug: true } } },
+    include: { organization: { select: { id: true, name: true, slug: true, status: true } } },
   });
   if (!user || !user.isActive) throw new AppError(401, 'Invalid credentials');
 
@@ -32,7 +32,9 @@ export async function loginUser(email: string, password: string) {
     accessToken, refreshToken,
     user: {
       id: user.id, email: user.email, firstName: user.firstName,
-      lastName: user.lastName, role: user.role, organization: user.organization,
+      lastName: user.lastName, role: user.role,
+      phone: user.phone,
+      organization: user.organization,   // now includes status
     },
   };
 }
