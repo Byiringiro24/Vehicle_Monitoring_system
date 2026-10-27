@@ -11,6 +11,7 @@ import {
   DollarSign, Activity, ChevronRight, Wrench, Globe, FileText, Handshake,
   Headphones, Lock, Ban, Navigation, Hammer, ShieldCheck,
   CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
+  Bike, ShoppingBag,
 } from 'lucide-react';
 
 const ICONS: Record<string, React.ElementType> = {
@@ -19,6 +20,7 @@ const ICONS: Record<string, React.ElementType> = {
   DollarSign, Activity, Wrench, Globe, FileText, Handshake,
   Headphones, Navigation, Hammer, ShieldCheck,
   CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
+  Bike, ShoppingBag,
   HeadphonesIcon: Headphones,
 };
 

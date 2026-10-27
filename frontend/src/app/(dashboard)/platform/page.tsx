@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { platformApi, supportApi } from '@/lib/api';
+import { apiClient } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
 import { formatDate } from '@/lib/utils';
@@ -11,11 +12,13 @@ import {
   AlertTriangle, Search, X, ChevronRight, Activity, Globe,
   Clock, XCircle, MessageSquare, Headphones, Plus, Trash2, Save,
   Mail, Phone, MessageCircle, Instagram, Video,
+  BarChart3, FileText, Cpu, Database, Wifi, RefreshCw,
+  CheckCircle, Circle, Edit2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MetricCard } from '@/components/ui/MetricCard';
 
-type PlatformTab = 'companies' | 'pending' | 'tickets' | 'contacts';
+type PlatformTab = 'companies' | 'pending' | 'tickets' | 'contacts' | 'plans' | 'audit' | 'health';
 
 const STATUS_COLORS: Record<string, string> = {
   TRIAL:      'bg-blue-100 text-blue-800',
@@ -61,6 +64,10 @@ export default function PlatformPage() {
   const [editingContacts, setEditingContacts] = useState<any[]>([]);
   const [contactsEdited, setContactsEdited] = useState(false);
 
+  // Plans editor state
+  const [editingPlan, setEditingPlan] = useState<any>(null);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+
   // ── Guard ─────────────────────────────────────────────────────────────────
   if (user?.role !== 'SUPER_ADMIN') {
     return (
@@ -82,6 +89,19 @@ export default function PlatformPage() {
     queryFn:  supportApi.contacts,
     onSuccess: (d: any[]) => { if (!contactsEdited) setEditingContacts(d.map(c => ({ ...c }))); },
   } as any);
+
+  const { data: auditLogs = [] } = useQuery({
+    queryKey: ['platform-audit'],
+    queryFn:  () => platformApi.auditLogs({ limit: 100 }),
+    enabled:  tab === 'audit',
+  });
+
+  const { data: health, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
+    queryKey: ['platform-health'],
+    queryFn:  () => apiClient.get('/health/detailed').then(r => r.data).catch(() => null),
+    enabled:  tab === 'health',
+    refetchInterval: tab === 'health' ? 15000 : false,
+  });
 
   const orgs = orgsData?.data ?? [];
   const openTickets = (tickets as any[]).filter((t: any) => t.status === 'OPEN').length;
@@ -117,11 +137,27 @@ export default function PlatformPage() {
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
   });
 
+  const planMutation = useMutation({
+    mutationFn: (data: any) => data.id
+      ? platformApi.updatePlan(data.id, data)
+      : platformApi.createPlan(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['platform-plans'] });
+      toast.success('Plan saved');
+      setShowPlanModal(false);
+      setEditingPlan(null);
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
+  });
+
   const TABS: { id: PlatformTab; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'companies', label: 'Companies',    icon: <Building2 size={14} /> },
-    { id: 'pending',   label: 'Pending',      icon: <Clock size={14} />,       badge: (pendingOrgs as any[]).length },
-    { id: 'tickets',   label: 'Support',      icon: <MessageSquare size={14} />, badge: openTickets },
-    { id: 'contacts',  label: 'Contacts',     icon: <Headphones size={14} /> },
+    { id: 'companies', label: 'Companies',   icon: <Building2 size={14} /> },
+    { id: 'pending',   label: 'Pending',     icon: <Clock size={14} />,         badge: (pendingOrgs as any[]).length },
+    { id: 'tickets',   label: 'Support',     icon: <MessageSquare size={14} />, badge: openTickets },
+    { id: 'contacts',  label: 'Contacts',    icon: <Headphones size={14} /> },
+    { id: 'plans',     label: 'Plans',       icon: <CreditCard size={14} /> },
+    { id: 'audit',     label: 'Audit Log',   icon: <FileText size={14} /> },
+    { id: 'health',    label: 'Health',      icon: <Activity size={14} /> },
   ];
 
   return (
@@ -372,7 +408,189 @@ export default function PlatformPage() {
         </div>
       )}
 
-      {/* Reject modal */}
+      {/* ── PLANS TAB ─────────────────────────────────────────────────────────── */}
+      {tab === 'plans' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">Subscription Plans</h2>
+            <button onClick={() => { setEditingPlan({ name:'', description:'', tier:'STARTER', monthlyPriceUsd:0, yearlyPriceUsd:0, maxSeats:10, maxVehicles:50, features:[] }); setShowPlanModal(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm rounded-lg transition">
+              <Plus size={13} /> New plan
+            </button>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(plans as any[]).map((p: any) => (
+              <div key={p.id} className="bg-white rounded-xl border border-gray-200 shadow-xs p-5 relative">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="font-bold text-gray-900">{p.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{p.tier}</p>
+                  </div>
+                  <button onClick={() => { setEditingPlan(p); setShowPlanModal(true); }}
+                    className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition">
+                    <Edit2 size={13} />
+                  </button>
+                </div>
+                <div className="flex items-end gap-0.5 mb-2">
+                  <span className="text-2xl font-extrabold text-gray-900 tabular">${p.monthlyPriceUsd}</span>
+                  <span className="text-xs text-gray-400 pb-0.5">/mo</span>
+                </div>
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p>{p.maxSeats} seats · {p.maxVehicles ?? '∞'} vehicles</p>
+                  {p.description && <p className="text-gray-400 line-clamp-2">{p.description}</p>}
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 flex-wrap">
+                  {((p.features ?? []) as string[]).slice(0,3).map((f: string) => (
+                    <span key={f} className="text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">{f}</span>
+                  ))}
+                  {(p.features ?? []).length > 3 && <span className="text-[10px] text-gray-400">+{(p.features ?? []).length - 3}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── AUDIT LOG TAB ─────────────────────────────────────────────────────── */}
+      {tab === 'audit' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">Audit Log</h2>
+            <span className="text-xs text-gray-400">Last 100 events</span>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            {(auditLogs as any[]).length === 0 ? (
+              <div className="p-12 text-center">
+                <FileText size={32} className="text-gray-200 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">No audit events recorded yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>{['Time','Actor','Action','Target','Details'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(auditLogs as any[]).map((log: any) => (
+                      <tr key={log.id} className="hover:bg-gray-50 transition">
+                        <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDate(log.createdAt)}</td>
+                        <td className="px-4 py-3 text-xs text-gray-700">{log.actorEmail ?? log.actorId?.slice(0,8)}</td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{log.action}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">{log.targetType}{log.targetId ? ` #${log.targetId.slice(0,8)}` : ''}</td>
+                        <td className="px-4 py-3 text-xs text-gray-400 max-w-xs truncate">{log.details ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── HEALTH TAB ───────────────────────────────────────────────────────── */}
+      {tab === 'health' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">System Health</h2>
+            <button onClick={() => refetchHealth()}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition">
+              <RefreshCw size={13} /> Refresh
+            </button>
+          </div>
+          {healthLoading ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1,2,3,4,5].map(i => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
+            </div>
+          ) : !health ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-center gap-3">
+              <AlertTriangle size={20} className="text-red-500 shrink-0" />
+              <div>
+                <p className="font-semibold text-red-800">Health endpoint unreachable</p>
+                <p className="text-sm text-red-600 mt-0.5">The backend health check returned no data. Check if the backend is running.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                { label: 'API Server',    status: health.status === 'ok', icon: <Cpu size={20} />,      detail: `v${health.version ?? '1.0.0'}` },
+                { label: 'PostgreSQL',    status: health.db,              icon: <Database size={20} />, detail: health.dbLatency ? `${health.dbLatency}ms` : 'connected' },
+                { label: 'Redis',         status: health.redis,           icon: <Activity size={20} />, detail: health.redisLatency ? `${health.redisLatency}ms` : 'connected' },
+                { label: 'MQTT Broker',   status: health.mqtt,            icon: <Wifi size={20} />,     detail: health.mqttClients ? `${health.mqttClients} clients` : 'running' },
+                { label: 'SMTP',          status: health.smtp,            icon: <Mail size={20} />,     detail: health.smtpHost ?? 'smtp.gmail.com' },
+                { label: 'File Storage',  status: true,                   icon: <FileText size={20} />, detail: 'Local filesystem' },
+              ].map(({ label, status, icon, detail }) => (
+                <div key={label} className={`bg-white rounded-xl border shadow-xs p-5 flex items-center gap-4 ${status ? 'border-green-200' : 'border-red-200'}`}>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${status ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+                    {icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-gray-900 text-sm">{label}</p>
+                      {status
+                        ? <CheckCircle size={14} className="text-green-500 shrink-0" />
+                        : <XCircle size={14} className="text-red-500 shrink-0" />}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">{detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {health && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-500">
+              Last checked: {formatDate(health.timestamp ?? new Date())} · Auto-refreshes every 15s
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PLAN EDIT MODAL ──────────────────────────────────────────────────── */}
+      {showPlanModal && editingPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold">{editingPlan.id ? 'Edit Plan' : 'New Plan'}</h2>
+              <button onClick={() => setShowPlanModal(false)}><X size={18} className="text-gray-400" /></button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { label: 'Plan name', key: 'name', type: 'text', placeholder: 'e.g. Starter' },
+                { label: 'Description', key: 'description', type: 'text', placeholder: 'Short description' },
+                { label: 'Monthly price (USD)', key: 'monthlyPriceUsd', type: 'number', placeholder: '49' },
+                { label: 'Yearly price (USD)', key: 'yearlyPriceUsd', type: 'number', placeholder: '470' },
+                { label: 'Max seats', key: 'maxSeats', type: 'number', placeholder: '25' },
+                { label: 'Max vehicles', key: 'maxVehicles', type: 'number', placeholder: '200' },
+              ].map(({ label, key, type, placeholder }) => (
+                <div key={key}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                  <input type={type} value={editingPlan[key] ?? ''} placeholder={placeholder}
+                    onChange={e => setEditingPlan((p: any) => ({ ...p, [key]: type === 'number' ? Number(e.target.value) : e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
+                <select value={editingPlan.tier} onChange={e => setEditingPlan((p: any) => ({ ...p, tier: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500">
+                  {['FREE','STARTER','BUSINESS','ENTERPRISE','CUSTOM'].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowPlanModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
+              <button onClick={() => planMutation.mutate(editingPlan)} disabled={!editingPlan.name || planMutation.isPending}
+                className="flex-1 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-60">
+                {planMutation.isPending ? 'Saving…' : 'Save plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {rejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">

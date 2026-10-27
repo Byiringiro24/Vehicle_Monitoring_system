@@ -29,6 +29,7 @@ import agreementRoutes     from './routes/agreement.routes';
 import supportRoutes       from './routes/support.routes';
 import tripRoutes          from './routes/trip.routes';
 import ownerRoutes         from './routes/owner.routes';
+import healthRoutes        from './routes/health.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
@@ -70,6 +71,7 @@ app.get('/health', (_req, res) => {
 });
 
 const api = '/api/v1';
+app.use(`${api}/health`,        healthRoutes);
 app.use(`${api}/auth`,          authLimiter, authRoutes);
 // Register has its own stricter limit (5 per hour per IP)
 app.use(`${api}/auth/register`, rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: { error: 'Too many registration attempts' }, standardHeaders: true, legacyHeaders: false }));
