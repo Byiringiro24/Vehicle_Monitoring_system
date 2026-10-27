@@ -15,7 +15,7 @@ export default function ForgotPasswordPage() {
   const [submittedEmail, setSubmittedEmail] = useState('');
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } =
-    useForm<Form>({ resolver: zodResolver(schema) });
+    useForm<Form>({ resolver: zodResolver(schema), mode: 'onTouched' });
 
   async function onSubmit(data: Form) {
     await authApi.forgotPassword(data.email);

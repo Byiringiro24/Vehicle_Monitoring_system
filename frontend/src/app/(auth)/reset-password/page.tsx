@@ -26,7 +26,7 @@ function ResetForm() {
   const [showConf, setShowConf] = useState(false);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } =
-    useForm<Form>({ resolver: zodResolver(schema) });
+    useForm<Form>({ resolver: zodResolver(schema), mode: 'onTouched' });
 
   if (!token) return (
     <div className="text-center py-4">

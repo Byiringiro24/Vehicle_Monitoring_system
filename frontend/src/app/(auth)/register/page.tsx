@@ -16,22 +16,22 @@ import {
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const companySchema = z.object({
-  orgName:   z.string().min(2, 'Company name required'),
-  firstName: z.string().min(1, 'Required'),
-  lastName:  z.string().min(1, 'Required'),
-  email:     z.string().email('Valid email required'),
+  orgName:   z.string().min(2, 'Company name must be at least 2 characters'),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName:  z.string().min(1, 'Last name is required'),
+  email:     z.string().email('Enter a valid email address'),
   country:   z.string().default('Rwanda'),
-  password:  z.string().min(8, 'Min 8 characters'),
-  confirm:   z.string().min(1, 'Required'),
+  password:  z.string().min(8, 'Password must be at least 8 characters'),
+  confirm:   z.string().min(8, 'Please confirm your password'),
 }).refine(d => d.password === d.confirm, { message: 'Passwords do not match', path: ['confirm'] });
 
 const personalSchema = z.object({
-  firstName: z.string().min(1, 'Required'),
-  lastName:  z.string().min(1, 'Required'),
-  email:     z.string().email('Valid email required'),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName:  z.string().min(1, 'Last name is required'),
+  email:     z.string().email('Enter a valid email address'),
   phone:     z.string().optional(),
-  password:  z.string().min(8, 'Min 8 characters'),
-  confirm:   z.string().min(1, 'Required'),
+  password:  z.string().min(8, 'Password must be at least 8 characters'),
+  confirm:   z.string().min(8, 'Please confirm your password'),
 }).refine(d => d.password === d.confirm, { message: 'Passwords do not match', path: ['confirm'] });
 
 type CompanyForm = z.infer<typeof companySchema>;
@@ -123,11 +123,13 @@ function RegisterForm() {
   const companyForm = useForm<CompanyForm>({
     resolver: zodResolver(companySchema),
     defaultValues: { country: 'Rwanda' },
+    mode: 'onTouched',
   });
 
   // Personal form
   const personalForm = useForm<PersonalForm>({
     resolver: zodResolver(personalSchema),
+    mode: 'onTouched',
   });
 
   // ── Submit company registration ────────────────────────────────────────────
@@ -136,7 +138,7 @@ function RegisterForm() {
       const { confirm, ...payload } = data;
       const result = await authApi.register({ ...payload, planHint: selectedPlan });
       setAuth(result.user, result.accessToken, result.refreshToken);
-      toast.success(`Welcome, ${result.user.firstName}! Awaiting approval.`);
+      toast.success(`Welcome, ${result.user.firstName}! Check your email — your registration is under review.`);
       router.push('/pending-approval');
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Registration failed. Please try again.');
@@ -149,8 +151,14 @@ function RegisterForm() {
       const { confirm, ...payload } = data;
       const result = await authApi.registerPersonal({ ...payload, intendedRole: selectedRole });
       setAuth(result.user, result.accessToken, result.refreshToken);
-      toast.success(`Welcome, ${result.user.firstName}!`);
-      router.push('/onboarding');
+      toast.success(`Welcome, ${result.user.firstName}! Check your email for a welcome message.`);
+      // Redirect based on intended role
+      const roleHome: Record<string, string> = {
+        owner:    '/owner',
+        driver:   '/dashboard',
+        customer: '/dashboard',
+      };
+      router.push(roleHome[selectedRole ?? ''] ?? '/onboarding');
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Registration failed. Please try again.');
     }

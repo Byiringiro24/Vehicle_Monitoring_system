@@ -18,12 +18,17 @@ type Form = z.infer<typeof schema>;
 
 // Role → first page after login
 const ROLE_HOME: Record<string, string> = {
-  SUPER_ADMIN:     '/platform',
-  ADMIN:           '/dashboard',
-  FLEET_MANAGER:   '/dashboard',
-  FINANCE_MANAGER: '/finance',
-  DRIVER:          '/dashboard',
-  VIEWER:          '/dashboard',
+  SUPER_ADMIN:        '/platform',
+  ADMIN:              '/dashboard',
+  FLEET_MANAGER:      '/dashboard',
+  FINANCE_MANAGER:    '/finance',
+  DRIVER:             '/dashboard',
+  VIEWER:             '/dashboard',
+  DISPATCHER:         '/dispatch',
+  HR_MANAGER:         '/staff',
+  MECHANIC:           '/workshop',
+  COMPLIANCE_OFFICER: '/compliance',
+  RENTAL_MANAGER:     '/rentals',
 };
 
 export default function LoginPage() {
@@ -32,7 +37,7 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } =
-    useForm<Form>({ resolver: zodResolver(schema) });
+    useForm<Form>({ resolver: zodResolver(schema), mode: 'onTouched' });
 
   async function onSubmit(data: Form) {
     try {
