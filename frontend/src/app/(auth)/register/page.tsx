@@ -150,7 +150,9 @@ function RegisterForm() {
     try {
       const { confirm, ...payload } = data;
       const result = await authApi.registerPersonal({ ...payload, intendedRole: selectedRole });
-      setAuth(result.user, result.accessToken, result.refreshToken);
+      // FIX #3: Store intendedRole on the user object so login redirects work on future sessions
+      const userWithRole = { ...result.user, intendedRole: selectedRole ?? undefined };
+      setAuth(userWithRole, result.accessToken, result.refreshToken);
       toast.success(`Welcome, ${result.user.firstName}! Check your email for a welcome message.`);
       // Redirect based on intended role
       const roleHome: Record<string, string> = {

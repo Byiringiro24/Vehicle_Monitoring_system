@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -71,16 +72,18 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       logger.warn(`[AUTH] Welcome email failed: ${err.message}`)
     );
 
-    // Notify Super Admin about new pending registration
-    const superAdmin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' }, select: { email: true } });
-    if (superAdmin) {
-      sendNewRegistrationAlert(superAdmin.email, org.name, `${user.firstName} ${user.lastName}`, org.id)
+    // FIX #7: Notify ALL super admins (not just the first one)
+    const superAdmins = await prisma.user.findMany({
+      where: { role: 'SUPER_ADMIN', isActive: true },
+      select: { email: true },
+    });
+    for (const sa of superAdmins) {
+      sendNewRegistrationAlert(sa.email, org.name, `${user.firstName} ${user.lastName}`, org.id)
         .catch(err => logger.warn(`[AUTH] Super Admin notification failed: ${err.message}`));
     }
 
-    // Auto-login after registration
-    const { loginUser: doLogin } = await import('../services/auth.service');
-    const result = await doLogin(email, password);
+    // FIX #9: loginUser is already statically imported — use it directly (no dynamic re-import)
+    const result = await loginUser(email, password);
 
     logger.info(`[AUTH] New organization registered (PENDING approval): ${org.name} (${org.id})`);
     res.status(201).json({ ...result, orgStatus: 'PENDING' });
@@ -140,6 +143,16 @@ export async function registerPersonal(req: Request, res: Response, next: NextFu
           organizationId: org.id,
         },
       });
+      // FIX #5: Create Membership record for personal users (same as company path)
+      await tx.membership.create({
+        data: {
+          userId:         user.id,
+          organizationId: org.id,
+          role:           userRole === 'DRIVER' ? 'DRIVER' : 'VIEWER' as any,
+          status:         'ACTIVE',
+          acceptedAt:     new Date(),
+        },
+      }).catch(() => {}); // non-fatal
       return { user, org };
     });
 

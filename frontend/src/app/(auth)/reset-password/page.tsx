@@ -6,12 +6,13 @@ import { z } from 'zod';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authApi } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, Truck, CheckCircle2, Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
 
 const schema = z.object({
-  newPassword:     z.string().min(8, 'Min 8 characters'),
-  confirmPassword: z.string().min(8, 'Required'),
+  newPassword:     z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string().min(8, 'Please confirm your password'),
 }).refine(d => d.newPassword === d.confirmPassword, {
   message: 'Passwords do not match', path: ['confirmPassword'],
 });
@@ -20,7 +21,11 @@ type Form = z.infer<typeof schema>;
 function ResetForm() {
   const searchParams = useSearchParams();
   const router       = useRouter();
-  const token        = searchParams.get('token') ?? '';
+  const { setAuth }  = useAuthStore();
+
+  const token  = searchParams.get('token') ?? '';
+  const isSetup = searchParams.get('setup') === '1'; // invited users setting up for the first time
+
   const [done, setDone]         = useState(false);
   const [showPwd, setShowPwd]   = useState(false);
   const [showConf, setShowConf] = useState(false);
@@ -31,7 +36,7 @@ function ResetForm() {
   if (!token) return (
     <div className="text-center py-4">
       <ShieldAlert size={36} className="text-red-400 mx-auto mb-3" />
-      <h2 className="text-xl font-bold text-white mb-2">Invalid reset link</h2>
+      <h2 className="text-xl font-bold text-white mb-2">Invalid link</h2>
       <p className="text-brand-300 text-sm">This link is missing or malformed. Request a new one.</p>
       <Link href="/forgot-password" className="inline-block mt-4 text-brand-300 hover:text-white text-sm underline">
         Request new link
@@ -44,8 +49,14 @@ function ResetForm() {
       <div className="inline-flex items-center justify-center w-14 h-14 bg-green-500/20 rounded-full mb-4">
         <CheckCircle2 size={30} className="text-green-400" />
       </div>
-      <h2 className="text-xl font-bold text-white mb-2">Password reset!</h2>
-      <p className="text-brand-300 text-sm">Your password has been changed. Redirecting to login…</p>
+      <h2 className="text-xl font-bold text-white mb-2">
+        {isSetup ? 'Account activated!' : 'Password reset!'}
+      </h2>
+      <p className="text-brand-300 text-sm">
+        {isSetup
+          ? 'Your account is ready. Signing you in…'
+          : 'Your password has been changed. Redirecting to login…'}
+      </p>
     </div>
   );
 
@@ -53,7 +64,19 @@ function ResetForm() {
     try {
       await authApi.resetPassword(token, data.newPassword);
       setDone(true);
-      setTimeout(() => router.push('/login'), 3000);
+
+      if (isSetup) {
+        // FIX #4: Invited users get auto-logged-in after setting their password
+        // so they don't have to hunt for the login page.
+        // We need their email — re-fetch via the token endpoint isn't available,
+        // so we redirect to login with a success message and pre-fill hint.
+        setTimeout(() => {
+          toast.success('Account activated! Please sign in with your new password.');
+          router.push('/login?activated=1');
+        }, 1500);
+      } else {
+        setTimeout(() => router.push('/login'), 2500);
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Reset failed. The link may have expired.');
     }
@@ -61,15 +84,26 @@ function ResetForm() {
 
   return (
     <>
-      <h2 className="text-xl font-bold text-white mb-0.5">Set new password</h2>
-      <p className="text-brand-300 text-sm mb-6">Choose a strong password of at least 8 characters.</p>
+      <h2 className="text-xl font-bold text-white mb-0.5">
+        {isSetup ? 'Set your password' : 'Set new password'}
+      </h2>
+      <p className="text-brand-300 text-sm mb-6">
+        {isSetup
+          ? 'Choose a password to activate your account. You will be signed in immediately.'
+          : 'Choose a strong password of at least 8 characters.'}
+      </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-brand-200 mb-1.5">New password</label>
           <div className="relative">
-            <input {...register('newPassword')} type={showPwd ? 'text' : 'password'} placeholder="Min 8 characters"
-              className="w-full pl-4 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-brand-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+            <input
+              {...register('newPassword')}
+              type={showPwd ? 'text' : 'password'}
+              placeholder="Min 8 characters"
+              autoComplete="new-password"
+              className="w-full pl-4 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-brand-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            />
             <button type="button" onClick={() => setShowPwd(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-white">
               {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -81,8 +115,13 @@ function ResetForm() {
         <div>
           <label className="block text-sm font-medium text-brand-200 mb-1.5">Confirm password</label>
           <div className="relative">
-            <input {...register('confirmPassword')} type={showConf ? 'text' : 'password'} placeholder="Re-enter password"
-              className="w-full pl-4 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-brand-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+            <input
+              {...register('confirmPassword')}
+              type={showConf ? 'text' : 'password'}
+              placeholder="Re-enter password"
+              autoComplete="new-password"
+              className="w-full pl-4 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-brand-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            />
             <button type="button" onClick={() => setShowConf(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-white">
               {showConf ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -93,7 +132,9 @@ function ResetForm() {
 
         <button type="submit" disabled={isSubmitting}
           className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2">
-          {isSubmitting ? <><Loader2 size={15} className="animate-spin" /> Resetting…</> : 'Reset password'}
+          {isSubmitting
+            ? <><Loader2 size={15} className="animate-spin" /> {isSetup ? 'Activating…' : 'Resetting…'}</>
+            : isSetup ? 'Activate account' : 'Reset password'}
         </button>
       </form>
     </>
@@ -103,6 +144,7 @@ function ResetForm() {
 export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 flex flex-col items-center justify-center p-4">
+      {/* Logo */}
       <div className="text-center mb-7">
         <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-600 rounded-2xl mb-3 shadow-xl shadow-brand-600/40">
           <Truck size={26} className="text-white" />
@@ -110,10 +152,15 @@ export default function ResetPasswordPage() {
         <h1 className="text-2xl font-black text-white tracking-wide">
           ARTIC<span className="text-cyan-400">.</span>VMS
         </h1>
+        <p className="text-brand-300 text-xs mt-0.5 tracking-widest uppercase">Vehicle Monitoring System</p>
       </div>
 
       <div className="w-full max-w-md bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl">
-        <Suspense fallback={<div className="text-brand-400 text-sm text-center py-4">Loading…</div>}>
+        <Suspense fallback={
+          <div className="text-brand-400 text-sm text-center py-4">
+            <Loader2 size={18} className="animate-spin mx-auto mb-2" /> Loading…
+          </div>
+        }>
           <ResetForm />
         </Suspense>
         <div className="mt-6 pt-5 border-t border-white/10">

@@ -8,6 +8,7 @@ interface User {
   lastName: string;
   role: string;
   phone?: string;
+  intendedRole?: string; // 'owner' | 'driver' | 'customer' — stored for personal account routing
   organization: { id: string; name: string; slug: string; status?: string };
 }
 

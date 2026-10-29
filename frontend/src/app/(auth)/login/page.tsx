@@ -1,14 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, Loader2, Truck, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Truck, Mail, Lock, CheckCircle2 } from 'lucide-react';
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email'),
@@ -31,10 +31,14 @@ const ROLE_HOME: Record<string, string> = {
   RENTAL_MANAGER:     '/rentals',
 };
 
-export default function LoginPage() {
+function LoginForm() {
   const router      = useRouter();
+  const searchParams = useSearchParams();
   const { setAuth } = useAuthStore();
   const [show, setShow] = useState(false);
+
+  // Show success banner when redirected here after account activation (invite flow)
+  const activated = searchParams.get('activated') === '1';
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } =
     useForm<Form>({ resolver: zodResolver(schema), mode: 'onTouched' });
@@ -44,7 +48,17 @@ export default function LoginPage() {
       const result = await authApi.login(data.email, data.password);
       setAuth(result.user, result.accessToken, result.refreshToken);
       toast.success(`Welcome back, ${result.user.firstName}!`);
-      const home = ROLE_HOME[result.user.role] ?? '/dashboard';
+
+      // FIX #8: For personal accounts (VIEWER/DRIVER), check stored intendedRole
+      // to route them to the correct portal instead of always /dashboard
+      const PERSONAL_ROLE_HOME: Record<string, string> = {
+        owner:    '/owner',
+        driver:   '/dashboard',
+        customer: '/dashboard',
+      };
+      const intendedRole = (result.user as any).intendedRole as string | undefined;
+      const personalHome = intendedRole ? PERSONAL_ROLE_HOME[intendedRole] : undefined;
+      const home = personalHome ?? ROLE_HOME[result.user.role] ?? '/dashboard';
       router.push(home);
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Login failed. Check your credentials.');
@@ -68,6 +82,14 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl">
         <h2 className="text-xl font-bold text-white mb-1">Sign in</h2>
         <p className="text-slate-400 text-sm mb-6">Enter your credentials to access your workspace</p>
+
+        {/* Account activated banner — shown after invite setup */}
+        {activated && (
+          <div className="flex items-center gap-2.5 bg-green-500/15 border border-green-500/30 rounded-xl px-4 py-3 mb-5">
+            <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+            <p className="text-green-300 text-sm">Your account is activated. Sign in with your new password.</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Email */}
@@ -136,5 +158,17 @@ export default function LoginPage() {
         ARTIC VMS &copy; {new Date().getFullYear()} · Secure fleet management
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center">
+        <Loader2 size={24} className="text-blue-400 animate-spin" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
