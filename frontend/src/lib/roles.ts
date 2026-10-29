@@ -71,9 +71,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/documents',   label: 'Documents',      icon: 'FolderOpen',      roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER','COMPLIANCE_OFFICER'] },
 
   // ── Personal portals (always visible after login) ─────────────────────────
-  { href: '/owner',    label: 'My Vehicles',  icon: 'Car',       roles: ['SUPER_ADMIN','ADMIN','VIEWER','DRIVER'] },
+  { href: '/owner',    label: 'My Vehicles',  icon: 'Car',         roles: ['SUPER_ADMIN','ADMIN','VIEWER','DRIVER'] },
   { href: '/customer', label: 'My Bookings',  icon: 'ShoppingBag', roles: ['VIEWER'] },
   { href: '/rider',    label: 'Rider Hub',    icon: 'Bike',        roles: ['DRIVER'] },
+  { href: '/seller',   label: 'My Listings',  icon: 'Tag',         roles: ['VIEWER'] },
+  { href: '/provider', label: 'My Services',  icon: 'Wrench',      roles: ['VIEWER'] },
 
   // ── Administration ────────────────────────────────────────────────────────
   { href: '/users',       label: 'Users',          icon: 'Users',           roles: ['SUPER_ADMIN','ADMIN'] },

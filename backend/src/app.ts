@@ -30,6 +30,7 @@ import supportRoutes       from './routes/support.routes';
 import tripRoutes          from './routes/trip.routes';
 import ownerRoutes         from './routes/owner.routes';
 import healthRoutes        from './routes/health.routes';
+import invoiceRoutes       from './routes/invoice.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
@@ -97,6 +98,7 @@ app.use(`${api}/agreements`,    apiLimiter,  agreementRoutes);
 app.use(`${api}/support`,       apiLimiter,  supportRoutes);
 app.use(`${api}/trips`,         apiLimiter,  tripRoutes);
 app.use(`${api}/owner`,         apiLimiter,  ownerRoutes);
+app.use(`${api}/invoices`,      apiLimiter,  invoiceRoutes);
 
 // Serve uploaded files — in production replace with a CDN / object storage signed URL
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

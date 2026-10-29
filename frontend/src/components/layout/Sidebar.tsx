@@ -9,9 +9,9 @@ import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User, X,
   DollarSign, Activity, ChevronRight, Wrench, Globe, FileText, Handshake,
-  Headphones, Lock, Ban, Navigation, Hammer, ShieldCheck,
+  Headphones, Lock as LockIcon, Ban, Navigation, Hammer, ShieldCheck,
   CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
-  Bike, ShoppingBag,
+  Bike, ShoppingBag, Tag,
 } from 'lucide-react';
 
 const ICONS: Record<string, React.ElementType> = {
@@ -20,7 +20,7 @@ const ICONS: Record<string, React.ElementType> = {
   DollarSign, Activity, Wrench, Globe, FileText, Handshake,
   Headphones, Navigation, Hammer, ShieldCheck,
   CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
-  Bike, ShoppingBag,
+  Bike, ShoppingBag, Tag,
   HeadphonesIcon: Headphones,
 };
 
@@ -121,7 +121,7 @@ export function Sidebar({ onClose }: SidebarProps) {
               <span className="flex-1">{label}</span>
               {/* Lock icon — plan not enabled */}
               {isPlanLocked && (
-                <Lock size={12} className="text-brand-500/80 shrink-0" aria-label="Plan required" />
+                <LockIcon size={12} className="text-brand-500/80 shrink-0" aria-label="Plan required" />
               )}
               {/* Ban icon — role doesn't permit */}
               {isRoleBlocked && (
