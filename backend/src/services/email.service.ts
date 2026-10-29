@@ -88,9 +88,15 @@ function btn(url: string, text: string, color = '#2563eb'): string {
 
 // ── Send helper ───────────────────────────────────────────────────────────────
 async function send(to: string, subject: string, html: string): Promise<void> {
-  const from = process.env.SMTP_FROM ?? '"ARTIC VMS" <noreply@articvms.ddnsgeek.com>';
+  // Gmail SMTP replaces the from address with the authenticated Gmail account.
+  // To show "ARTIC VMS" as the sender name, we must use the SMTP_USER address
+  // (the Gmail account) in the from field, with "ARTIC VMS" as the display name.
+  // If SMTP_FROM is set explicitly in .env, use that instead.
+  const smtpUser = process.env.SMTP_USER ?? 'noreply@articvms.ddnsgeek.com';
+  const from = process.env.SMTP_FROM ?? `"ARTIC VMS" <${smtpUser}>`;
+  const replyTo = process.env.SMTP_REPLY_TO ?? '"ARTIC VMS Support" <byiringirofabrice6@gmail.com>';
   try {
-    await getTransporter().sendMail({ from, to, subject, html });
+    await getTransporter().sendMail({ from, to, subject, html, replyTo });
     logger.info(`[EMAIL] Sent "${subject}" → ${to}`);
   } catch (err: any) {
     // Log the error but don't crash the request — email is best-effort
@@ -190,7 +196,7 @@ export async function sendOverduePaymentEmail(
       <tr style="background:#fff1f2;"><td style="color:#475569;font-size:14px;"><strong>Days overdue:</strong></td><td style="color:#dc2626;font-size:14px;font-weight:600;">${details.daysOverdue} days</td></tr>
     </table>
     ${btn(`${appUrl}/login`, 'View Payment Details', '#dc2626')}`;
-  await send(to, `⚠ Overdue Payment — Contract ${details.contractNumber}`, layout('Overdue Payment', body));
+  await send(to, `ARTIC VMS — ⚠ Overdue Payment — Contract ${details.contractNumber}`, layout('Overdue Payment', body));
 }
 
 // ── Document expiry warning ───────────────────────────────────────────────────
@@ -230,7 +236,7 @@ export async function sendDocumentExpiryEmail(
       <tbody>${rows}</tbody>
     </table>
     ${btn(`${appUrl}/vehicles`, 'Manage Documents', '#d97706')}`;
-  await send(to, `📋 ${docs.length} document(s) expiring soon`, layout('Document Expiry Reminder', body));
+  await send(to, `ARTIC VMS — 📋 ${docs.length} document(s) expiring soon`, layout('Document Expiry Reminder', body));
 }
 
 // ── Vehicle offline alert ─────────────────────────────────────────────────────
@@ -251,7 +257,7 @@ export async function sendVehicleOfflineEmail(
       <tr><td style="color:#475569;font-size:14px;"><strong>Last seen:</strong></td><td style="color:#dc2626;font-size:14px;font-weight:600;">${vehicle.lastSeenAt}</td></tr>
     </table>
     ${btn(`${appUrl}/map`, 'View Live Map', '#dc2626')}`;
-  await send(to, `🚨 Vehicle Offline: ${vehicle.licensePlate}`, layout('Vehicle Offline', body));
+  await send(to, `ARTIC VMS — 🚨 Vehicle Offline: ${vehicle.licensePlate}`, layout('Vehicle Offline', body));
 }
 
 // ── Invitation email ──────────────────────────────────────────────────────────
@@ -290,8 +296,8 @@ export async function sendInvitationEmail(
       If you did not expect this invitation, you can ignore this email.
     </p>`;
   const subject = isNew
-    ? `You've been invited to ${orgName} — Set up your account`
-    : `You've been added to ${orgName} on ARTIC VMS`;
+    ? `ARTIC VMS — You've been invited to ${orgName} — Set up your account`
+    : `ARTIC VMS — You've been added to ${orgName}`;
   await send(to, subject, layout(subject, body));
 }
 
@@ -313,7 +319,7 @@ export async function sendNewRegistrationAlert(
       <tr style="background:#f1f5f9;"><td style="color:#475569;font-size:14px;"><strong>Admin contact:</strong></td><td style="color:#1e293b;font-size:14px;">${adminName}</td></tr>
     </table>
     ${btn(`${appUrl}/platform`, 'Review Registration', '#059669')}`;
-  await send(adminEmail, `New registration: ${orgName} — Approval required`, layout('New Registration', body));
+  await send(adminEmail, `ARTIC VMS — New registration: ${orgName} — Approval required`, layout('New Registration', body));
 }
 
 // ── Verify SMTP config (called at startup) ────────────────────────────────────
