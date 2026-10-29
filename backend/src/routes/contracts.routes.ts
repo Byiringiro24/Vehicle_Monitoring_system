@@ -30,7 +30,7 @@ router.get('/customers', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/customers', async (req: any, res, next) => {
+router.post('/customers', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER', 'RENTAL_MANAGER'), async (req: any, res, next) => {
   try {
     const customer = await prisma.customer.create({
       data: { ...req.body, organizationId: req.user.organizationId },
@@ -39,7 +39,7 @@ router.post('/customers', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/customers/:id', async (req: any, res, next) => {
+router.put('/customers/:id', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER', 'RENTAL_MANAGER'), async (req: any, res, next) => {
   try {
     const c = await prisma.customer.update({ where: { id: req.params.id }, data: req.body });
     res.json(c);

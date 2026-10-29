@@ -17,7 +17,9 @@ router.use(authenticate);
 //   {"command":"restart"}          → device restarts the SIM808 module
 //   {"command":"ussd","code":"*175#"}  → run USSD (e.g. buy data)
 //   {"command":"ping"}             → device responds with pong
-router.post('/:vehicleId/command', async (req: any, res, next) => {
+// Engine lock/unlock commands are handled on the vehicle routes (PATCH /vehicles/:id/lock)
+// and require the plate number to be typed — that's where the real security is.
+router.post('/:vehicleId/command', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), async (req: any, res, next) => {
     try {
       const vehicle = await prisma.vehicle.findFirst({
         where: { id: req.params.vehicleId, organizationId: req.user.organizationId },
@@ -61,7 +63,7 @@ router.post('/:vehicleId/command', async (req: any, res, next) => {
 // ─── Update SIM card number for a vehicle (with verification) ────────────────
 // The ESP32 sends simNumber in its telemetry payload.
 // When user sets the SIM on the website, we check if it matches what the device reported.
-router.patch('/:vehicleId/sim', async (req: any, res, next) => {
+router.patch('/:vehicleId/sim', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), async (req: any, res, next) => {
     try {
       const { simNumber } = req.body;
       if (!simNumber) throw new AppError(400, 'simNumber is required');
@@ -102,7 +104,7 @@ router.patch('/:vehicleId/sim', async (req: any, res, next) => {
 );
 
 // ─── Update data plan (internet purchase tracking) ────────────────────────────
-router.patch('/:vehicleId/data-plan', async (req: any, res, next) => {
+router.patch('/:vehicleId/data-plan', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), async (req: any, res, next) => {
     try {
       const { dataPlanType, dataPlanBoughtAt, dataPlanExpiry } = req.body;
       if (!dataPlanType) throw new AppError(400, 'dataPlanType is required (DAILY/WEEKLY/MONTHLY)');

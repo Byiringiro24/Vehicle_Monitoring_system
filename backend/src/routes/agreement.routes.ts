@@ -253,7 +253,7 @@ router.post('/:id/activate', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'),
 });
 
 // ── POST /agreements/:id/payments — record a payment ─────────────────────────
-router.post('/:id/payments', async (req: any, res, next) => {
+router.post('/:id/payments', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER'), async (req: any, res, next) => {
   try {
     const orgId = req.user.organizationId;
     const agreement = await prisma.agreement.findFirst({ where: { id: req.params.id, organizationId: orgId } });
