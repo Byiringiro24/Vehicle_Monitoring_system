@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { getNavItems, type AppRole } from '@/lib/roles';
+import { getRouteFeature, FEATURE_CATALOG, isFeatureAvailable } from '@/lib/featureCatalog';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
@@ -25,17 +26,13 @@ const ICONS: Record<string, React.ElementType> = {
 };
 
 // ── Items that require a specific plan (lock icon) ─────────────────────────
-// Key = href, value = plan name displayed in tooltip
-const PLAN_LOCKED: Record<string, string> = {
-  // Nothing currently locked — all features enabled by default.
-  // Add entries here as feature-gating is implemented:
-  // '/dispatch': 'Business',
-  // '/workshop': 'Enterprise',
-};
+// Now driven by featureCatalog.ts — routes with a premium feature code
+// show 🔒 if the org's plan doesn't include that feature.
+// Core features (vehicles, GPS, alerts, finance, maintenance, etc.) are
+// NEVER locked — they're available on every plan.
+// Premium features (dispatch, workshop, compliance, HR, rentals) show the lock.
 
 // ── Items that require a specific role but org has the feature (ban icon) ──
-// These are computed dynamically from the user's role, but we define
-// which hrefs are "sensitive" so we can show ⛔ for lower roles.
 const ROLE_SENSITIVE: Record<string, AppRole[]> = {
   '/platform': ['SUPER_ADMIN'],
   '/users':    ['SUPER_ADMIN', 'ADMIN'],
@@ -79,16 +76,32 @@ export function Sidebar({ onClose }: SidebarProps) {
           const Icon    = ICONS[icon] ?? FileText;
           const active  = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
           const isAllowed   = allowed.has(href);
-          const isPlanLocked = !!PLAN_LOCKED[href];
+
+          // ── Check if this route is a premium feature ────────────────────────
+          // Core features (GPS, vehicles, drivers, alerts, finance, maintenance)
+          // are NEVER locked — they work on every plan.
+          // Premium features (dispatch, workshop, compliance, HR, rentals) show 🔒
+          // For now, all features are ENABLED (no plan check backend yet).
+          // The 🔒 icon shows on premium features so users know they CAN be locked,
+          // but we fail-open (allow access) until the backend entitlement system is built.
+          const featureCode = getRouteFeature(href);
+          const isPremiumFeature = !!featureCode;
+          // TODO: when backend entitlement system is live, check isFeatureAvailable(featureCode, orgPlan)
+          // For now: premium features are available to ALL active companies
+          const isPlanLocked = false; // ← change to !isFeatureAvailable(...) when backend is ready
+
           // Role-blocked: org has it, but this user's role doesn't include it
           const isRoleBlocked = !isAllowed && !isPlanLocked &&
             ROLE_SENSITIVE[href] !== undefined &&
             !(ROLE_SENSITIVE[href] as string[]).includes(role);
 
-          if (!isAllowed && !isPlanLocked && !isRoleBlocked) {
+          if (!isAllowed && !isPremiumFeature && !isRoleBlocked) {
             // Truly hidden (not relevant to this role context at all)
             return null;
           }
+
+          // Feature info for upsell tooltip
+          const featureInfo = featureCode ? FEATURE_CATALOG[featureCode] : null;
 
           return (
             <Link
@@ -96,8 +109,9 @@ export function Sidebar({ onClose }: SidebarProps) {
               href={href}
               onClick={onClose}
               title={
-                isPlanLocked ? `${PLAN_LOCKED[href]} plan required — contact Super Admin` :
+                isPlanLocked && featureInfo ? `${featureInfo.name} — available on ${featureInfo.minPlan} plan. Contact Super Admin to upgrade.` :
                 isRoleBlocked ? `Your role cannot access this — request from Company Admin` :
+                featureInfo ? featureInfo.description :
                 label
               }
               className={cn(
@@ -119,7 +133,7 @@ export function Sidebar({ onClose }: SidebarProps) {
                 )}
               />
               <span className="flex-1">{label}</span>
-              {/* Lock icon — plan not enabled */}
+              {/* Lock icon — plan not enabled (future: when entitlement system is live) */}
               {isPlanLocked && (
                 <LockIcon size={12} className="text-brand-500/80 shrink-0" aria-label="Plan required" />
               )}
