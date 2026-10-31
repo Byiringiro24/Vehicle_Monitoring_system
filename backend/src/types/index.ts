@@ -5,6 +5,8 @@ export interface JwtPayload {
   userId: string;
   email: string;
   role: UserRole;
+  roles?: UserRole[];
+  pendingRoles?: UserRole[];
   organizationId: string;
 }
 

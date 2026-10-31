@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { membershipApi } from '@/lib/api';
+import { authApi, membershipApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { Building2, ChevronDown, Check, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,7 @@ interface Membership {
 }
 
 export function WorkspaceSwitcher() {
-  const { user } = useAuthStore();
+  const { user, setAuth } = useAuthStore();
   const [open, setOpen] = useState(false);
 
   const { data: memberships = [] } = useQuery<Membership[]>({
@@ -88,11 +88,27 @@ export function WorkspaceSwitcher() {
                   {others.map(m => (
                     <button
                       key={m.id}
-                      onClick={() => {
-                        // Full page reload to switch context — the server re-validates JWT
-                        // TODO: proper context switching via API call + token update
-                        setOpen(false);
-                        window.location.href = `/dashboard?org=${m.organization.id}`;
+                      onClick={async () => {
+                        if (!user) return;
+                        try {
+                          const result = await authApi.switchOrganization(m.organization.id);
+                          const nextOrg = {
+                            id: m.organization.id,
+                            name: m.organization.name,
+                            slug: m.organization.slug,
+                            status: 'ACTIVE',
+                          };
+                          setAuth({
+                            ...user,
+                            role: result.user.role,
+                            organization: nextOrg,
+                          }, result.accessToken, result.refreshToken);
+                          setOpen(false);
+                          window.location.href = '/dashboard';
+                        } catch (error) {
+                          console.error('Failed to switch workspace', error);
+                          setOpen(false);
+                        }
                       }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition text-left"
                     >

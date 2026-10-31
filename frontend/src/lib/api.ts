@@ -44,6 +44,8 @@ export const authApi = {
   registerPersonal: (data: object) => apiClient.post('/auth/register-personal', data).then(r => r.data),
   login:            (email: string, password: string) => apiClient.post('/auth/login', { email, password }).then(r => r.data),
   me:               () => apiClient.get('/auth/me').then(r => r.data),
+  switchOrganization: (organizationId: string) =>
+    apiClient.post('/auth/switch-organization', { organizationId }).then(r => r.data),
   logout:           (refreshToken: string) => apiClient.post('/auth/logout', { refreshToken }),
   changePassword:   (data: object) => apiClient.post('/auth/change-password', data).then(r => r.data),
   forgotPassword:   (email: string) => apiClient.post('/auth/forgot-password', { email }).then(r => r.data),
@@ -131,6 +133,17 @@ export const financialApi = {
   driverPayments:  (params?: object) => apiClient.get('/financial/driver-payments', { params }).then(r => r.data),
   createDriverPayment: (data: object) => apiClient.post('/financial/driver-payments', data).then(r => r.data),
   markDriverPaid:  (id: string)      => apiClient.patch(`/financial/driver-payments/${id}/mark-paid`).then(r => r.data),
+  payroll:         (params?: object) => apiClient.get('/financial/payroll', { params }).then(r => r.data),
+  generatePayroll: (data: object) => apiClient.post('/financial/payroll/generate', data).then(r => r.data),
+  ownerPayouts:    (params?: object) => apiClient.get('/financial/owner-payouts', { params }).then(r => r.data),
+  executeOwnerPayout: (data: object) => apiClient.post('/financial/owner-payouts/execute', data).then(r => r.data),
+};
+
+export const requisitionApi = {
+  list:         (params?: object) => apiClient.get('/financial/requisitions', { params }).then(r => r.data),
+  create:       (data: object) => apiClient.post('/financial/requisitions', data).then(r => r.data),
+  approve:      (id: string, notes?: string) => apiClient.patch(`/financial/requisitions/${id}/approve`, { notes }).then(r => r.data),
+  reject:       (id: string, reason: string) => apiClient.patch(`/financial/requisitions/${id}/reject`, { reason }).then(r => r.data),
 };
 
 // ─── Contracts ────────────────────────────────────────────────────────────────

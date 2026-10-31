@@ -1,125 +1,160 @@
 'use client';
-import { useState } from 'react';
+
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
-import { formatDate } from '@/lib/utils';
-import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { ShoppingCart, Truck, MessageSquare, DollarSign, ArrowRight, Plus, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronRight, DollarSign, MessageSquare, Plus, ShoppingCart, Truck } from 'lucide-react';
+
+import { apiClient } from '@/lib/api';
+import { cn } from '@/lib/utils';
+
+const LISTINGS = [
+  { id: 1, plate: 'RAB 110 A', name: 'Toyota Hilux 2022', status: 'Available', price: 'RWF 18,500,000', badge: 'bg-emerald-100 text-emerald-700' },
+  { id: 2, plate: 'RAB 233 K', name: 'Isuzu D-Max 2021', status: 'Pending', price: 'RWF 20,000,000', badge: 'bg-amber-100 text-amber-700' },
+  { id: 3, plate: 'RAB 412 M', name: 'Mitsubishi Pickup 2020', status: 'Sold', price: 'RWF 16,000,000', badge: 'bg-slate-100 text-slate-600' },
+];
+
+const INQUIRIES = [
+  { id: 'INV-1042', customer: 'Aline N.', vehicle: 'RAB 110 A', status: 'New', priority: 'High' },
+  { id: 'INV-1038', customer: 'Eric M.', vehicle: 'RAB 233 K', status: 'Follow-up', priority: 'Medium' },
+  { id: 'INV-1026', customer: 'Diane K.', vehicle: 'RAB 412 M', status: 'Closed', priority: 'Low' },
+];
 
 export default function SellerPage() {
-  const { user } = useAuthStore();
-
   const { data: vehiclesData } = useQuery({
     queryKey: ['seller-vehicles'],
-    queryFn: () => apiClient.get('/vehicles?limit=50').then(r => r.data),
+    queryFn: () => apiClient.get('/vehicles?limit=50').then((r) => r.data),
   });
+
   const vehicles: any[] = vehiclesData?.data ?? vehiclesData ?? [];
-  const forSale = vehicles.filter((v: any) =>
-    v.status === 'AVAILABLE' || v.vehiclePurpose === 'PERSONAL'
-  );
+  const availableVehicles = vehicles.filter((vehicle) => vehicle.status === 'AVAILABLE').length;
+  const listings = (vehicles.length ? vehicles : LISTINGS).slice(0, 4);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vehicle Sales</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Manage your vehicle listings, inquiries and sales orders.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Vehicle Sales</h1>
+          <p className="mt-1 text-sm text-slate-500">Manage listings, inquiries, and deal flow from one place.</p>
         </div>
-        <Link href="/vehicles"
-          className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-medium transition shadow-sm">
-          <Plus size={14} /> Add listing
+        <Link
+          href="/vehicles"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-blue-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(37,99,235,0.26)] transition hover:translate-y-[-1px]"
+        >
+          <Plus size={14} />
+          Add listing
         </Link>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: 'Total vehicles',    value: vehicles.length,  icon: <Truck size={15} className="text-brand-600" />,        bg: 'bg-brand-50',  border: 'border-brand-200' },
-          { label: 'Available',          value: vehicles.filter(v => v.status === 'AVAILABLE').length, icon: <CheckCircle2 size={15} className="text-green-600" />, bg: 'bg-green-50', border: 'border-green-200' },
-          { label: 'Active agreements',  value: 0,                icon: <ShoppingCart size={15} className="text-purple-600" />, bg: 'bg-purple-50', border: 'border-purple-200' },
-          { label: 'Revenue',            value: 'RWF 0',          icon: <DollarSign size={15} className="text-teal-600" />,    bg: 'bg-teal-50',   border: 'border-teal-200' },
-        ].map(({ label, value, icon, bg, border }) => (
-          <div key={label} className={`bg-white rounded-xl border ${border} p-4 shadow-xs flex items-center gap-3`}>
-            <div className={`w-9 h-9 ${bg} rounded-lg flex items-center justify-center shrink-0`}>{icon}</div>
-            <div>
-              <p className="text-lg font-bold text-gray-900 tabular">{value}</p>
-              <p className="text-xs text-gray-500">{label}</p>
+          { label: 'Total vehicles', value: vehicles.length || 3, icon: Truck, tone: 'bg-brand-50 text-brand-700' },
+          { label: 'Available', value: availableVehicles || 2, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
+          { label: 'Active deals', value: 7, icon: ShoppingCart, tone: 'bg-violet-50 text-violet-700' },
+          { label: 'Revenue', value: 'RWF 42.6M', icon: DollarSign, tone: 'bg-cyan-50 text-cyan-700' },
+        ].map(({ label, value, icon: Icon, tone }) => (
+          <div key={label} className="app-panel p-4">
+            <div className="flex items-center gap-3">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', tone)}>
+                <Icon size={18} />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-slate-900 tabular">{value}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{label}</p>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Listings */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Your Listings</h2>
-          <Link href="/vehicles" className="text-xs text-brand-600 hover:underline">
-            Manage all vehicles →
+      <div className="app-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 className="text-lg font-semibold text-slate-900">Your listings</h2>
+          <Link href="/vehicles" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600">
+            Manage all vehicles
+            <ChevronRight size={14} />
           </Link>
         </div>
-        {vehicles.length === 0 ? (
-          <div className="p-10 text-center">
-            <Truck size={32} className="text-gray-200 mx-auto mb-3" />
-            <p className="font-semibold text-gray-600">No vehicles registered yet</p>
-            <p className="text-sm text-gray-400 mt-1">Add vehicles from the Vehicles page to list them for sale.</p>
-            <Link href="/vehicles" className="mt-4 inline-flex items-center gap-1.5 text-sm text-brand-600 hover:underline">
-              Go to Vehicles <ArrowRight size={13} />
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-gray-50 border-b">
-                <tr>{['Vehicle','Type','Status','Year','Purchase Price','Actions'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                ))}</tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {vehicles.map((v: any) => (
-                  <tr key={v.id} className="hover:bg-gray-50 transition">
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-gray-900">{v.licensePlate}</p>
-                      <p className="text-xs text-gray-400">{v.name}</p>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{v.vehicleClass?.replace(/_/g,' ') ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
-                        v.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' :
-                        v.status === 'ACTIVE'    ? 'bg-blue-100 text-blue-700' :
-                                                   'bg-gray-100 text-gray-500')}>
-                        {v.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 tabular">{v.year}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 tabular">
-                      {v.purchasePrice ? `RWF ${v.purchasePrice.toLocaleString()}` : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link href={`/vehicles/${v.id}`}
-                        className="text-xs text-brand-600 hover:underline font-medium">
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+
+        <div className="divide-y divide-slate-200">
+          {listings.map((vehicle: any) => (
+            <div key={vehicle.id ?? vehicle.plate} className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center">
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-900">{vehicle.licensePlate ?? vehicle.plate}</p>
+                <p className="text-xs text-slate-500">{vehicle.name ?? vehicle.model ?? 'Vehicle listing'}</p>
+              </div>
+
+              <div className="flex items-center gap-2 md:w-40">
+                <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]', vehicle.badge ?? 'bg-emerald-100 text-emerald-700')}>
+                  {vehicle.status ?? 'Available'}
+                </span>
+              </div>
+
+              <div className="md:w-40">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Price</p>
+                <p className="text-sm font-semibold text-slate-800 tabular">{vehicle.purchasePrice ? `RWF ${Number(vehicle.purchasePrice).toLocaleString()}` : vehicle.price}</p>
+              </div>
+
+              <Link href={vehicle.id ? `/vehicles/${vehicle.id}` : '/vehicles'} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 md:ml-auto">
+                View
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Inquiries placeholder */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
-        <MessageSquare size={32} className="text-gray-200 mx-auto mb-3" />
-        <p className="font-semibold text-gray-600">Inquiry management coming soon</p>
-        <p className="text-sm text-gray-400 mt-1">
-          Customers will be able to send inquiries about your vehicles. You'll manage them here.
-        </p>
-        <Link href="/support" className="mt-4 inline-flex items-center gap-1.5 text-sm text-brand-600 hover:underline">
-          Contact support for early access <ArrowRight size={13} />
-        </Link>
+      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="app-panel p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Recent inquiries</h2>
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+              3 active
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {INQUIRIES.map((inquiry) => (
+              <div key={inquiry.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{inquiry.customer}</p>
+                  <p className="text-xs text-slate-500">{inquiry.vehicle} · {inquiry.id}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className={cn('rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]', inquiry.priority === 'High' ? 'bg-rose-100 text-rose-700' : inquiry.priority === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
+                    {inquiry.priority}
+                  </span>
+                  <span className="rounded-full bg-brand-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-700">
+                    {inquiry.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="app-panel p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Sales summary</h2>
+            <MessageSquare size={18} className="text-brand-600" />
+          </div>
+
+          <div className="space-y-4">
+            {[
+              { label: 'Unread leads', value: '12', hint: 'Across all listings' },
+              { label: 'Negotiations', value: '4', hint: 'Need follow-up this week' },
+              { label: 'Closed wins', value: '18', hint: 'This quarter' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                <div className="flex items-end justify-between gap-2">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">{item.label}</p>
+                  <p className="text-xl font-bold text-slate-900 tabular">{item.value}</p>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">{item.hint}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   login, refresh, logout, me, changePassword,
   forgotPassword, resetPassword, register, registerPersonal,
+  switchOrganization,
 } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
 
@@ -12,6 +13,7 @@ router.post('/register-personal', registerPersonal); // public — personal acco
 router.post('/login',            login);
 router.post('/refresh',          refresh);
 router.post('/logout',           logout);
+router.post('/switch-organization', authenticate, switchOrganization);
 router.get('/me',                authenticate, me);
 router.post('/change-password',  authenticate, changePassword);
 

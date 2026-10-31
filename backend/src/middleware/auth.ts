@@ -23,7 +23,12 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
 export function authorize(...roles: UserRole[]) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     if (!req.user) { res.status(401).json({ error: 'Unauthorized' }); return; }
-    if (!roles.includes(req.user.role)) {
+    const grantedRoles = new Set<UserRole>([
+      req.user.role,
+      ...((Array.isArray(req.user.roles) ? req.user.roles : []) as UserRole[]),
+    ]);
+    const allowed = roles.some(role => grantedRoles.has(role));
+    if (!allowed) {
       res.status(403).json({ error: 'Insufficient permissions' });
       return;
     }

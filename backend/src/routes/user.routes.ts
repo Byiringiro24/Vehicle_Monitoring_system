@@ -44,21 +44,23 @@ router.get('/all', authorize('SUPER_ADMIN'), async (_req: any, res, next) => {
 // ── POST /users — SUPER_ADMIN or ADMIN: create a new user in their organisation ─
 router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) => {
   try {
-    const { email, password, firstName, lastName, role, phone } = req.body;
-    if (!email || !password || !firstName || !lastName || !role) {
-      res.status(400).json({ error: 'email, password, firstName, lastName and role are required' });
+    const { email, password, firstName, lastName, role, roles, phone } = req.body;
+    const requestedRoles = Array.isArray(roles) && roles.length ? roles : [role].filter(Boolean);
+    if (!email || !password || !firstName || !lastName || !requestedRoles.length) {
+      res.status(400).json({ error: 'email, password, firstName, lastName and at least one role are required' });
       return;
     }
-    if (role === 'SUPER_ADMIN') {
+    if (requestedRoles.includes('SUPER_ADMIN')) {
       res.status(403).json({ error: 'SUPER_ADMIN role cannot be assigned through this endpoint' });
       return;
     }
-    // ADMIN cannot create another ADMIN — only SUPER_ADMIN can
-    if (role === 'ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+    if (requestedRoles.includes('ADMIN') && req.user.role !== 'SUPER_ADMIN') {
       res.status(403).json({ error: 'Only SUPER_ADMIN can create ADMIN users' });
       return;
     }
 
+    const primaryRole = requestedRoles[0];
+    const pendingRoles = requestedRoles.length > 1 ? requestedRoles.slice(1) : [];
     const passwordHash = await bcrypt.hash(password, 12);
     const orgId = req.user.organizationId;
 
@@ -66,21 +68,20 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
       const newUser = await tx.user.create({
         data: {
           email: email.toLowerCase(), passwordHash,
-          firstName, lastName, role, phone,
+          firstName, lastName, role: primaryRole, roles: [primaryRole], pendingRoles, phone,
           organizationId: orgId,
         },
-        select: { id: true, email: true, firstName: true, lastName: true, role: true },
+        select: { id: true, email: true, firstName: true, lastName: true, role: true, roles: true, pendingRoles: true },
       });
-      // Create membership record for the unified identity system
       await tx.membership.create({
         data: {
           userId: newUser.id,
           organizationId: orgId,
-          role: role === 'ADMIN' ? 'COMPANY_ADMIN' : role as any,
+          role: primaryRole === 'ADMIN' ? 'COMPANY_ADMIN' : primaryRole as any,
           status: 'ACTIVE',
           acceptedAt: new Date(),
         },
-      }).catch(() => {}); // membership may not exist in older DB — non-fatal
+      }).catch(() => {});
       return newUser;
     });
 
@@ -104,23 +105,62 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
 // ── PUT /users/:id — SUPER_ADMIN or ADMIN: update user details ───────────────
 router.put('/:id', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) => {
   try {
-    const { password, role, ...rest } = req.body;
+    const { password, role, roles, ...rest } = req.body;
     const data: any = { ...rest };
 
-    // Prevent assigning SUPER_ADMIN role via this endpoint
     if (role && role !== 'SUPER_ADMIN') data.role = role;
     if (role === 'SUPER_ADMIN') {
       res.status(403).json({ error: 'SUPER_ADMIN role cannot be assigned through this endpoint' });
       return;
+    }
+    if (Array.isArray(roles) && roles.length) {
+      data.roles = roles;
+      const primaryRole = roles[0];
+      if (primaryRole) data.role = primaryRole;
     }
     if (password) data.passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data,
-      select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, roles: true, pendingRoles: true, isActive: true },
     });
     res.json(user);
+  } catch (err) { next(err); }
+});
+
+router.patch('/:id/approve-roles', authorize('SUPER_ADMIN'), async (req: any, res, next) => {
+  try {
+    const { roles } = req.body;
+    if (!Array.isArray(roles) || !roles.length) {
+      res.status(400).json({ error: 'roles must be a non-empty array' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { roles: true, pendingRoles: true, role: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const approvedRoles = Array.from(new Set([...(user.roles ?? []), ...roles]));
+    const nextPending = (user.pendingRoles ?? []).filter(role => !roles.includes(role));
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        roles: approvedRoles,
+        pendingRoles: nextPending,
+        role: approvedRoles[0] ?? user.role,
+      },
+      select: { id: true, email: true, role: true, roles: true, pendingRoles: true },
+    });
+
+    res.json({ message: 'Additional roles approved successfully.', user: updated });
   } catch (err) { next(err); }
 });
 
@@ -183,19 +223,26 @@ router.patch('/:id/status', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, 
 // If user already exists → add membership; if new → create with temp password + send setup link
 router.post('/invite', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) => {
   try {
-    const { email, role, firstName, lastName } = req.body;
-    if (!email || !role) {
-      res.status(400).json({ error: 'email and role are required' });
+    const { email, role, roles, firstName, lastName } = req.body;
+    const requestedRoles = Array.isArray(roles) && roles.length ? roles : [role].filter(Boolean);
+    if (!email || !requestedRoles.length) {
+      res.status(400).json({ error: 'email and at least one role are required' });
       return;
     }
-    if (role === 'SUPER_ADMIN') {
+    if (requestedRoles.includes('SUPER_ADMIN')) {
       res.status(403).json({ error: 'SUPER_ADMIN role cannot be invited' });
+      return;
+    }
+    if (requestedRoles.includes('ADMIN') && req.user.role !== 'SUPER_ADMIN') {
+      res.status(403).json({ error: 'Only SUPER_ADMIN can invite ADMIN users' });
       return;
     }
 
     const appUrl = process.env.APP_URL ?? 'https://articvms.ddnsgeek.com';
     const orgId  = req.user.organizationId;
     const org    = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+    const primaryRole = requestedRoles[0];
+    const pendingRoles = requestedRoles.length > 1 ? requestedRoles.slice(1) : [];
 
     // Check if user already exists
     let targetUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
@@ -221,43 +268,34 @@ router.post('/invite', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, 
       // Same org — update role only (safe)
       await prisma.user.update({
         where: { id: targetUser.id },
-        data:  { role: role as any },
+        data:  { role: primaryRole as any, roles: [primaryRole], pendingRoles },
       });
-      // Update or create membership
+      const membershipRole = primaryRole === 'ADMIN' ? 'COMPANY_ADMIN' : primaryRole as any;
       await prisma.membership.upsert({
-        where: { id: targetUser.id }, // will fail gracefully — use updateMany below
-        update: { role: role as any },
-        create: {
-          userId: targetUser.id,
-          organizationId: orgId,
-          role: role === 'ADMIN' ? 'COMPANY_ADMIN' : role as any,
+        where: {
+          userId_organizationId: {
+            userId: targetUser.id,
+            organizationId: orgId,
+          },
+        },
+        update: {
+          role: membershipRole,
           status: 'ACTIVE',
           acceptedAt: new Date(),
         },
-      }).catch(async () => {
-        // Upsert by id won't work — try findFirst + update/create
-        const existing = await prisma.membership.findFirst({
-          where: { userId: targetUser!.id, organizationId: orgId },
-        });
-        if (existing) {
-          await prisma.membership.update({ where: { id: existing.id }, data: { role: role as any } });
-        } else {
-          await prisma.membership.create({
-            data: {
-              userId: targetUser!.id,
-              organizationId: orgId,
-              role: role === 'ADMIN' ? 'COMPANY_ADMIN' : role as any,
-              status: 'ACTIVE',
-              acceptedAt: new Date(),
-            },
-          });
-        }
+        create: {
+          userId: targetUser.id,
+          organizationId: orgId,
+          role: membershipRole,
+          status: 'ACTIVE',
+          acceptedAt: new Date(),
+        },
       });
 
-      sendInvitationEmail(targetUser.email, targetUser.firstName, org?.name ?? 'ARTIC VMS', role, `${appUrl}/login`, null)
+      sendInvitationEmail(targetUser.email, targetUser.firstName, org?.name ?? 'ARTIC VMS', primaryRole, `${appUrl}/login`, null)
         .catch(e => logger.warn(`[INVITE] Email failed: ${e.message}`));
-      logger.info(`[INVITE] Existing user ${email} role updated to ${role} in org ${orgId}`);
-      res.json({ message: `${targetUser.firstName}'s role has been updated to ${role.replace(/_/g,' ')}.`, type: 'existing' });
+      logger.info(`[INVITE] Existing user ${email} primary role updated to ${primaryRole} in org ${orgId}`);
+      res.json({ message: `${targetUser.firstName}'s access has been updated. Additional roles are pending Super Admin approval.`, type: 'existing' });
     } else {
       // New user — generate temp password and setup token
       const rawToken    = crypto.randomBytes(32).toString('hex');
@@ -277,7 +315,9 @@ router.post('/invite', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, 
             passwordHash,
             firstName:      resolvedFirst,
             lastName:       resolvedLast,
-            role:           role as any,
+            role:           primaryRole as any,
+            roles:          [primaryRole],
+            pendingRoles,
             organizationId: orgId,
           },
         });
@@ -290,7 +330,7 @@ router.post('/invite', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, 
           data: {
             userId:         newUser.id,
             organizationId: orgId,
-            role:           role === 'ADMIN' ? 'COMPANY_ADMIN' : role as any,
+            role:           primaryRole === 'ADMIN' ? 'COMPANY_ADMIN' : primaryRole as any,
             status:         'ACTIVE',
             acceptedAt:     new Date(),
           },
@@ -299,10 +339,10 @@ router.post('/invite', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, 
       });
 
       const setupUrl = `${appUrl}/reset-password?token=${rawToken}&setup=1`;
-      sendInvitationEmail(email, resolvedFirst, org?.name ?? 'ARTIC VMS', role, setupUrl, rawToken)
+      sendInvitationEmail(email, resolvedFirst, org?.name ?? 'ARTIC VMS', primaryRole, setupUrl, rawToken)
         .catch(e => logger.warn(`[INVITE] Email failed: ${e.message}`));
-      logger.info(`[INVITE] New user invited: ${email} to org ${orgId} as ${role}`);
-      res.status(201).json({ message: `Invitation sent to ${email}. They'll receive an email to set their password.`, type: 'new' });
+      logger.info(`[INVITE] New user invited: ${email} to org ${orgId} as ${primaryRole}`);
+      res.status(201).json({ message: `Invitation sent to ${email}. Any additional access roles remain pending Super Admin approval or active subscription unlock.`, type: 'new' });
     }
   } catch (err: any) {
     if (err?.code === 'P2002') {

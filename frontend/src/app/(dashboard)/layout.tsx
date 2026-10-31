@@ -43,24 +43,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     if (!user) return;
 
-    const role   = user.role as AppRole;
+    const roles = [user.role, ...(user.roles ?? [])].filter(Boolean) as AppRole[];
     const status = user.organization?.status;
 
-    // PENDING orgs see only the pending-approval screen
     if (status === 'PENDING' && pathname !== '/pending-approval') {
       router.replace('/pending-approval');
       return;
     }
 
-    // REJECTED orgs see only the rejection screen
     if (status === 'REJECTED' && pathname !== '/rejected') {
       router.replace('/rejected');
       return;
     }
 
-    // Role cannot access this page → redirect to role home
-    if (status === 'ACTIVE' && !canAccess(role, pathname)) {
-      const home = ROLE_HOME[role] ?? '/dashboard';
+    if (status === 'ACTIVE' && !canAccess(roles, pathname)) {
+      const home = ROLE_HOME[(roles[0] ?? user.role) as AppRole] ?? '/dashboard';
       router.replace(home);
     }
   }, [isAuthenticated, user, pathname, router]);
@@ -68,15 +65,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Don't render until auth confirmed
   if (!isAuthenticated || !user) return null;
 
-  // Prevent flash of forbidden content while redirecting
-  if (!canAccess(user.role as AppRole, pathname)) return null;
+  const roles = [user.role, ...(user.roles ?? [])].filter(Boolean) as AppRole[];
+  if (!canAccess(roles, pathname)) return null;
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.08),_transparent_20%),linear-gradient(180deg,_#f8fafc_0%,_#eef3fb_100%)]">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -93,18 +90,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pathname}
-              variants={pageVariants}
-              initial="hidden"
-              animate="show"
-              exit="exit"
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-transparent">
+          <div className="mx-auto max-w-[1600px]">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pathname}
+                variants={pageVariants}
+                initial="hidden"
+                animate="show"
+                exit="exit"
+                className="space-y-5"
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </main>
       </div>
     </div>

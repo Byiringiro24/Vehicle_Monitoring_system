@@ -176,6 +176,36 @@ enum ExpenseCategory {
   OTHER
 }
 
+enum RequisitionType {
+  EXPENSE_REIMBURSEMENT
+  PURCHASE_ADVANCE
+  DRIVER_ADVANCE
+  PER_DIEM
+  FUEL_ADVANCE
+  PETTY_CASH
+  SALARY_ADJUSTMENT
+  DRIVER_DEDUCTION
+  OWNER_PAYOUT
+  SUPPLIER_PAYMENT
+  REFUND
+  SUBCONTRACTOR_PAY
+  CUSTOM
+}
+
+enum RequisitionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  SCHEDULED
+  PAID
+  RECONCILED
+  ON_HOLD
+  REJECTED
+  CANCELLED
+  VOID
+}
+
 // ─── Alerts ───────────────────────────────────────────────────────────────────
 
 enum AlertSeverity {
@@ -252,6 +282,7 @@ model Organization {
   documents     Document[]      @relation("OrgDocuments")
   businessModels BusinessModel[] @relation("OrgBusinessModels")
   agreements    Agreement[]     @relation("OrgAgreements")
+  requisitions  Requisition[]   @relation("OrgRequisitions")
 
   @@map("organizations")
 }
@@ -266,6 +297,8 @@ model User {
   lastName     String
   middleName   String?
   role         UserRole    @default(VIEWER)
+  roles        UserRole[]  @default([])
+  pendingRoles UserRole[]  @default([])
   phone        String?
   altPhone     String?
   avatarUrl    String?
@@ -278,13 +311,15 @@ model User {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  managedFleets      Fleet[]
-  driverProfile      Driver?
-  refreshTokens      RefreshToken[]
-  passwordResetTokens PasswordResetToken[]
-  acknowledgedAlerts Alert[]         @relation("AcknowledgedBy")
-  memberships        Membership[]    @relation("UserMemberships")
-  sentInvitations    Membership[]    @relation("MembershipInviter")
+  managedFleets          Fleet[]
+  driverProfile          Driver?
+  refreshTokens          RefreshToken[]
+  passwordResetTokens    PasswordResetToken[]
+  acknowledgedAlerts      Alert[]         @relation("AcknowledgedBy")
+  memberships            Membership[]    @relation("UserMemberships")
+  sentInvitations        Membership[]    @relation("MembershipInviter")
+  requisitionsRequested   Requisition[]  @relation("RequisitionRequester")
+  requisitionsApproved    Requisition[]  @relation("RequisitionApprover")
 
   @@map("users")
 }
@@ -753,6 +788,34 @@ model DriverPayment {
 
   @@unique([driverId, month, year])
   @@map("driver_payments")
+}
+
+model Requisition {
+  id                 String            @id @default(uuid())
+  organizationId     String
+  organization       Organization       @relation("OrgRequisitions", fields: [organizationId], references: [id], onDelete: Cascade)
+  requesterId        String
+  requester          User              @relation("RequisitionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  type               RequisitionType
+  status             RequisitionStatus @default(SUBMITTED)
+  amount             Float
+  neededBy           DateTime?
+  reason             String
+  paymentPreference  String?
+  vehicleId          String?
+  tripReference      String?
+  workOrderRef       String?
+  agreementRef       String?
+  notes              String?
+  rejectedReason     String?
+  approvedById       String?
+  approvedBy         User?             @relation("RequisitionApprover", fields: [approvedById], references: [id])
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([organizationId, status])
+  @@index([requesterId])
+  @@map("requisitions")
 }
 
 // =============================================================================

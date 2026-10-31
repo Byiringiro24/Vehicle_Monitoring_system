@@ -85,7 +85,7 @@ const STATS = [
   { value: '15s', label: 'GPS refresh rate' },
   { value: '17',  label: 'Alert types' },
   { value: '6',   label: 'User roles' },
-  { value: '100%',label: 'Self-hosted' },
+  { value: '24/7', label: 'Fleet visibility' },
 ];
 
 const FAQ = [
@@ -364,15 +364,14 @@ export default function LandingPage() {
           initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} variants={stagger}>
           <motion.div variants={fadeUp} className="space-y-5">
             <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full">
-              <Zap size={11} /> Low cost. High control.
+              <Zap size={11} /> Built for growing fleets.
             </div>
-            <h2 className="text-3xl font-extrabold text-gray-900">Built for the real world</h2>
+            <h2 className="text-3xl font-extrabold text-gray-900">Scalable fleet management for real operations</h2>
             <p className="text-gray-500 text-sm leading-relaxed">
-              ARTIC VMS works with affordable ESP32 + SIM808 GPS hardware over 2G/GPRS —
-              making it accessible for fleets of any size, from a single motorcycle to hundreds of trucks.
+              ARTIC VMS gives transport businesses a single system to manage drivers, vehicles, alerts, contracts, and performance across the full lifecycle of each asset.
             </p>
             <ul className="space-y-3">
-              {['Works with any SIM card and GPRS connection', 'ESP32 + SIM808 hardware under $15 per vehicle', 'Self-hosted — your data stays on your server', 'MQTT real-time comms work on slow 2G networks', 'No per-vehicle subscription fees ever'].map(item => (
+              {['Flexible for single-owner fleets and large operators', 'Live tracking, alerts, and operational visibility', 'Finance, payroll, and compliance in one platform', 'Designed to scale from a few vehicles to hundreds'].map(item => (
                 <li key={item} className="flex items-start gap-3 text-sm text-gray-700">
                   <CheckCircle size={15} className="text-blue-600 mt-0.5 shrink-0" /> {item}
                 </li>
@@ -387,9 +386,9 @@ export default function LandingPage() {
           <motion.div variants={fadeUp}
             className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-8 text-white shadow-xl shadow-blue-600/20">
             <div className="text-5xl font-black mb-1 tabular">$0</div>
-            <p className="text-blue-200 text-sm mb-6">Platform license — host it yourself</p>
+            <p className="text-blue-200 text-sm mb-6">Access to the platform</p>
             <div className="space-y-2.5 text-sm">
-              {['✓ Unlimited vehicles', '✓ Unlimited GPS history', '✓ Real-time engine lock', '✓ Full financial module', '✓ Driver & customer portals', '✓ Open source hardware'].map(f => (
+              {['✓ Unlimited vehicles', '✓ Unlimited GPS history', '✓ Real-time engine lock', '✓ Full financial module', '✓ Driver & customer portals', '✓ Operational reporting'].map(f => (
                 <div key={f} className="text-blue-50">{f}</div>
               ))}
             </div>

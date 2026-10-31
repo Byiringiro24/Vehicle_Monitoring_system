@@ -168,6 +168,56 @@ export default function PlatformPage() {
         <p className="text-gray-500 text-sm mt-0.5">Manage all companies, approvals, support and contacts</p>
       </div>
 
+      <div className="bg-slate-950 text-slate-100 rounded-2xl border border-slate-800 shadow-lg overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-800">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Restricted access</p>
+            <h2 className="text-lg font-semibold text-white mt-1">System architecture</h2>
+          </div>
+          <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-red-300">
+            Super Admin only
+          </span>
+        </div>
+
+        <div className="grid gap-4 p-5 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+            <div className="mb-2 flex items-center gap-2 text-cyan-300">
+              <Cpu size={16} />
+              <span className="text-sm font-semibold">Edge devices</span>
+            </div>
+            <ul className="space-y-2 text-sm text-slate-300">
+              <li>• ESP32-based vehicle telemetry devices</li>
+              <li>• SIM808 GPS + cellular modem stack</li>
+              <li>• 2G/GPRS connectivity and command handling</li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+            <div className="mb-2 flex items-center gap-2 text-emerald-300">
+              <Wifi size={16} />
+              <span className="text-sm font-semibold">Communication layer</span>
+            </div>
+            <ul className="space-y-2 text-sm text-slate-300">
+              <li>• MQTT message broker for telemetry</li>
+              <li>• Device heartbeat and command dispatch flow</li>
+              <li>• Real-time map and alert propagation</li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+            <div className="mb-2 flex items-center gap-2 text-violet-300">
+              <Database size={16} />
+              <span className="text-sm font-semibold">Platform stack</span>
+            </div>
+            <ul className="space-y-2 text-sm text-slate-300">
+              <li>• Next.js web application with JWT auth</li>
+              <li>• PostgreSQL + Redis persistence layer</li>
+              <li>• Self-hosted deployment with internal admin controls</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       {/* KPIs */}
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

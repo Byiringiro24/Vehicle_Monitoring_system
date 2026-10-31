@@ -7,6 +7,8 @@ interface User {
   firstName: string;
   lastName: string;
   role: string;
+  roles?: string[];
+  pendingRoles?: string[];
   phone?: string;
   intendedRole?: string; // 'owner' | 'driver' | 'customer' — stored for personal account routing
   organization: { id: string; name: string; slug: string; status?: string };
@@ -18,6 +20,7 @@ interface AuthState {
   refreshToken: string | null;
   isAuthenticated: boolean;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
+  switchOrganization: (organization: User['organization'], accessToken: string, refreshToken: string) => void;
   updateToken: (accessToken: string) => void;
   logout: () => void;
 }
@@ -31,6 +34,13 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       setAuth: (user, accessToken, refreshToken) =>
         set({ user, accessToken, refreshToken, isAuthenticated: true }),
+      switchOrganization: (organization, accessToken, refreshToken) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, organization } : state.user,
+          accessToken,
+          refreshToken,
+          isAuthenticated: !!state.user,
+        })),
       updateToken: (accessToken) => set({ accessToken }),
       logout: () => set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
     }),

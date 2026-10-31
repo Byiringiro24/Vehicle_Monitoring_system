@@ -44,34 +44,31 @@ interface SidebarProps { onClose?: () => void; }
 export function Sidebar({ onClose }: SidebarProps) {
   const pathname  = usePathname();
   const { user }  = useAuthStore();
-  const role      = (user?.role ?? 'VIEWER') as AppRole;
+  const roles = [user?.role ?? 'VIEWER', ...(user?.roles ?? [])].filter(Boolean) as AppRole[];
 
-  // getNavItems returns only items the role can see — but we ALSO want to
-  // show locked/blocked items so users know they exist and can request access.
-  // Strategy: get ALL nav items and classify each one.
-  const allItems = getNavItems('SUPER_ADMIN' as AppRole); // full list
-  const allowed  = new Set(getNavItems(role).map(i => i.href));
+  const allItems = getNavItems('SUPER_ADMIN' as AppRole);
+  const allowed  = new Set(getNavItems(roles).map(i => i.href));
 
   return (
-    <aside className="w-64 bg-brand-900 text-white flex flex-col shrink-0 shadow-2xl h-full">
+    <aside className="w-64 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.28),_transparent_24%),linear-gradient(180deg,_#0b1220_0%,_#101b35_100%)] text-white flex flex-col shrink-0 shadow-[0_20px_60px_rgba(15,23,42,0.35)] h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center gap-3 px-5 border-b border-brand-700/50">
-        <div className="bg-brand-600 p-2 rounded-lg shadow-inner shrink-0">
-          <Truck size={20} />
+      <div className="h-16 flex items-center gap-3 px-5 border-b border-white/10 bg-white/3">
+        <div className="bg-gradient-to-br from-brand-500 to-cyan-400 p-2.5 rounded-xl shadow-[0_8px_18px_rgba(37,99,235,0.4)] shrink-0">
+          <Truck size={19} className="text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm leading-tight tracking-wide">ARTIC VMS</p>
-          <p className="text-xs text-brand-300 leading-tight">Vehicle Monitoring</p>
+          <p className="font-black text-sm leading-tight tracking-[0.12em] uppercase">ARTIC VMS</p>
+          <p className="text-[11px] text-sky-200/80 leading-tight">Vehicle Monitoring</p>
         </div>
         {onClose && (
-          <button onClick={onClose} className="lg:hidden p-1 text-brand-300 hover:text-white" aria-label="Close menu">
+          <button onClick={onClose} className="lg:hidden p-1 text-sky-200/80 hover:text-white" aria-label="Close menu">
             <X size={18} />
           </button>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-3">
+      <nav className="flex-1 overflow-y-auto py-4 space-y-1 px-3">
         {allItems.map(({ href, label, icon }) => {
           const Icon    = ICONS[icon] ?? FileText;
           const active  = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
@@ -93,7 +90,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           // Role-blocked: org has it, but this user's role doesn't include it
           const isRoleBlocked = !isAllowed && !isPlanLocked &&
             ROLE_SENSITIVE[href] !== undefined &&
-            !(ROLE_SENSITIVE[href] as string[]).includes(role);
+            !(ROLE_SENSITIVE[href] as string[]).some(role => roles.includes(role as AppRole));
 
           if (!isAllowed && !isPremiumFeature && !isRoleBlocked) {
             // Truly hidden (not relevant to this role context at all)
@@ -115,12 +112,12 @@ export function Sidebar({ onClose }: SidebarProps) {
                 label
               }
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group',
                 active && isAllowed
-                  ? 'bg-brand-600 text-white shadow-md'
+                  ? 'bg-gradient-to-r from-brand-600 to-cyan-500 text-white shadow-[0_12px_24px_rgba(37,99,235,0.32)]'
                   : isAllowed
-                  ? 'text-brand-200 hover:bg-white/10 hover:text-white'
-                  : 'text-brand-400/60 cursor-pointer hover:bg-white/5',
+                  ? 'text-slate-200 hover:bg-white/8 hover:text-white'
+                  : 'text-slate-400/75 cursor-pointer hover:bg-white/4',
               )}
             >
               <Icon

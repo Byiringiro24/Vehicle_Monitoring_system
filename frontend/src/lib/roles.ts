@@ -104,17 +104,24 @@ export const PAGE_ROLES: Record<string, AppRole[]> = {
   '/reports':     ['SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER'],
 };
 
-export function canAccess(role: AppRole | string, pathname: string): boolean {
-  for (const [path, roles] of Object.entries(PAGE_ROLES)) {
+function toRoleList(roleOrRoles: AppRole | string | Array<AppRole | string>): string[] {
+  if (Array.isArray(roleOrRoles)) return roleOrRoles.filter(Boolean) as string[];
+  return [roleOrRoles].filter(Boolean) as string[];
+}
+
+export function canAccess(role: AppRole | string | Array<AppRole | string>, pathname: string): boolean {
+  const roles = toRoleList(role);
+  for (const [path, allowedRoles] of Object.entries(PAGE_ROLES)) {
     if (pathname === path || pathname.startsWith(path + '/')) {
-      return (roles as string[]).includes(role);
+      return (allowedRoles as string[]).some(item => roles.includes(item));
     }
   }
   return true;
 }
 
-export function getNavItems(role: AppRole | string) {
+export function getNavItems(role: AppRole | string | Array<AppRole | string>) {
+  const roles = toRoleList(role);
   return NAV_ITEMS.filter(item =>
-    !item.roles || (item.roles as string[]).includes(role)
+    !item.roles || item.roles.some(accessRole => roles.includes(accessRole))
   );
 }

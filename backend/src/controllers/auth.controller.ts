@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { loginUser, refreshAccessToken, logoutUser } from '../services/auth.service';
+import { loginUser, refreshAccessToken, logoutUser, switchUserOrganization } from '../services/auth.service';
 import { sendPasswordResetEmail, sendPasswordChangedEmail, sendWelcomeEmail, sendNewRegistrationAlert } from '../services/email.service';
 import { AuthenticatedRequest } from '../types';
 import { prisma } from '../config/database';
@@ -195,18 +195,57 @@ export async function logout(req: Request, res: Response, next: NextFunction) {
   } catch (err) { next(err); }
 }
 
+export async function switchOrganization(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const { organizationId } = req.body;
+    if (!organizationId) throw new AppError(400, 'organizationId is required');
+
+    const result = await switchUserOrganization(req.user!.userId, organizationId);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
 export async function me(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
       select: {
         id: true, email: true, firstName: true, lastName: true,
-        role: true, phone: true, avatarUrl: true, lastLoginAt: true,
+        role: true, roles: true, pendingRoles: true, phone: true, avatarUrl: true, lastLoginAt: true,
+        organizationId: true,
         organization: { select: { id: true, name: true, slug: true, status: true } },
       },
     });
     if (!user) throw new AppError(404, 'User not found');
-    res.json(user);
+
+    const membershipRoles = await prisma.membership.findMany({
+      where: { userId: req.user!.userId, organizationId: user.organizationId, status: 'ACTIVE' },
+      select: { role: true },
+    });
+
+    const normalizedRoles = new Set<string>(Array.isArray(user.roles) ? user.roles.map(String) : []);
+    for (const membership of membershipRoles) {
+      const mapped = membership.role === 'COMPANY_OWNER' || membership.role === 'COMPANY_ADMIN' ? 'ADMIN' :
+        membership.role === 'FLEET_MANAGER' ? 'FLEET_MANAGER' :
+        membership.role === 'DISPATCHER' ? 'DISPATCHER' :
+        membership.role === 'FINANCE_MANAGER' || membership.role === 'ACCOUNTANT' ? 'FINANCE_MANAGER' :
+        membership.role === 'HR_MANAGER' ? 'HR_MANAGER' :
+        membership.role === 'MECHANIC' ? 'MECHANIC' :
+        membership.role === 'DRIVER' ? 'DRIVER' :
+        membership.role === 'SAFETY_OFFICER' ? 'COMPLIANCE_OFFICER' :
+        'VIEWER';
+      normalizedRoles.add(mapped);
+    }
+
+    const roleList = Array.from(normalizedRoles);
+    const primaryRole = roleList.includes(String(user.role)) ? String(user.role) : (roleList[0] ?? user.role);
+
+    res.json({
+      ...user,
+      role: primaryRole,
+      roles: roleList,
+      pendingRoles: user.pendingRoles ?? [],
+    });
   } catch (err) { next(err); }
 }
 

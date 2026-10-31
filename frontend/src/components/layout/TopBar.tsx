@@ -52,24 +52,24 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shrink-0 shadow-sm z-10">
+    <header className="h-16 bg-white/80 border-b border-slate-200/80 backdrop-blur-xl flex items-center justify-between px-4 md:px-6 shrink-0 shadow-[0_8px_28px_rgba(15,23,42,0.04)] z-10">
       <div className="flex items-center gap-3">
         {/* Hamburger — mobile only */}
         <button
           onClick={onMenuClick}
-          className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition"
+          className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition"
           aria-label="Open menu">
           <Menu size={20} />
         </button>
         <div className="hidden sm:block">
-          <h2 className="text-sm font-semibold text-gray-700 leading-tight">{user?.organization?.name ?? 'ARTIC VMS'}</h2>
-          <p className="text-xs text-gray-400 leading-tight">Vehicle Monitoring System</p>
+          <h2 className="text-sm font-bold text-slate-800 leading-tight">{user?.organization?.name ?? 'ARTIC VMS'}</h2>
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400 leading-tight">Vehicle Monitoring System</p>
         </div>
       </div>
       <div className="flex items-center gap-1.5">
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition"
+          className="p-2.5 rounded-xl text-slate-600 hover:bg-slate-100 transition border border-slate-200/80 bg-white/70"
           aria-label="Toggle theme">
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
@@ -78,25 +78,25 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
         <div className="relative" ref={bellRef}>
           <button
             onClick={() => { setShowNotifs(!showNotifs); if (!showNotifs) markAllRead(); }}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition relative"
+            className="p-2.5 rounded-xl text-slate-600 hover:bg-slate-100 transition relative border border-slate-200/80 bg-white/70"
             aria-label="Notifications">
             <Bell size={18} />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1 font-bold">
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
 
           {showNotifs && (
-            <div className="absolute right-0 top-10 w-72 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <p className="font-semibold text-sm text-gray-800">Notifications</p>
-                <button onClick={clearAll} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600">
+            <div className="absolute right-0 top-12 w-72 sm:w-80 bg-white rounded-2xl shadow-[0_25px_50px_rgba(15,23,42,0.22)] border border-slate-200 z-50 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/80">
+                <p className="font-semibold text-sm text-slate-800">Notifications</p>
+                <button onClick={clearAll} className="p-1.5 hover:bg-slate-200/80 rounded-lg text-slate-400 hover:text-slate-600">
                   <X size={14} />
                 </button>
               </div>
-              <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
                 {notifications.length ? notifications.map(n => (
                   <div key={n.id} className={cn('px-4 py-3 text-sm', getSeverityColor(n.severity))}>
                     <p className="font-medium">{n.title}</p>
@@ -117,7 +117,7 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition border border-slate-200/80 bg-white/70">
           <LogOut size={16} />
           <span className="hidden sm:inline">Logout</span>
         </button>

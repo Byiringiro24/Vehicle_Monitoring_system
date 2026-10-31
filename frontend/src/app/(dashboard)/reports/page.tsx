@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, financialApi, expenseApi } from '@/lib/api';
+import { apiClient, financialApi, expenseApi, reportApi } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { format, subDays } from 'date-fns';
@@ -9,7 +9,7 @@ import { Download, Calendar, BarChart3, Truck, Users, DollarSign,
   MapPin, TrendingUp, AlertTriangle, Fuel } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Tab = 'summary' | 'fleet' | 'vehicles' | 'drivers' | 'financial';
+type Tab = 'summary' | 'fleet' | 'vehicles' | 'drivers' | 'financial' | 'daily';
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#14b8a6'];
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -18,6 +18,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'vehicles',  label: 'Vehicle Reports',    icon: <Truck size={14} /> },
   { id: 'drivers',   label: 'Driver Reports',     icon: <Users size={14} /> },
   { id: 'financial', label: 'Financial Reports',  icon: <DollarSign size={14} /> },
+  { id: 'daily',     label: 'Daily Payments',     icon: <DollarSign size={14} /> },
 ];
 
 function exportCSV(data: object[], filename: string) {
@@ -477,6 +478,109 @@ function FinancialTab({ from, to }: { from: string; to: string }) {
   );
 }
 
+function DailyPaymentsTab() {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['daily-payments-report', month, year],
+    queryFn: () => reportApi.dailyPayments({ month, year }),
+  });
+
+  const vehicles = data?.vehicles ?? [];
+  const grid = data?.grid ?? {};
+  const daysInMonth = data?.daysInMonth ?? new Date(year, month, 0).getDate();
+  const dayKeys = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  });
+  const totalsByDay = dayKeys.map((key) => {
+    const values = Object.values(grid[key] ?? {});
+    return values.reduce((sum: number, value: any) => sum + Number(value || 0), 0);
+  });
+  const grandTotal = (data?.grandTotal ?? 0).toLocaleString();
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800">Daily Payments Grid</h2>
+          <p className="text-sm text-gray-500">Vehicle-by-day reconciliation for the selected month</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500">
+            {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
+              <option key={m} value={m}>{new Date(2024, m - 1, 1).toLocaleString('default', { month: 'long' })}</option>
+            ))}
+          </select>
+          <input type="number" min={2024} value={year} onChange={(e) => setYear(Number(e.target.value))}
+            className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm overflow-x-auto">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700">Grand total: <span className="text-green-700">{grandTotal} RWF</span></p>
+        </div>
+
+        {isLoading ? (
+          <p className="py-8 text-center text-sm text-gray-500">Loading daily payment grid…</p>
+        ) : !vehicles.length ? (
+          <p className="py-8 text-center text-sm text-gray-500">No vehicle payment data found for this month.</p>
+        ) : (
+          <table className="min-w-[1200px] border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 border border-gray-200 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-700">Vehicle</th>
+                {dayKeys.map((key) => (
+                  <th key={key} className="border border-gray-200 bg-gray-50 px-2 py-2 text-center font-medium text-gray-600">
+                    {new Date(key).getDate()}
+                  </th>
+                ))}
+                <th className="border border-gray-200 bg-green-50 px-3 py-2 text-center font-semibold text-green-700">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.map((vehicle: any) => (
+                <tr key={vehicle.id}>
+                  <td className="sticky left-0 z-10 border border-gray-200 bg-white px-3 py-2 font-medium text-gray-800">
+                    {vehicle.name || vehicle.plate}
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500">{vehicle.plate}</div>
+                  </td>
+                  {dayKeys.map((key) => {
+                    const value = Number(grid[key]?.[vehicle.id] ?? 0);
+                    return (
+                      <td key={`${vehicle.id}-${key}`} className="border border-gray-200 px-2 py-2 text-right text-gray-700">
+                        {value > 0 ? value.toLocaleString() : '—'}
+                      </td>
+                    );
+                  })}
+                  <td className="border border-gray-200 bg-gray-50 px-3 py-2 text-right font-bold text-gray-800">
+                    {(Object.values(grid).reduce((sum: number, day: any) => sum + Number(day?.[vehicle.id] ?? 0), 0)).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-gray-50">
+                <td className="border border-gray-200 px-3 py-2 font-bold text-gray-800">Total by day</td>
+                {totalsByDay.map((total, index) => (
+                  <td key={`daily-total-${index}`} className="border border-gray-200 px-2 py-2 text-right font-semibold text-gray-700">
+                    {total > 0 ? total.toLocaleString() : '—'}
+                  </td>
+                ))}
+                <td className="border border-gray-200 bg-green-50 px-3 py-2 text-right font-bold text-green-700">
+                  {grandTotal}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [tab, setTab]   = useState<Tab>('summary');
@@ -513,6 +617,7 @@ export default function ReportsPage() {
       {tab === 'vehicles'  && <VehiclesTab  from={from} to={to} />}
       {tab === 'drivers'   && <DriversTab   from={from} to={to} />}
       {tab === 'financial' && <FinancialTab from={from} to={to} />}
+      {tab === 'daily'     && <DailyPaymentsTab />}
     </div>
   );
 }

@@ -29,7 +29,7 @@ const GpsHistoryMapSatellite = dynamic(() => import('@/components/maps/GpsHistor
   loading: () => <div className="flex items-center justify-center h-full bg-gray-900 rounded-xl text-gray-400">Loading satellite…</div>,
 });
 
-type Tab = 'overview' | 'history' | 'trips' | 'telemetry' | 'commands' | 'documents';
+type Tab = 'overview' | 'history' | 'trips' | 'telemetry' | 'commands' | 'documents' | 'ownership' | 'assignments';
 
 // ─── Relative time helper ─────────────────────────────────────────────────────
 function timeAgo(dateStr: string | undefined | null): string {
@@ -656,11 +656,13 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const status = getStatus();
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview',   label: 'Overview',        icon: <Info size={14} /> },
-    { id: 'history',    label: 'GPS History',     icon: <Route size={14} /> },
-    { id: 'telemetry',  label: 'Telemetry',       icon: <BarChart2 size={14} /> },
-    { id: 'commands',   label: 'Device Commands', icon: <Terminal size={14} /> },
-    { id: 'documents',  label: 'Documents',       icon: <History size={14} /> },
+    { id: 'overview',    label: 'Overview',         icon: <Info size={14} /> },
+    { id: 'history',     label: 'GPS History',      icon: <Route size={14} /> },
+    { id: 'telemetry',   label: 'Telemetry',        icon: <BarChart2 size={14} /> },
+    { id: 'commands',    label: 'Device Commands',  icon: <Terminal size={14} /> },
+    { id: 'documents',   label: 'Documents',        icon: <History size={14} /> },
+    { id: 'ownership',   label: 'Ownership',        icon: <Satellite size={14} /> },
+    { id: 'assignments', label: 'Assignments',      icon: <Calendar size={14} /> },
   ];
 
   return (

@@ -1,38 +1,61 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supportApi, platformApi } from '@/lib/api';
+import { supportApi, platformApi, requisitionApi, financialApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { CheckSquare, Clock, CheckCircle2, XCircle, Building2, X, AlertTriangle } from 'lucide-react';
+import { CheckSquare, Clock, CheckCircle2, XCircle, Building2, X, AlertTriangle, WalletCards, DollarSign } from 'lucide-react';
 
-type TabId = 'pending-orgs' | 'tickets';
+type TabId = 'pending-orgs' | 'finance-approvals' | 'tickets';
 
 export default function ApprovalsPage() {
   const { user } = useAuthStore();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<TabId>('pending-orgs');
+  const rawRoles = Array.isArray(user?.roles) ? user.roles : user ? [user.role] : [];
+  const canManageRegistrations = rawRoles.includes('SUPER_ADMIN') || rawRoles.includes('ADMIN');
+  const isFinanceApprover = rawRoles.includes('FINANCE_MANAGER') || rawRoles.includes('SUPER_ADMIN') || rawRoles.includes('ADMIN');
+  const [tab, setTab] = useState<TabId>(isFinanceApprover ? 'finance-approvals' : 'pending-orgs');
   const [rejectModal, setRejectModal] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState('');
 
   const { data: pendingOrgs = [], isLoading: orgsLoading } = useQuery({
     queryKey: ['pending-orgs'],
     queryFn: supportApi.pendingOrgs,
-    enabled: user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN',
+    enabled: canManageRegistrations,
+  });
+
+  const { data: financeApprovals = { data: [] }, isLoading: financeLoading } = useQuery({
+    queryKey: ['finance-approval-queue'],
+    queryFn: () => requisitionApi.list({ status: 'SUBMITTED' }),
+    enabled: isFinanceApprover,
+  });
+
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  const { data: payrollQueue = { data: [] }, isLoading: payrollLoading } = useQuery({
+    queryKey: ['finance-payroll-queue', currentMonth, currentYear],
+    queryFn: () => financialApi.payroll({ month: currentMonth, year: currentYear }),
+    enabled: isFinanceApprover,
+  });
+
+  const { data: payoutQueue = { data: [] }, isLoading: payoutLoading } = useQuery({
+    queryKey: ['finance-owner-payout-queue'],
+    queryFn: () => financialApi.ownerPayouts(),
+    enabled: isFinanceApprover,
   });
 
   const { data: tickets = [], isLoading: ticketsLoading } = useQuery({
     queryKey: ['support-tickets'],
     queryFn: () => supportApi.allTickets(),
-    enabled: user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN',
+    enabled: canManageRegistrations,
   });
 
   const { data: plans = [] } = useQuery({
     queryKey: ['platform-plans'],
     queryFn: platformApi.plans,
-    enabled: user?.role === 'SUPER_ADMIN',
+    enabled: rawRoles.includes('SUPER_ADMIN'),
   });
 
   const [selectedPlan, setSelectedPlan] = useState('');
@@ -55,7 +78,53 @@ export default function ApprovalsPage() {
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
   });
 
+  const requisitionApprove = useMutation({
+    mutationFn: ({ id, notes }: { id: string; notes?: string }) => requisitionApi.approve(id, notes),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['finance-approval-queue'] });
+      toast.success('Requisition approved');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Approval failed'),
+  });
+
+  const requisitionReject = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => requisitionApi.reject(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['finance-approval-queue'] });
+      toast.success('Requisition rejected');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Rejection failed'),
+  });
+
   const openTickets = (tickets as any[]).filter((t: any) => t.status === 'OPEN').length;
+  const requisitionQueue = (financeApprovals as any)?.data ?? [];
+  const payrollItems = (payrollQueue as any)?.data ?? [];
+  const ownerPayoutItems = (payoutQueue as any)?.data ?? [];
+  const financeQueue = [
+    ...requisitionQueue.map((item: any) => ({ ...item, queueType: 'REQUISITION' })),
+    ...payrollItems
+      .filter((item: any) => (item.status ?? '').toString().toUpperCase() !== 'PAID')
+      .map((item: any) => ({
+        id: item.id,
+        queueType: 'PAYROLL',
+        amount: Number(item.net ?? 0),
+        requester: { firstName: 'Payroll', lastName: 'Run', email: item.email ?? 'n/a' },
+        type: 'PAYROLL_RUN',
+        reason: `${item.driverName} • ${item.vehicle} • net ${Number(item.net ?? 0).toLocaleString()} RWF`,
+        neededBy: null,
+        status: item.status,
+      })),
+    ...ownerPayoutItems.map((item: any) => ({
+      id: item.ownerId,
+      queueType: 'OWNER_PAYOUT',
+      amount: Number(item.netPayout ?? 0),
+      requester: { firstName: 'Owner', lastName: 'Settlement', email: item.email ?? 'n/a' },
+      type: 'OWNER_PAYOUT',
+      reason: `${item.ownerName} • ${item.vehicleCount} vehicle(s) • ${Number(item.netPayout ?? 0).toLocaleString()} RWF`,
+      neededBy: null,
+      status: 'PENDING',
+    })),
+  ];
 
   const TICKET_STATUS_COLORS: Record<string, string> = {
     OPEN:        'bg-blue-100 text-blue-700',
@@ -72,27 +141,43 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-        <button onClick={() => setTab('pending-orgs')}
-          className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition relative',
-            tab === 'pending-orgs' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700')}>
-          <Building2 size={14} /> Pending Registrations
-          {(pendingOrgs as any[]).length > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
-              {(pendingOrgs as any[]).length}
-            </span>
-          )}
-        </button>
-        <button onClick={() => setTab('tickets')}
-          className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition relative',
-            tab === 'tickets' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700')}>
-          <CheckSquare size={14} /> Support Tickets
-          {openTickets > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
-              {openTickets}
-            </span>
-          )}
-        </button>
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
+        {canManageRegistrations && (
+          <button onClick={() => setTab('pending-orgs')}
+            className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition relative',
+              tab === 'pending-orgs' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700')}>
+            <Building2 size={14} /> Pending Registrations
+            {(pendingOrgs as any[]).length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
+                {(pendingOrgs as any[]).length}
+              </span>
+            )}
+          </button>
+        )}
+        {isFinanceApprover && (
+          <button onClick={() => setTab('finance-approvals')}
+            className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition relative',
+              tab === 'finance-approvals' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700')}>
+            <DollarSign size={14} /> Finance Queue
+            {financeQueue.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
+                {financeQueue.length}
+              </span>
+            )}
+          </button>
+        )}
+        {canManageRegistrations && (
+          <button onClick={() => setTab('tickets')}
+            className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition relative',
+              tab === 'tickets' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700')}>
+            <CheckSquare size={14} /> Support Tickets
+            {openTickets > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
+                {openTickets}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Pending orgs */}
@@ -143,6 +228,64 @@ export default function ApprovalsPage() {
                     <XCircle size={14} /> Reject
                   </button>
                 </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'finance-approvals' && isFinanceApprover && (
+        <div className="space-y-3">
+          {financeLoading || payrollLoading || payoutLoading ? (
+            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}</div>
+          ) : financeQueue.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <WalletCards size={36} className="text-emerald-300 mx-auto mb-3" />
+              <p className="font-semibold text-gray-600">No pending finance items</p>
+              <p className="text-gray-400 text-sm mt-1">All requisitions, payroll, and owner payouts are clear.</p>
+            </div>
+          ) : financeQueue.map((item: any) => (
+            <div key={`${item.queueType}-${item.id}`} className="bg-white rounded-xl border border-emerald-200 shadow-sm p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{item.queueType === 'PAYROLL' ? 'PAYROLL' : item.queueType === 'OWNER_PAYOUT' ? 'OWNER PAYOUT' : item.status}</span>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600">{(item.type ?? item.queueType).replace(/_/g, ' ')}</span>
+                  </div>
+                  <p className="text-lg font-semibold text-gray-900">{Number(item.amount ?? 0).toLocaleString()} RWF</p>
+                  <p className="text-sm text-gray-600">{item.requester?.firstName} {item.requester?.lastName} · {item.requester?.email}</p>
+                  {item.neededBy && (
+                    <p className="text-xs text-gray-500 mt-1">Needed {formatDate(new Date(item.neededBy))}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {item.queueType === 'REQUISITION' ? (
+                    <>
+                      <button
+                        onClick={() => requisitionApprove.mutate({ id: item.id, notes: 'Approved from approvals queue' })}
+                        disabled={requisitionApprove.isPending}
+                        className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition disabled:opacity-60">
+                        <CheckCircle2 size={14} /> Approve
+                      </button>
+                      <button
+                        onClick={() => requisitionReject.mutate({ id: item.id, reason: 'Rejected from approvals queue' })}
+                        disabled={requisitionReject.isPending}
+                        className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition disabled:opacity-60">
+                        <XCircle size={14} /> Reject
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => toast.success(`${item.queueType === 'PAYROLL' ? 'Payroll' : 'Owner payout'} item reviewed`)}
+                      className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition">
+                      <CheckCircle2 size={14} /> Review
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 border-t border-gray-100 pt-3 text-sm text-gray-600">
+                <p className="font-medium text-gray-700">Reason</p>
+                <p>{item.reason}</p>
               </div>
             </div>
           ))}

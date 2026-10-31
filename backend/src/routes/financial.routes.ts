@@ -5,6 +5,283 @@ import { prisma } from '../config/database';
 const router = Router();
 router.use(authenticate);
 
+// ─── Requisitions ─────────────────────────────────────────────────────────────
+router.get('/requisitions', async (req: any, res, next) => {
+  try {
+    const orgId = req.user.organizationId;
+    const where: Record<string, any> = { organizationId: orgId };
+    if (req.query.status) where.status = req.query.status;
+
+    const requisitions = await prisma.requisition.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+        approvedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+
+    res.json({ data: requisitions });
+  } catch (err) { next(err); }
+});
+
+router.post('/requisitions', async (req: any, res, next) => {
+  try {
+    const { type, amount, neededBy, reason, paymentPreference, vehicleId, tripReference, workOrderRef, agreementRef, notes } = req.body;
+
+    if (!type || !reason || !amount || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Type, amount and reason are required' });
+    }
+
+    const requisition = await prisma.requisition.create({
+      data: {
+        organizationId: req.user.organizationId,
+        requesterId: req.user.id,
+        type,
+        amount: Number(amount),
+        neededBy: neededBy ? new Date(neededBy) : null,
+        reason: String(reason).trim(),
+        paymentPreference: paymentPreference ?? 'MOBILE_MONEY',
+        vehicleId: vehicleId || null,
+        tripReference: tripReference || null,
+        workOrderRef: workOrderRef || null,
+        agreementRef: agreementRef || null,
+        notes: notes || null,
+        status: 'SUBMITTED',
+      },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+      },
+    });
+
+    res.status(201).json(requisition);
+  } catch (err) { next(err); }
+});
+
+router.patch('/requisitions/:id/approve', authorize('FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'), async (req: any, res, next) => {
+  try {
+    const { notes } = req.body;
+    const requisition = await prisma.requisition.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'APPROVED',
+        notes: notes ?? undefined,
+        approvedById: req.user.id,
+      },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+        approvedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+
+    res.json(requisition);
+  } catch (err) { next(err); }
+});
+
+router.patch('/requisitions/:id/reject', authorize('FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'), async (req: any, res, next) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ error: 'A rejection reason is required' });
+    }
+
+    const requisition = await prisma.requisition.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'REJECTED',
+        rejectedReason: String(reason).trim(),
+        approvedById: req.user.id,
+      },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+        approvedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+
+    res.json(requisition);
+  } catch (err) { next(err); }
+});
+
+// ─── Payroll Runs ─────────────────────────────────────────────────────────────
+router.get('/payroll', async (req: any, res, next) => {
+  try {
+    const orgId = req.user.organizationId;
+    const month = Number(req.query.month ?? new Date().getMonth() + 1);
+    const year = Number(req.query.year ?? new Date().getFullYear());
+
+    const rows = await prisma.driverPayment.findMany({
+      where: {
+        driver: { organizationId: orgId },
+        month,
+        year,
+      },
+      include: {
+        driver: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+            currentVehicle: { select: { id: true, name: true, licensePlate: true } },
+          },
+        },
+      },
+      orderBy: [{ totalAmount: 'desc' }],
+    });
+
+    const data = rows.map((row: any) => ({
+      id: row.id,
+      driverId: row.driverId,
+      driverName: `${row.driver.user.firstName ?? ''} ${row.driver.user.lastName ?? ''}`.trim() || 'Unknown driver',
+      email: row.driver.user.email,
+      phone: row.driver.user.phone,
+      vehicle: row.driver.currentVehicle ? `${row.driver.currentVehicle.name} (${row.driver.currentVehicle.licensePlate})` : 'Unassigned',
+      gross: (row.baseSalary ?? 0) + (row.commission ?? 0) + (row.bonus ?? 0),
+      deductions: row.deductions ?? 0,
+      net: row.totalAmount ?? 0,
+      paid: row.paidAmount ?? 0,
+      status: row.status,
+      month: row.month,
+      year: row.year,
+    }));
+
+    const totalGross = data.reduce((sum, row) => sum + row.gross, 0);
+    const totalNet = data.reduce((sum, row) => sum + row.net, 0);
+
+    res.json({ month, year, data, totalGross, totalNet, count: data.length });
+  } catch (err) { next(err); }
+});
+
+router.post('/payroll/generate', authorize('FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'), async (req: any, res, next) => {
+  try {
+    const orgId = req.user.organizationId;
+    const month = Number(req.body.month ?? new Date().getMonth() + 1);
+    const year = Number(req.body.year ?? new Date().getFullYear());
+
+    const drivers = await prisma.driver.findMany({
+      where: { organizationId: orgId },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    });
+
+    const rows = await Promise.all(drivers.map(async (driver: any) => {
+      const payment = await prisma.driverPayment.upsert({
+        where: { driverId_month_year: { driverId: driver.id, month, year } },
+        create: {
+          driverId: driver.id,
+          month,
+          year,
+          baseSalary: driver.baseSalary ?? 0,
+          expectedAmount: driver.baseSalary ?? 0,
+          paidAmount: 0,
+          difference: 0,
+          totalAmount: driver.baseSalary ?? 0,
+          status: 'PENDING',
+        },
+        update: {
+          baseSalary: driver.baseSalary ?? 0,
+          expectedAmount: driver.baseSalary ?? 0,
+          totalAmount: driver.baseSalary ?? 0,
+        },
+      });
+      return payment;
+    }));
+
+    res.status(201).json({ month, year, generated: rows.length, data: rows });
+  } catch (err) { next(err); }
+});
+
+// ─── Owner Payouts ────────────────────────────────────────────────────────────
+router.get('/owner-payouts', async (req: any, res, next) => {
+  try {
+    const orgId = req.user.organizationId;
+    const vehicles = await prisma.vehicle.findMany({
+      where: { organizationId: orgId, ownerUserId: { not: null } },
+      select: { id: true, name: true, licensePlate: true, ownerUserId: true },
+    });
+
+    const payoutRows: any[] = [];
+    for (const vehicle of vehicles) {
+      if (!vehicle.ownerUserId) continue;
+
+      const [incomeAgg, expenseAgg, owner] = await Promise.all([
+        prisma.contractPayment.aggregate({
+          where: { contract: { vehicleId: vehicle.id }, status: 'PAID' },
+          _sum: { amount: true },
+        }),
+        prisma.vehicleExpense.aggregate({
+          where: { vehicleId: vehicle.id },
+          _sum: { amount: true },
+        }),
+        prisma.user.findUnique({
+          where: { id: vehicle.ownerUserId! },
+          select: { id: true, firstName: true, lastName: true, email: true },
+        }),
+      ]);
+
+      const income = incomeAgg._sum.amount ?? 0;
+      const expenses = expenseAgg._sum.amount ?? 0;
+      const net = income - expenses;
+
+      if (!owner || net <= 0) continue;
+
+      const existing = payoutRows.find((row) => row.ownerId === owner.id);
+      if (existing) {
+        existing.grossIncome += income;
+        existing.totalExpenses += expenses;
+        existing.netPayout += net;
+        existing.vehicleCount += 1;
+        existing.vehicles.push({ id: vehicle.id, name: vehicle.name, licensePlate: vehicle.licensePlate, net });
+      } else {
+        payoutRows.push({
+          ownerId: owner.id,
+          ownerName: `${owner.firstName ?? ''} ${owner.lastName ?? ''}`.trim() || owner.email || 'Owner',
+          email: owner.email,
+          vehicleCount: 1,
+          grossIncome: income,
+          totalExpenses: expenses,
+          netPayout: net,
+          vehicles: [{ id: vehicle.id, name: vehicle.name, licensePlate: vehicle.licensePlate, net }],
+        });
+      }
+    }
+
+    res.json({ data: payoutRows, totalPayout: payoutRows.reduce((sum, row) => sum + row.netPayout, 0) });
+  } catch (err) { next(err); }
+});
+
+router.post('/owner-payouts/execute', authorize('FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'), async (req: any, res, next) => {
+  try {
+    const { ownerId, amount, notes } = req.body;
+    const orgId = req.user.organizationId;
+
+    if (!ownerId || !amount || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Owner and amount are required' });
+    }
+
+    const owner = await prisma.user.findFirst({
+      where: { id: ownerId, organizationId: orgId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    if (!owner) {
+      return res.status(404).json({ error: 'Owner not found in your organization' });
+    }
+
+    const requisition = await prisma.requisition.create({
+      data: {
+        organizationId: orgId,
+        requesterId: req.user.id,
+        type: 'OWNER_PAYOUT',
+        status: 'APPROVED',
+        amount: Number(amount),
+        reason: notes ? String(notes).trim() : `Approved owner payout for ${owner.firstName ?? 'Owner'} ${owner.lastName ?? ''}`.trim(),
+        paymentPreference: 'BANK_TRANSFER',
+        approvedById: req.user.id,
+        notes: notes ? String(notes).trim() : null,
+      },
+    });
+
+    res.status(201).json({ requisition, message: 'Owner payout executed and recorded' });
+  } catch (err) { next(err); }
+});
+
 // ─── Finance Dashboard Summary ────────────────────────────────────────────────
 router.get('/dashboard', async (req: any, res, next) => {
   try {

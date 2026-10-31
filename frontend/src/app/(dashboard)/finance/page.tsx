@@ -1,15 +1,16 @@
 ﻿'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { financialApi, contractApi, expenseApi, apiClient } from '@/lib/api';
+import { financialApi, contractApi, expenseApi, apiClient, requisitionApi } from '@/lib/api';
 import { format, subDays } from 'date-fns';
 import { DollarSign, Plus, TrendingUp, TrendingDown, AlertCircle,
   CheckCircle, Clock, Shield, FileText, Fuel, Wrench, Receipt,
   BarChart3, Users2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 
-type FinTab = 'dashboard' | 'contracts' | 'expenses' | 'invoices' | 'statements';
+type FinTab = 'dashboard' | 'contracts' | 'expenses' | 'requisitions' | 'payroll' | 'payouts' | 'invoices' | 'statements';
 
 const EXPENSE_CATEGORIES = [
   'MAINTENANCE','FUEL','INSURANCE','ROAD_TAX','INSPECTION',
@@ -373,6 +374,181 @@ function ExpensesTab() {
 }
 
 // â”€â”€â”€ Invoices Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function RequisitionsTab() {
+  const qc = useQueryClient();
+  const { user } = useAuthStore();
+  const rawRoles = Array.isArray(user?.roles) ? user.roles : user ? [user.role] : [];
+  const isFinance = rawRoles.includes('FINANCE_MANAGER') || rawRoles.includes('ADMIN') || rawRoles.includes('SUPER_ADMIN');
+
+  const [form, setForm] = useState({
+    type: 'FUEL_ADVANCE',
+    amount: '',
+    neededBy: format(new Date(Date.now() + 3 * 86400000), 'yyyy-MM-dd'),
+    reason: '',
+    paymentPreference: 'MOBILE_MONEY',
+    vehicleId: '',
+    tripReference: '',
+    notes: '',
+  });
+
+  const { data: requisitions = { data: [] }, isLoading } = useQuery({
+    queryKey: ['requisitions'],
+    queryFn: () => requisitionApi.list(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => requisitionApi.create({
+      ...form,
+      amount: Number(form.amount),
+      vehicleId: form.vehicleId || undefined,
+      tripReference: form.tripReference || undefined,
+      notes: form.notes || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['requisitions'] });
+      toast.success('Requisition submitted');
+      setForm({ type: 'FUEL_ADVANCE', amount: '', neededBy: format(new Date(Date.now() + 3 * 86400000), 'yyyy-MM-dd'), reason: '', paymentPreference: 'MOBILE_MONEY', vehicleId: '', tripReference: '', notes: '' });
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to submit requisition'),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: ({ id, notes }: { id: string; notes?: string }) => requisitionApi.approve(id, notes),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['requisitions'] });
+      toast.success('Requisition approved');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Approval failed'),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => requisitionApi.reject(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['requisitions'] });
+      toast.success('Requisition rejected');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Rejection failed'),
+  });
+
+  const rows = requisitions?.data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-gray-800">Submit requisition</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm font-medium text-gray-700">
+            Type
+            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500">
+              {['EXPENSE_REIMBURSEMENT','PURCHASE_ADVANCE','DRIVER_ADVANCE','PER_DIEM','FUEL_ADVANCE','PETTY_CASH','SALARY_ADJUSTMENT','DRIVER_DEDUCTION','SUPPLIER_PAYMENT','REFUND','CUSTOM'].map((value) => (
+                <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-gray-700">
+            Amount (RWF)
+            <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </label>
+          <label className="text-sm font-medium text-gray-700">
+            Needed by
+            <input type="date" value={form.neededBy} onChange={(e) => setForm({ ...form, neededBy: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </label>
+          <label className="text-sm font-medium text-gray-700">
+            Payment preference
+            <select value={form.paymentPreference} onChange={(e) => setForm({ ...form, paymentPreference: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="MOBILE_MONEY">Mobile money</option>
+              <option value="BANK_TRANSFER">Bank transfer</option>
+              <option value="CASH">Cash</option>
+            </select>
+          </label>
+          <label className="text-sm font-medium text-gray-700 md:col-span-2">
+            Reason
+            <textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              rows={3} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </label>
+          <label className="text-sm font-medium text-gray-700">
+            Vehicle ID (optional)
+            <input value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </label>
+          <label className="text-sm font-medium text-gray-700">
+            Trip reference (optional)
+            <input value={form.tripReference} onChange={(e) => setForm({ ...form, tripReference: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </label>
+          <label className="text-sm font-medium text-gray-700 md:col-span-2">
+            Notes
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={2} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          </label>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
+            {createMutation.isPending ? 'Submitting...' : 'Submit requisition'}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="border-b border-gray-200 px-5 py-3">
+          <h2 className="font-semibold text-gray-800">Approval queue</h2>
+        </div>
+        {isLoading ? (
+          <div className="p-6 space-y-3">{[1,2,3].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-gray-100" />)}</div>
+        ) : rows.length === 0 ? (
+          <div className="p-10 text-center text-sm text-gray-500">No requisitions yet</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {rows.map((r: any) => (
+              <div key={r.id} className="p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{r.type.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-gray-500">{r.requester?.firstName} {r.requester?.lastName} · {r.requester?.role}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn('rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
+                      r.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                      r.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                      r.status === 'ON_HOLD' ? 'bg-amber-100 text-amber-700' :
+                      'bg-blue-100 text-blue-700')}>{r.status}</span>
+                    <span className="text-sm font-bold text-gray-900">{Number(r.amount ?? 0).toLocaleString()} RWF</span>
+                  </div>
+                </div>
+                <div className="mt-2 text-sm text-gray-600">{r.reason}</div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <span>Needed: {r.neededBy ? format(new Date(r.neededBy), 'dd MMM yyyy') : '—'}</span>
+                  <span>•</span>
+                  <span>Payment: {r.paymentPreference?.replace(/_/g, ' ') || '—'}</span>
+                  {r.tripReference && <><span>•</span><span>Trip: {r.tripReference}</span></>}
+                </div>
+                {isFinance && r.status !== 'APPROVED' && r.status !== 'REJECTED' && (
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={() => approveMutation.mutate({ id: r.id, notes: 'Approved by finance manager' })}
+                      className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700">
+                      Approve
+                    </button>
+                    <button onClick={() => rejectMutation.mutate({ id: r.id, reason: 'Rejected by finance review' })}
+                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700">
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function InvoicesTab() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -586,15 +762,139 @@ function StatementsTab() {
   );
 }
 
+function PayrollTab() {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const { data, isLoading } = useQuery({
+    queryKey: ['finance-payroll', month, year],
+    queryFn: () => financialApi.payroll({ month, year }),
+  });
+
+  const rows = data?.data ?? [];
+  const totalGross = rows.reduce((sum: number, row: any) => sum + (row.gross ?? 0), 0);
+  const totalNet = rows.reduce((sum: number, row: any) => sum + (row.net ?? 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-gray-800">Payroll Runs</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Monthly salary and commission payroll preview.</p>
+        </div>
+        <button onClick={() => toast.success('Payroll run prepared')} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700">
+          Prepare run
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs uppercase text-gray-500">Staff</p>
+          <p className="text-2xl font-bold mt-1 text-gray-900">{rows.length}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs uppercase text-gray-500">Gross</p>
+          <p className="text-2xl font-bold mt-1 text-green-700">RWF {totalGross.toLocaleString()}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs uppercase text-gray-500">Net</p>
+          <p className="text-2xl font-bold mt-1 text-brand-700">RWF {totalNet.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b">
+            <tr>{['Driver','Vehicle','Gross','Deductions','Net','Status'].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {isLoading ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">Loading payroll…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No payroll rows found for this period.</td></tr>
+            ) : rows.map((row: any) => (
+              <tr key={row.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.driverName}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{row.vehicle}</td>
+                <td className="px-4 py-3 text-sm text-green-700">RWF {Number(row.gross ?? 0).toLocaleString()}</td>
+                <td className="px-4 py-3 text-sm text-red-600">RWF {Number(row.deductions ?? 0).toLocaleString()}</td>
+                <td className="px-4 py-3 text-sm font-semibold text-brand-700">RWF {Number(row.net ?? 0).toLocaleString()}</td>
+                <td className="px-4 py-3"><span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">{row.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PayoutsTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['finance-owner-payouts'],
+    queryFn: () => financialApi.ownerPayouts(),
+  });
+
+  const rows = data?.data ?? [];
+  const qc = useQueryClient();
+  const executeMutation = useMutation({
+    mutationFn: (payload: { ownerId: string; amount: number; notes: string }) => financialApi.executeOwnerPayout(payload),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['finance-owner-payouts'] }); toast.success('Owner payout executed'); },
+    onError: (err: any) => toast.error(err.response?.data?.error ?? 'Failed to execute payout'),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-semibold text-gray-800">Owner Payouts</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Generated net payouts for owners based on vehicle income and expenses.</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b">
+            <tr>{['Owner','Vehicles','Gross income','Expenses','Net payout','Action'].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {isLoading ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">Loading owner payouts…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No owner payouts available.</td></tr>
+            ) : rows.map((row: any) => (
+              <tr key={row.ownerId} className="hover:bg-gray-50">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.ownerName}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{row.vehicleCount}</td>
+                <td className="px-4 py-3 text-sm text-green-700">RWF {Number(row.grossIncome ?? 0).toLocaleString()}</td>
+                <td className="px-4 py-3 text-sm text-red-600">RWF {Number(row.totalExpenses ?? 0).toLocaleString()}</td>
+                <td className="px-4 py-3 text-sm font-semibold text-brand-700">RWF {Number(row.netPayout ?? 0).toLocaleString()}</td>
+                <td className="px-4 py-3">
+                  <button onClick={() => executeMutation.mutate({ ownerId: row.ownerId, amount: Number(row.netPayout ?? 0), notes: `Owner payout for ${row.ownerName}` })}
+                    disabled={executeMutation.isPending || Number(row.netPayout ?? 0) <= 0}
+                    className="bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+                    Execute
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // â”€â”€â”€ Main Finance Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function FinancePage() {
   const [tab, setTab] = useState<FinTab>('dashboard');
   const TABS = [
-    { id: 'dashboard'  as FinTab, label: 'Dashboard',  icon: <DollarSign size={14} /> },
-    { id: 'contracts'  as FinTab, label: 'Contracts',  icon: <FileText size={14} /> },
-    { id: 'expenses'   as FinTab, label: 'Expenses',   icon: <Receipt size={14} /> },
-    { id: 'invoices'   as FinTab, label: 'Invoices',   icon: <BarChart3 size={14} /> },
-    { id: 'statements' as FinTab, label: 'Statements', icon: <Users2 size={14} /> },
+    { id: 'dashboard'     as FinTab, label: 'Dashboard',     icon: <DollarSign size={14} /> },
+    { id: 'contracts'     as FinTab, label: 'Contracts',     icon: <FileText size={14} /> },
+    { id: 'expenses'      as FinTab, label: 'Expenses',      icon: <Receipt size={14} /> },
+    { id: 'requisitions'  as FinTab, label: 'Requisitions',  icon: <CheckCircle size={14} /> },
+    { id: 'payroll'       as FinTab, label: 'Payroll',       icon: <Users2 size={14} /> },
+    { id: 'payouts'       as FinTab, label: 'Payouts',       icon: <BarChart3 size={14} /> },
+    { id: 'invoices'      as FinTab, label: 'Invoices',      icon: <BarChart3 size={14} /> },
+    { id: 'statements'    as FinTab, label: 'Statements',    icon: <Users2 size={14} /> },
   ];
   return (
     <div className="space-y-5">
@@ -613,11 +913,14 @@ export default function FinancePage() {
           </button>
         ))}
       </div>
-      {tab === 'dashboard'  && <FinanceDashboard />}
-      {tab === 'contracts'  && <ContractsTab />}
-      {tab === 'expenses'   && <ExpensesTab />}
-      {tab === 'invoices'   && <InvoicesTab />}
-      {tab === 'statements' && <StatementsTab />}
+      {tab === 'dashboard'    && <FinanceDashboard />}
+      {tab === 'contracts'    && <ContractsTab />}
+      {tab === 'expenses'     && <ExpensesTab />}
+      {tab === 'requisitions' && <RequisitionsTab />}
+      {tab === 'payroll'      && <PayrollTab />}
+      {tab === 'payouts'      && <PayoutsTab />}
+      {tab === 'invoices'     && <InvoicesTab />}
+      {tab === 'statements'   && <StatementsTab />}
     </div>
   );
 }
