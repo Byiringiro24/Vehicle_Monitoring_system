@@ -114,6 +114,19 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
           )}
         </div>
 
+        {/* User avatar + profile link */}
+        <a href="/profile"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-gray-100 transition group"
+          title={`${user?.firstName} ${user?.lastName} — ${user?.role?.replace(/_/g,' ')}`}>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0">
+            {user?.firstName?.[0]}{user?.lastName?.[0]}
+          </div>
+          <div className="hidden md:block text-left">
+            <p className="text-xs font-semibold text-gray-800 leading-tight">{user?.firstName} {user?.lastName}</p>
+            <p className="text-[10px] text-gray-400 leading-tight">{user?.role?.replace(/_/g,' ')}</p>
+          </div>
+        </a>
+
         {/* Logout */}
         <button
           onClick={handleLogout}

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vehicleApi, telemetryApi } from '@/lib/api';
@@ -22,16 +22,16 @@ import { SPEED_THRESHOLD } from '@/lib/liveStatus';
 const TelemetryChart = dynamic(() => import('@/components/charts/TelemetryChart'), { ssr: false });
 const GpsHistoryMap  = dynamic(() => import('@/components/maps/GpsHistoryMap'), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center h-full bg-gray-100 rounded-xl text-gray-400">Loading map…</div>,
+  loading: () => <div className="flex items-center justify-center h-full bg-gray-100 rounded-xl text-gray-400">Loading mapâ€¦</div>,
 });
 const GpsHistoryMapSatellite = dynamic(() => import('@/components/maps/GpsHistoryMapSatellite'), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center h-full bg-gray-900 rounded-xl text-gray-400">Loading satellite…</div>,
+  loading: () => <div className="flex items-center justify-center h-full bg-gray-900 rounded-xl text-gray-400">Loading satelliteâ€¦</div>,
 });
 
 type Tab = 'overview' | 'history' | 'trips' | 'telemetry' | 'commands' | 'documents' | 'ownership' | 'assignments';
 
-// ─── Relative time helper ─────────────────────────────────────────────────────
+// â”€â”€â”€ Relative time helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function timeAgo(dateStr: string | undefined | null): string {
   if (!dateStr) return 'Never';
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -42,7 +42,7 @@ function timeAgo(dateStr: string | undefined | null): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// ─── Copy-to-clipboard button ─────────────────────────────────────────────────
+// â”€â”€â”€ Copy-to-clipboard button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const done = () => { setCopied(true); toast.success('Copied!'); setTimeout(() => setCopied(false), 2500); };
@@ -67,7 +67,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// ─── Engine lock confirmation modal ───────────────────────────────────────────
+// â”€â”€â”€ Engine lock confirmation modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LockConfirmModal({ plate, action, onConfirm, onCancel }:
   { plate: string; action: 'lock'|'unlock'; onConfirm:()=>void; onCancel:()=>void }) {
   const [input, setInput] = useState('');
@@ -110,7 +110,7 @@ function LockConfirmModal({ plate, action, onConfirm, onCancel }:
             className={cn('flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition',
               isLock ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-200' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-200',
               'disabled:cursor-not-allowed')}>
-            {isLock ? '🔒 Confirm Lock' : '🔓 Confirm Unlock'}
+            {isLock ? 'ðŸ”’ Confirm Lock' : 'ðŸ”“ Confirm Unlock'}
           </button>
         </div>
       </div>
@@ -118,7 +118,7 @@ function LockConfirmModal({ plate, action, onConfirm, onCancel }:
   );
 }
 
-// ─── GPS Ping Status badge ────────────────────────────────────────────────────
+// â”€â”€â”€ GPS Ping Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function GpsPingBadge({ vehicleId }: { vehicleId: string }) {
   const [pinging, setPinging]   = useState(false);
   const [result, setResult]     = useState<boolean | null>(null);
@@ -132,9 +132,9 @@ function GpsPingBadge({ vehicleId }: { vehicleId: string }) {
       setResult(data.gpsOnline);
       setCheckedAt(data.checkedAt);
       if (data.gpsOnline) {
-        toast.success('GPS module is online ✅');
+        toast.success('GPS module is online âœ…');
       } else {
-        toast.error('GPS module did not respond — offline or out of range');
+        toast.error('GPS module did not respond â€” offline or out of range');
       }
     } catch {
       setResult(false);
@@ -163,7 +163,7 @@ function GpsPingBadge({ vehicleId }: { vehicleId: string }) {
           'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed'
         )}>
         {pinging
-          ? <><RefreshCw size={12} className="animate-spin" /> Pinging…</>
+          ? <><RefreshCw size={12} className="animate-spin" /> Pingingâ€¦</>
           : <><Satellite size={12} /> Ping GPS</>}
       </button>
       {checkedAt && <span className="text-xs text-gray-400">Checked {formatDate(checkedAt)}</span>}
@@ -171,7 +171,7 @@ function GpsPingBadge({ vehicleId }: { vehicleId: string }) {
   );
 }
 
-// ─── Device SIM Card ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Device SIM Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DeviceSimCard({ vehicleId, current, onSave, saving }:
   { vehicleId: string; current?: string; onSave: (n: string) => void; saving: boolean }) {
   const [editing, setEditing] = useState(false);
@@ -179,7 +179,7 @@ function DeviceSimCard({ vehicleId, current, onSave, saving }:
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
       <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-        📶 SIM Card Number
+        ðŸ“¶ SIM Card Number
       </h3>
       {editing ? (
         <div className="flex gap-2">
@@ -188,7 +188,7 @@ function DeviceSimCard({ vehicleId, current, onSave, saving }:
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
           <button onClick={() => { onSave(value); setEditing(false); }} disabled={saving}
             className="px-3 py-2 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700 disabled:opacity-50">
-            {saving ? '…' : 'Save'}
+            {saving ? 'â€¦' : 'Save'}
           </button>
           <button onClick={() => setEditing(false)}
             className="px-3 py-2 border border-gray-300 text-xs rounded-lg hover:bg-gray-50">
@@ -208,23 +208,23 @@ function DeviceSimCard({ vehicleId, current, onSave, saving }:
   );
 }
 
-// ─── Remote Device Commands ───────────────────────────────────────────────────
+// â”€â”€â”€ Remote Device Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DeviceCommands({ vehicleId: _id, onCommand, pending }:
   { vehicleId: string; onCommand: (cmd: string, p?: object) => void; pending: boolean }) {
   const [ussd, setUssd] = useState('');
   const [showUssd, setShowUssd] = useState(false);
 
   const buttons = [
-    { label: 'Check Internet',  cmd: 'check_internet', icon: '🌐', color: 'bg-blue-50 text-blue-700 border-blue-200',       desc: 'Check signal & data' },
-    { label: 'Ping Device',     cmd: 'ping',            icon: '📡', color: 'bg-green-50 text-green-700 border-green-200',   desc: 'Confirm online' },
-    { label: 'Restart GSM',     cmd: 'restart',         icon: '🔄', color: 'bg-orange-50 text-orange-700 border-orange-200', desc: 'Reboot SIM808' },
-    { label: 'Check Balance',   cmd: 'ussd',            icon: '💳', color: 'bg-purple-50 text-purple-700 border-purple-200', desc: 'Run USSD code', ussd: true },
+    { label: 'Check Internet',  cmd: 'check_internet', icon: 'ðŸŒ', color: 'bg-blue-50 text-blue-700 border-blue-200',       desc: 'Check signal & data' },
+    { label: 'Ping Device',     cmd: 'ping',            icon: 'ðŸ“¡', color: 'bg-green-50 text-green-700 border-green-200',   desc: 'Confirm online' },
+    { label: 'Restart GSM',     cmd: 'restart',         icon: 'ðŸ”„', color: 'bg-orange-50 text-orange-700 border-orange-200', desc: 'Reboot SIM808' },
+    { label: 'Check Balance',   cmd: 'ussd',            icon: 'ðŸ’³', color: 'bg-purple-50 text-purple-700 border-purple-200', desc: 'Run USSD code', ussd: true },
   ];
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
       <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-        ⚡ Remote Device Commands
+        âš¡ Remote Device Commands
       </h3>
       <div className="grid grid-cols-2 gap-2">
         {buttons.map(b => (
@@ -269,7 +269,7 @@ function DeviceCommands({ vehicleId: _id, onCommand, pending }:
   );
 }
 
-// ─── Data Plan Tracker ────────────────────────────────────────────────────────
+// â”€â”€â”€ Data Plan Tracker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
   { vehicleId: string; vehicle: any; onSave: (d: any) => void; saving: boolean }) {
   const [open, setOpen]         = useState(false);
@@ -297,7 +297,7 @@ function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
     <div className={cn('bg-white rounded-xl border p-4 space-y-3',
       expired ? 'border-red-300 bg-red-50' : urgent ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200')}>
       <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-        📶 SIM Data Plan
+        ðŸ“¶ SIM Data Plan
       </h3>
 
       {/* Current status */}
@@ -311,8 +311,8 @@ function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
             <span className="text-gray-500">Expires</span>
             <span className={cn('font-semibold', expired ? 'text-red-600' : urgent ? 'text-yellow-700' : 'text-green-700')}>
               {formatDate(current)}
-              {expired && ' ⚠ EXPIRED'}
-              {urgent && !expired && ' ⚠ Expires soon'}
+              {expired && ' âš  EXPIRED'}
+              {urgent && !expired && ' âš  Expires soon'}
             </span>
           </div>
           {vehicle.dataPlanBoughtAt && (
@@ -351,13 +351,13 @@ function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
               className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
           <p className="text-[10px] text-gray-400">
-            Alert: Monthly = 3 days before · Weekly = 1 day before · Daily = 3 hours before
+            Alert: Monthly = 3 days before Â· Weekly = 1 day before Â· Daily = 3 hours before
           </p>
           <div className="flex gap-2">
             <button onClick={() => { onSave({ dataPlanType: type, dataPlanBoughtAt: boughtAt, dataPlanExpiry: expiry }); setOpen(false); }}
               disabled={!boughtAt || !expiry || saving}
               className="flex-1 py-2 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700 disabled:opacity-50 font-semibold">
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? 'Savingâ€¦' : 'Save'}
             </button>
             <button onClick={() => setOpen(false)}
               className="px-3 py-2 border border-gray-300 text-xs rounded-lg hover:bg-gray-50">Cancel</button>
@@ -366,7 +366,7 @@ function DataPlanCard({ vehicleId, vehicle, onSave, saving }:
       ) : (
         <button onClick={() => setOpen(true)}
           className="w-full py-2 border border-brand-200 text-brand-700 text-xs rounded-lg hover:bg-brand-50 font-semibold transition">
-          📥 Record New Purchase
+          ðŸ“¥ Record New Purchase
         </button>
       )}
     </div>
@@ -398,7 +398,7 @@ function Stat({ label, value, sub, icon, color = 'blue' }: {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function VehicleDetailPage({ params }: { params: { id: string } }) {
   const qc = useQueryClient();
   const { accessToken } = useAuthStore();
@@ -446,7 +446,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     }
   }, [vehicle]);
 
-  // GPS history — use full datetime (from/to include time)
+  // GPS history â€” use full datetime (from/to include time)
   const { data: gpsData } = useQuery({
     queryKey: ['gps-history', params.id, from, to],
     queryFn:  () => vehicleApi.gpsHistory(params.id, {
@@ -464,7 +464,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     enabled:  tab === 'telemetry',
   });
 
-  // Socket.IO — live telemetry, lock state, online/offline
+  // Socket.IO â€” live telemetry, lock state, online/offline
   useEffect(() => {
     if (!accessToken) return;
     const socket = getSocket(accessToken);
@@ -491,7 +491,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       setLiveStatus(spd >= SPEED_THRESHOLD ? 'ACTIVE' : 'IDLE');
     });
 
-    // ── Command responses from ESP32 device ───────────────────────────────────
+    // â”€â”€ Command responses from ESP32 device â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Fired by the backend when the ESP32 publishes a command-response payload
     // to the telemetry topic (ack, pong, internet_status, ussd_response, restart)
     socket.on('device:response', (p: any) => {
@@ -499,13 +499,13 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       const d = p.payload;
       let summary = '';
 
-      if (d.ack === 'lock')   summary = '🔒 Engine LOCKED — relay confirmed';
-      else if (d.ack === 'unlock') summary = '🔓 Engine UNLOCKED — relay released';
-      else if (d.pong)        summary = `📡 Pong received — GPS: ${d.gpsModuleOn ? 'ON ✅' : 'OFF ❌'} | Relay: ${d.locked ? 'LOCKED 🔒' : 'UNLOCKED 🔓'} | SIM: ${d.simNumber ?? '—'}`;
-      else if (d.cmd === 'internet_status') summary = `🌐 Signal: ${d.signal}/31 (${d.signalPct}%) | GPRS: ${d.gprsOk ? 'OK ✅' : 'OFFLINE ❌'} | GPS: ${d.gpsOn ? 'ON' : 'OFF'} | IP: ${d.ip ?? '—'}`;
-      else if (d.cmd === 'ussd_response') summary = `💬 USSD [${d.code}] → ${d.ussd_response || '(no response)'}`;
-      else if (d.cmd === 'restarting') summary = '🔄 Device is restarting SIM808…';
-      else if (d.event === 'device_connected') summary = '✅ Device connected to server';
+      if (d.ack === 'lock')   summary = 'ðŸ”’ Engine LOCKED â€” relay confirmed';
+      else if (d.ack === 'unlock') summary = 'ðŸ”“ Engine UNLOCKED â€” relay released';
+      else if (d.pong)        summary = `ðŸ“¡ Pong received â€” GPS: ${d.gpsModuleOn ? 'ON âœ…' : 'OFF âŒ'} | Relay: ${d.locked ? 'LOCKED ðŸ”’' : 'UNLOCKED ðŸ”“'} | SIM: ${d.simNumber ?? 'â€”'}`;
+      else if (d.cmd === 'internet_status') summary = `ðŸŒ Signal: ${d.signal}/31 (${d.signalPct}%) | GPRS: ${d.gprsOk ? 'OK âœ…' : 'OFFLINE âŒ'} | GPS: ${d.gpsOn ? 'ON' : 'OFF'} | IP: ${d.ip ?? 'â€”'}`;
+      else if (d.cmd === 'ussd_response') summary = `ðŸ’¬ USSD [${d.code}] â†’ ${d.ussd_response || '(no response)'}`;
+      else if (d.cmd === 'restarting') summary = 'ðŸ”„ Device is restarting SIM808â€¦';
+      else if (d.event === 'device_connected') summary = 'âœ… Device connected to server';
       else summary = JSON.stringify(d).slice(0, 120);
 
       setCmdLog(prev => [
@@ -545,7 +545,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       }
     });
 
-    // Heartbeat — device online but may have no GPS fix — update last seen time
+    // Heartbeat â€” device online but may have no GPS fix â€” update last seen time
     socket.on('device:heartbeat', (p: any) => {
       if (p.vehicleId !== params.id) return;
       setConnectedNow(true);
@@ -572,7 +572,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     onSuccess: (_, { locked }) => {
       setEngineLocked(locked);
       qc.invalidateQueries({ queryKey: ['vehicle', params.id] });
-      toast.success(locked ? '🔒 Engine locked' : '🔓 Engine unlocked');
+      toast.success(locked ? 'ðŸ”’ Engine locked' : 'ðŸ”“ Engine unlocked');
     },
     onError: () => toast.error('Lock command failed'),
   });
@@ -582,7 +582,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
     mutationFn: ({ command, params: p }: { command: string; params?: object }) =>
       deviceApi.sendCommand(params.id, command, p),
     onSuccess: (_, { command }) => toast.success(`Command "${command}" sent to device`),
-    onError: () => toast.error('Command failed — check device connection'),
+    onError: () => toast.error('Command failed â€” check device connection'),
   });
 
   // SIM update mutation
@@ -630,7 +630,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
         <Truck size={40} className="mb-3 opacity-20" />
         <p className="font-medium">Vehicle not found</p>
-        <Link href="/vehicles" className="mt-4 text-blue-600 text-sm hover:underline">← Back to vehicles</Link>
+        <Link href="/vehicles" className="mt-4 text-blue-600 text-sm hover:underline">â† Back to vehicles</Link>
       </div>
     );
   }
@@ -638,7 +638,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   const loc    = liveLoc ?? vehicle.lastLocation;
   const locked = engineLocked ?? vehicle.engineLocked;
 
-  // ── Status resolution: connectedNow is ground truth ─────────────────────────
+  // â”€â”€ Status resolution: connectedNow is ground truth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // If we received a gps:online / device:heartbeat for this vehicle, it's confirmed online.
   // Use speed to distinguish ACTIVE vs IDLE.
   // Fall back to DB status only when we have no live signal at all.
@@ -668,7 +668,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
   return (
     <div className="space-y-5">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/vehicles"
@@ -724,7 +724,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
-      {/* ── Live stats row ──────────────────────────────────────────────────── */}
+      {/* â”€â”€ Live stats row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="Speed"       value={formatSpeed(loc?.speed)}     icon={<Gauge size={18} />}       color="blue"   />
         <Stat label="Fuel Level"  value={formatFuel(loc?.fuelLevel)}  icon={<Fuel size={18} />}        color="yellow" />
@@ -735,7 +735,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
           sub={loc?.updatedAt ? `Last seen ${timeAgo(loc.updatedAt)}` : 'No data'} />
       </div>
 
-      {/* ── Tabs ────────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto scrollbar-none -mx-0">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -750,11 +750,11 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         ))}
       </div>
 
-      {/* ── OVERVIEW TAB ────────────────────────────────────────────────────── */}
+      {/* â”€â”€ OVERVIEW TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-          {/* Left column — vehicle info */}
+          {/* Left column â€” vehicle info */}
           <div className="lg:col-span-1 space-y-4">
 
             {/* GPS Ping */}
@@ -791,7 +791,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                   <div className="flex justify-between">
                     <span className="text-gray-500">Engine</span>
                     <span className={loc.engineOn ? 'text-green-700 font-semibold' : 'text-gray-500'}>
-                      {loc.engineOn ? 'ON ✅' : 'OFF'}
+                      {loc.engineOn ? 'ON âœ…' : 'OFF'}
                     </span>
                   </div>
                   {loc.updatedAt && (
@@ -811,7 +811,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               <p className="text-xs text-gray-500">Used as MQTT username & password for this vehicle's GPS device.</p>
               <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
                 <span className="font-mono text-xs text-gray-700 truncate flex-1">
-                  {vehicle.deviceToken?.substring(0, 16)}…
+                  {vehicle.deviceToken?.substring(0, 16)}â€¦
                 </span>
                 <CopyButton text={vehicle.deviceToken ?? ''} />
               </div>
@@ -819,7 +819,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                 onClick={() => { if (confirm('Regenerate device token? The old token will stop working immediately.')) regenMutation.mutate(); }}
                 disabled={regenMutation.isPending}
                 className="w-full mt-1 py-2 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition disabled:opacity-50">
-                {regenMutation.isPending ? 'Regenerating…' : '⟳ Regenerate Token'}
+                {regenMutation.isPending ? 'Regeneratingâ€¦' : 'âŸ³ Regenerate Token'}
               </button>
             </div>
 
@@ -832,7 +832,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
             />
           </div>
 
-          {/* Right column — vehicle details */}
+          {/* Right column â€” vehicle details */}
           <div className="lg:col-span-2 space-y-4">
 
             {/* Basic info */}
@@ -843,9 +843,9 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                   ['Manufacturer',  vehicle.manufacturer],
                   ['Model',         vehicle.model],
                   ['Year',          vehicle.year],
-                  ['VIN',           vehicle.vin ?? '—'],
-                  ['Engine No.',    vehicle.engineNumber ?? '—'],
-                  ['Color',         vehicle.color ?? '—'],
+                  ['VIN',           vehicle.vin ?? 'â€”'],
+                  ['Engine No.',    vehicle.engineNumber ?? 'â€”'],
+                  ['Color',         vehicle.color ?? 'â€”'],
                   ['Vehicle Class', vehicle.vehicleClass?.replace(/_/g,' ')],
                   ['Purpose',       vehicle.purpose?.replace(/_/g,' ')],
                   ['Energy Type',   vehicle.energyType],
@@ -855,7 +855,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                 ].map(([label, value]) => (
                   <div key={label as string} className="flex flex-col">
                     <span className="text-xs text-gray-500">{label}</span>
-                    <span className="font-medium text-gray-900">{value ?? '—'}</span>
+                    <span className="font-medium text-gray-900">{value ?? 'â€”'}</span>
                   </div>
                 ))}
               </div>
@@ -871,17 +871,17 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                   ['Insurance Expiry',   vehicle.insuranceExpiry],
                   ['Road Tax Expiry',    vehicle.roadTaxExpiry],
                   ['Inspection Expiry',  vehicle.inspectionExpiry],
-                  ['Insurance Company',  vehicle.insuranceCompany ?? '—'],
-                  ['Policy No.',         vehicle.insurancePolicyNo ?? '—'],
+                  ['Insurance Company',  vehicle.insuranceCompany ?? 'â€”'],
+                  ['Policy No.',         vehicle.insurancePolicyNo ?? 'â€”'],
                 ].map(([label, value]) => {
-                  const isDate = value && value !== '—';
+                  const isDate = value && value !== 'â€”';
                   const expired = isDate && new Date(value as string) < new Date();
                   return (
                     <div key={label as string} className="flex flex-col">
                       <span className="text-xs text-gray-500">{label}</span>
                       <span className={cn('font-medium', expired ? 'text-red-600' : 'text-gray-900')}>
-                        {isDate ? formatDate(value as string) : (value ?? '—')}
-                        {expired && <span className="ml-1 text-xs font-bold">⚠ EXPIRED</span>}
+                        {isDate ? formatDate(value as string) : (value ?? 'â€”')}
+                        {expired && <span className="ml-1 text-xs font-bold">âš  EXPIRED</span>}
                       </span>
                     </div>
                   );
@@ -898,16 +898,16 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                 <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
                   {[
                     ['Device ID',     vehicle.gpsDevice.deviceId],
-                    ['IMEI',          vehicle.gpsDevice.imei ?? '—'],
-                    ['SIM Number',    vehicle.gpsDevice.simNumber ?? '—'],
-                    ['Provider',      vehicle.gpsDevice.networkProvider ?? '—'],
-                    ['Firmware',      vehicle.gpsDevice.firmwareVersion ?? '—'],
+                    ['IMEI',          vehicle.gpsDevice.imei ?? 'â€”'],
+                    ['SIM Number',    vehicle.gpsDevice.simNumber ?? 'â€”'],
+                    ['Provider',      vehicle.gpsDevice.networkProvider ?? 'â€”'],
+                    ['Firmware',      vehicle.gpsDevice.firmwareVersion ?? 'â€”'],
                     ['Status',        vehicle.gpsDevice.status],
                     ['Last Comm.',    vehicle.gpsDevice.lastCommunication ? formatDate(vehicle.gpsDevice.lastCommunication) : 'Never'],
                   ].map(([label, value]) => (
                     <div key={label as string} className="flex flex-col">
                       <span className="text-xs text-gray-500">{label}</span>
-                      <span className="font-medium text-gray-900">{value ?? '—'}</span>
+                      <span className="font-medium text-gray-900">{value ?? 'â€”'}</span>
                     </div>
                   ))}
                 </div>
@@ -917,7 +917,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
-      {/* ── GPS HISTORY TAB ─────────────────────────────────────────────────── */}
+      {/* â”€â”€ GPS HISTORY TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {tab === 'history' && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
@@ -965,7 +965,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
               )
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">
-                <RefreshCw size={20} className="animate-spin mr-2" /> Loading GPS history…
+                <RefreshCw size={20} className="animate-spin mr-2" /> Loading GPS historyâ€¦
               </div>
             )}
           </div>
@@ -977,7 +977,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
-      {/* ── TELEMETRY TAB ───────────────────────────────────────────────────── */}
+      {/* â”€â”€ TELEMETRY TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {tab === 'telemetry' && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
@@ -1005,7 +1005,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
-      {/* ── COMMANDS TAB ────────────────────────────────────────────────────── */}
+      {/* â”€â”€ COMMANDS TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {tab === 'commands' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-4">
@@ -1022,12 +1022,12 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
             />
           </div>
 
-          {/* ── Response log panel ─────────────────────────────────── */}
+          {/* â”€â”€ Response log panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="bg-white rounded-xl border border-gray-200 flex flex-col" style={{ minHeight: 480 }}>
             {/* Panel header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-800">📨 Device Responses</span>
+                <span className="text-sm font-semibold text-gray-800">ðŸ“¨ Device Responses</span>
                 {cmdLog.length > 0 && (
                   <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
                     {cmdLog.length}
@@ -1047,7 +1047,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
             {cmdMutation.isPending && (
               <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-100">
                 <RefreshCw size={12} className="animate-spin text-blue-500" />
-                <span className="text-xs text-blue-700 font-medium">Waiting for device response…</span>
+                <span className="text-xs text-blue-700 font-medium">Waiting for device responseâ€¦</span>
               </div>
             )}
 
@@ -1106,7 +1106,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                           <div className="bg-white rounded-lg border border-blue-200 p-2 text-center">
                             <p className="text-[10px] text-gray-500 mb-0.5">GPRS</p>
                             <p className={`text-sm font-bold ${entry.raw.gprsOk ? 'text-green-600' : 'text-red-600'}`}>
-                              {entry.raw.gprsOk ? '✅ OK' : '❌ OFF'}
+                              {entry.raw.gprsOk ? 'âœ… OK' : 'âŒ OFF'}
                             </p>
                             {entry.raw.ip && <p className="text-[9px] text-gray-400 mt-1 font-mono">{entry.raw.ip}</p>}
                           </div>
@@ -1116,7 +1116,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
                       {/* Raw data toggle */}
                       <details className="mt-1">
                         <summary className="text-[10px] text-gray-400 cursor-pointer hover:text-gray-600">
-                          Raw data ▾
+                          Raw data â–¾
                         </summary>
                         <pre className="text-[9px] text-gray-500 mt-1 bg-white rounded border p-2 overflow-x-auto">
                           {JSON.stringify(entry.raw, null, 2)}
@@ -1131,7 +1131,7 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
-      {/* ── DOCUMENTS TAB ───────────────────────────────────────────────────── */}
+      {/* â”€â”€ DOCUMENTS TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {tab === 'documents' && (
         <div className="max-w-2xl">
           <DocumentUploader
@@ -1142,7 +1142,91 @@ export default function VehicleDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
-      {/* ── Lock confirmation modal ──────────────────────────────────────────── */}
+
+      {/* Ownership Tab */}
+      {tab === 'ownership' && (
+        <div className="space-y-4 max-w-2xl">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <h3 className="font-semibold text-gray-800 mb-4">Ownership Details</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {([
+                { label: 'Ownership type',  value: vehicle.ownershipType?.replace(/_/g,' ') ?? '—' },
+                { label: 'Owner name',       value: vehicle.ownerName ?? '—' },
+                { label: 'Owner company',    value: vehicle.ownerCompany ?? '—' },
+                { label: 'Purchase date',    value: vehicle.purchaseDate ? formatDate(vehicle.purchaseDate) : '—' },
+                { label: 'Purchase price',   value: vehicle.purchasePrice ? `RWF ${(vehicle.purchasePrice as number).toLocaleString()}` : '—' },
+                { label: 'Current value',    value: vehicle.currentValue ? `RWF ${(vehicle.currentValue as number).toLocaleString()}` : '—' },
+                { label: 'Supplier',         value: vehicle.supplierName ?? '—' },
+                { label: 'Warranty expiry',  value: vehicle.warrantyExpiry ? formatDate(vehicle.warrantyExpiry) : '—' },
+                { label: 'Personal owner',   value: (vehicle as any).ownerUserId ? 'Linked to owner account' : 'Not claimed' },
+              ] as {label:string;value:string}[]).map(({ label, value }) => (
+                <div key={label} className="py-2 border-b border-gray-100 last:border-0">
+                  <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+                  <p className="font-medium text-gray-900">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <h3 className="font-semibold text-gray-800 mb-4">Insurance</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {([
+                { label: 'Insurance company', value: vehicle.insuranceCompany ?? '—' },
+                { label: 'Policy number',      value: vehicle.insurancePolicyNo ?? '—' },
+                { label: 'Start date',         value: vehicle.insuranceStart ? formatDate(vehicle.insuranceStart) : '—' },
+                { label: 'Expiry date',        value: vehicle.insuranceExpiry ? formatDate(vehicle.insuranceExpiry) : '—' },
+                { label: 'Premium',            value: vehicle.insurancePremium ? `RWF ${(vehicle.insurancePremium as number).toLocaleString()}` : '—' },
+                { label: 'Coverage',           value: vehicle.insuranceCoverage ?? '—' },
+              ] as {label:string;value:string}[]).map(({ label, value }) => (
+                <div key={label} className="py-2 border-b border-gray-100 last:border-0">
+                  <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+                  <p className="font-medium text-gray-900">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assignments Tab */}
+      {tab === 'assignments' && (
+        <div className="space-y-4 max-w-2xl">
+          {vehicle.driverAssignments && (vehicle.driverAssignments as any[]).length > 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-800">Assignment History</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{(vehicle.driverAssignments as any[]).length} total</p>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {(vehicle.driverAssignments as any[]).map((a: any, i: number) => (
+                  <div key={a.id ?? i} className="flex items-center gap-4 px-5 py-4">
+                    <div className="w-9 h-9 bg-brand-50 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold text-brand-700">
+                      {a.driver?.user?.firstName?.[0]}{a.driver?.user?.lastName?.[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {a.driver?.user?.firstName} {a.driver?.user?.lastName}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatDate(a.startDate)} {a.endDate ? `to ${formatDate(a.endDate)}` : 'to Present'}
+                      </p>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${!a.endDate ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {!a.endDate ? 'CURRENT' : 'ENDED'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+              <p className="font-semibold text-gray-600">No assignment history yet</p>
+              <p className="text-sm text-gray-400 mt-1">Driver assignments will appear here once a driver is assigned.</p>
+            </div>
+          )}
+        </div>
+      )}
+      {/* â”€â”€ Lock confirmation modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {confirmAction && (
         <LockConfirmModal
           plate={vehicle.licensePlate}
