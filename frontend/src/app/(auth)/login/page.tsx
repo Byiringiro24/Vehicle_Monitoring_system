@@ -56,9 +56,11 @@ function LoginForm() {
         driver:   '/dashboard',
         customer: '/dashboard',
       };
+      const allRoles = [result.user.role, ...(result.user.roles ?? [])].filter(Boolean) as string[];
       const intendedRole = (result.user as any).intendedRole as string | undefined;
       const personalHome = intendedRole ? PERSONAL_ROLE_HOME[intendedRole] : undefined;
-      const home = personalHome ?? ROLE_HOME[result.user.role] ?? '/dashboard';
+      const primaryRole = allRoles[0] ?? result.user.role;
+      const home = personalHome ?? ROLE_HOME[primaryRole] ?? '/dashboard';
       router.push(home);
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Login failed. Check your credentials.');

@@ -13,16 +13,19 @@ datasource db {
 
 enum UserRole {
   SUPER_ADMIN
+  PLATFORM_SUPPORT
   ADMIN
   FLEET_MANAGER
-  DRIVER
-  VIEWER
   FINANCE_MANAGER
   DISPATCHER
   HR_MANAGER
   MECHANIC
   COMPLIANCE_OFFICER
   RENTAL_MANAGER
+  SALES_AGENT
+  AUDITOR
+  DRIVER
+  VIEWER
 }
 
 // ─── Vehicle ──────────────────────────────────────────────────────────────────
@@ -331,6 +334,8 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+  userAgent String?
+  ipAddress String?
 
   @@map("refresh_tokens")
 }
@@ -1725,4 +1730,89 @@ model SupportTicket {
   @@index([organizationId])
   @@index([status])
   @@map("support_tickets")
+}
+
+// =============================================================================
+//  FEATURE ENTITLEMENTS
+// =============================================================================
+model FeatureEntitlement {
+  id             String    @id @default(uuid())
+  organizationId String
+  featureCode    String
+  enabled        Boolean   @default(true)
+  grantedBy      String?
+  expiresAt      DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([organizationId, featureCode])
+  @@index([organizationId])
+  @@map("feature_entitlements")
+}
+
+// =============================================================================
+//  NOTIFICATION PREFERENCES
+// =============================================================================
+model NotificationPreference {
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String
+  alertType      String
+  emailEnabled   Boolean  @default(true)
+  inAppEnabled   Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, organizationId, alertType])
+  @@map("notification_preferences")
+}
+
+// =============================================================================
+//  ATTENDANCE
+// =============================================================================
+model Attendance {
+  id             String    @id @default(uuid())
+  userId         String
+  organizationId String
+  date           DateTime
+  checkIn        DateTime?
+  checkOut       DateTime?
+  status         String    @default("PRESENT")
+  notes          String?
+  approvedBy     String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([userId, date])
+  @@index([organizationId, date(sort: Desc)])
+  @@map("attendance")
+}
+
+// =============================================================================
+//  PAYOUTS
+// =============================================================================
+model Payout {
+  id              String    @id @default(uuid())
+  organizationId  String
+  ownerId         String
+  vehicleId       String?
+  amount          Float
+  currency        String    @default("RWF")
+  periodFrom      DateTime
+  periodTo        DateTime
+  status          String    @default("PENDING")
+  requestedBy     String
+  approvedBy      String?
+  executedBy      String?
+  rejectedBy      String?
+  rejectionReason String?
+  notes           String?
+  method          String?
+  reference       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([organizationId, status])
+  @@index([ownerId])
+  @@map("payouts")
 }

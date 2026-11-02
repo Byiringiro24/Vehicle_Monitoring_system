@@ -185,11 +185,16 @@ export const userApi = {
   list:          () => apiClient.get('/users').then(r => r.data),
   // SUPER_ADMIN only: list all users across every organisation
   listAll:       () => apiClient.get('/users/all').then(r => r.data),
+  listSuperAdmins: () => apiClient.get('/users/super-admins').then(r => r.data),
   create:        (data: object)    => apiClient.post('/users', data).then(r => r.data),
   update:        (id: string, data: object) => apiClient.put(`/users/${id}`, data).then(r => r.data),
   // Invite by email — creates user if new, links role if existing
   invite:        (data: { email: string; role: string; firstName?: string; lastName?: string }) =>
     apiClient.post('/users/invite', data).then(r => r.data),
+  requestSuperAdminRemoval: (id: string) =>
+    apiClient.post(`/users/${id}/request-super-admin-removal`).then(r => r.data),
+  confirmSuperAdminRemoval: (token: string) =>
+    apiClient.post('/users/super-admins/confirm-removal', { token }).then(r => r.data),
   // SUPER_ADMIN only: force-reset any user's password (no current password needed)
   resetPassword: (id: string, newPassword: string) =>
     apiClient.post(`/users/${id}/reset-password`, { newPassword }).then(r => r.data),

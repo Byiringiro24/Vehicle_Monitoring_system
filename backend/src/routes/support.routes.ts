@@ -1,4 +1,4 @@
-/**
+﻿/**
  * /api/v1/support
  * Support contacts (public read, Super Admin write)
  * Support tickets (any user can create, Super Admin manages)
@@ -13,11 +13,11 @@ import logger from '../utils/logger';
 
 const router = Router();
 
-// ═══════════════════════════════════════════════════════════════════════════════
-//  PUBLIC — no authentication required
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  PUBLIC â€” no authentication required
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// GET /support/contacts — visible to everyone (including pending users)
+// GET /support/contacts â€” visible to everyone (including pending users)
 router.get('/contacts', async (_req, res, next) => {
   try {
     const contacts = await prisma.supportContact.findMany({
@@ -28,7 +28,7 @@ router.get('/contacts', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /support/tickets — any authenticated OR unauthenticated user can submit
+// POST /support/tickets â€” any authenticated OR unauthenticated user can submit
 router.post('/tickets', async (req: any, res, next) => {
   try {
     const { userEmail, userName, subject, message, category, priority } = req.body;
@@ -55,12 +55,12 @@ router.post('/tickets', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-//  AUTHENTICATED — requires login
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  AUTHENTICATED â€” requires login
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.use(authenticate as any);
 
-// GET /support/my-tickets — user's own tickets
+// GET /support/my-tickets â€” user's own tickets
 router.get('/my-tickets', async (req: any, res, next) => {
   try {
     const tickets = await prisma.supportTicket.findMany({
@@ -71,12 +71,12 @@ router.get('/my-tickets', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-//  SUPER ADMIN — all ticket management + org approval + contact config
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  SUPER ADMIN â€” all ticket management + org approval + contact config
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// GET /support/admin/tickets — all tickets
-router.get('/admin/tickets', authorize('SUPER_ADMIN') as any, async (req: any, res, next) => {
+// GET /support/admin/tickets â€” super admin + platform support agent
+router.get('/admin/tickets', authorize('SUPER_ADMIN', 'SUPER_ADMIN') as any, async (req: any, res, next) => {
   try {
     const status   = req.query.status as string | undefined;
     const category = req.query.category as string | undefined;
@@ -92,10 +92,22 @@ router.get('/admin/tickets', authorize('SUPER_ADMIN') as any, async (req: any, r
   } catch (err) { next(err); }
 });
 
-// PATCH /support/admin/tickets/:id — update status, add notes
-router.patch('/admin/tickets/:id', authorize('SUPER_ADMIN') as any, async (req: any, res, next) => {
+// PATCH /support/admin/tickets/:id â€” update status, add notes
+router.patch('/admin/tickets/:id', authorize('SUPER_ADMIN', 'SUPER_ADMIN') as any, async (req: any, res, next) => {
   try {
     const { status, priority, adminNotes } = req.body;
+    const isSupportAgent = req.user.role === 'SUPER_ADMIN';
+
+    if (isSupportAgent) {
+      const allowedStatus = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+      if (status && !allowedStatus.includes(status)) {
+        throw new AppError(403, 'Support agents can only update ticket status within the support workflow');
+      }
+      if (priority && priority !== 'HIGH' && priority !== 'MEDIUM' && priority !== 'LOW') {
+        throw new AppError(403, 'Support agents cannot change the ticket priority beyond the configured support levels');
+      }
+    }
+
     const ticket = await prisma.supportTicket.update({
       where: { id: req.params.id },
       data: {
@@ -109,7 +121,7 @@ router.patch('/admin/tickets/:id', authorize('SUPER_ADMIN') as any, async (req: 
   } catch (err) { next(err); }
 });
 
-// GET /support/admin/pending-orgs — organizations awaiting approval
+// GET /support/admin/pending-orgs â€” organizations awaiting approval
 router.get('/admin/pending-orgs', authorize('SUPER_ADMIN') as any, async (_req, res, next) => {
   try {
     const orgs = await prisma.organization.findMany({
@@ -123,7 +135,7 @@ router.get('/admin/pending-orgs', authorize('SUPER_ADMIN') as any, async (_req, 
   } catch (err) { next(err); }
 });
 
-// POST /support/admin/orgs/:id/approve — approve a pending organization
+// POST /support/admin/orgs/:id/approve â€” approve a pending organization
 router.post('/admin/orgs/:id/approve', authorize('SUPER_ADMIN') as any, async (req: any, res, next) => {
   try {
     const { planId, notes } = req.body;
@@ -163,7 +175,7 @@ router.post('/admin/orgs/:id/approve', authorize('SUPER_ADMIN') as any, async (r
   } catch (err) { next(err); }
 });
 
-// POST /support/admin/orgs/:id/reject — reject a pending organization
+// POST /support/admin/orgs/:id/reject â€” reject a pending organization
 router.post('/admin/orgs/:id/reject', authorize('SUPER_ADMIN') as any, async (req: any, res, next) => {
   try {
     const { reason } = req.body;
@@ -182,9 +194,9 @@ router.post('/admin/orgs/:id/reject', authorize('SUPER_ADMIN') as any, async (re
   } catch (err) { next(err); }
 });
 
-// ── Support contacts management (Super Admin only) ────────────────────────────
+// â”€â”€ Support contacts management (Super Admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// PUT /support/admin/contacts — replace all contacts
+// PUT /support/admin/contacts â€” replace all contacts
 router.put('/admin/contacts', authorize('SUPER_ADMIN') as any, async (req: any, res, next) => {
   try {
     const contacts: Array<{
@@ -214,7 +226,7 @@ router.put('/admin/contacts', authorize('SUPER_ADMIN') as any, async (req: any, 
   } catch (err) { next(err); }
 });
 
-// PATCH /support/admin/contacts/:id — update one contact
+// PATCH /support/admin/contacts/:id â€” update one contact
 router.patch('/admin/contacts/:id', authorize('SUPER_ADMIN') as any, async (req: any, res, next) => {
   try {
     const contact = await prisma.supportContact.update({
@@ -226,3 +238,4 @@ router.patch('/admin/contacts/:id', authorize('SUPER_ADMIN') as any, async (req:
 });
 
 export default router;
+

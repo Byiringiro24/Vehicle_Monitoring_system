@@ -108,37 +108,107 @@ router.post('/', authorize(...DISPATCH_ROLES) as any, async (req: any, res, next
   } catch (err) { next(err); }
 });
 
-// ── PATCH /trips/:id/assign — assign driver + vehicle ────────────────────────
+// ── PATCH /trips/:id/assign — assign driver + vehicle with conflict detection ─
 router.patch('/:id/assign', authorize(...DISPATCH_ROLES) as any, async (req: any, res, next) => {
   try {
     const { driverId, vehicleId } = req.body;
     const orgId = req.user.organizationId;
 
-    const trip = await prisma.trip.findFirst({
-      where: { id: req.params.id, vehicleId: { not: undefined } },
-    });
+    const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
     if (!trip) throw new AppError(404, 'Trip not found');
 
-    // Verify vehicle belongs to org if vehicleId provided
+    const meta = (trip.pathPoints as any) ?? {};
+    const scheduledAt  = meta.scheduledAt ? new Date(meta.scheduledAt) : trip.startTime;
+    const scheduledEnd = new Date(scheduledAt.getTime() + 2 * 60 * 60 * 1000); // assume 2h duration
+
+    const conflicts: string[] = [];
+
+    // ── Conflict detection ─────────────────────────────────────────────────────
     if (vehicleId) {
+      // Verify vehicle belongs to org
       const v = await prisma.vehicle.findFirst({ where: { id: vehicleId, organizationId: orgId } });
       if (!v) throw new AppError(404, 'Vehicle not found in your organization');
+
+      // Check vehicle is not already assigned to an overlapping trip
+      const vehicleConflict = await prisma.trip.findFirst({
+        where: {
+          id:        { not: req.params.id },
+          vehicleId,
+          startTime: { lt: scheduledEnd },
+          pathPoints: { path: ['$.status'], string_contains: 'ASSIGNED' },
+        } as any,
+      });
+      // Fallback: check endTime overlap
+      const vehicleActive = await prisma.trip.findFirst({
+        where: {
+          id:        { not: req.params.id },
+          vehicleId,
+          startTime: { lte: scheduledEnd },
+          endTime:   null,          // in-progress trips have no endTime yet
+        },
+      });
+      if (vehicleConflict || vehicleActive) {
+        conflicts.push(`Vehicle ${v.licensePlate} is already assigned to another trip at this time`);
+      }
+
+      // Check vehicle maintenance status
+      if (v.status === 'MAINTENANCE' || v.status === 'OUT_OF_SERVICE') {
+        conflicts.push(`Vehicle ${v.licensePlate} is in ${v.status} status — cannot be dispatched`);
+      }
     }
 
-    const meta = (trip.pathPoints as any) ?? {};
+    if (driverId) {
+      const driver = await prisma.driver.findFirst({
+        where: { id: driverId, organizationId: orgId },
+        include: { user: { select: { firstName: true, lastName: true } } },
+      });
+      if (!driver) throw new AppError(404, 'Driver not found in your organization');
+
+      // Check driver licence expiry
+      if (driver.licenseExpiry && new Date(driver.licenseExpiry) < scheduledAt) {
+        conflicts.push(`Driver ${driver.user?.firstName} ${driver.user?.lastName} licence expired on ${driver.licenseExpiry.toISOString().slice(0, 10)}`);
+      }
+
+      // Check driver status
+      if (driver.status === 'SUSPENDED' || driver.status === 'TERMINATED') {
+        conflicts.push(`Driver ${driver.user?.firstName} ${driver.user?.lastName} is ${driver.status}`);
+      }
+
+      // Check driver not already on another trip at the same time
+      const driverConflict = await prisma.trip.findFirst({
+        where: {
+          id:       { not: req.params.id },
+          driverId,
+          startTime: { lte: scheduledEnd },
+          endTime:   null,
+        },
+      });
+      if (driverConflict) {
+        conflicts.push(`Driver ${driver.user?.firstName} ${driver.user?.lastName} is already on another trip`);
+      }
+    }
+
+    // If hard conflicts exist, return 409 with details
+    if (conflicts.length > 0) {
+      res.status(409).json({
+        error: 'Assignment conflicts detected',
+        conflicts,
+        canOverride: true, // frontend can show "Assign anyway" button
+      });
+      return;
+    }
+
     const updated = await prisma.trip.update({
       where: { id: req.params.id },
       data: {
-        driverId: driverId ?? trip.driverId,
+        driverId:  driverId  ?? trip.driverId,
         vehicleId: vehicleId ?? trip.vehicleId,
         pathPoints: { ...meta, status: driverId ? 'ASSIGNED' : meta.status },
       },
-      include: {
-        vehicle: { select: { id: true, name: true, licensePlate: true } },
-      },
+      include: { vehicle: { select: { id: true, name: true, licensePlate: true } } },
     });
 
-    res.json(updated);
+    res.json({ ...updated, conflicts: [] });
   } catch (err) { next(err); }
 });
 

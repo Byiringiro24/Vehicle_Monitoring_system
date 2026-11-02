@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { loginUser, refreshAccessToken, logoutUser, switchUserOrganization } from '../services/auth.service';
-import { sendPasswordResetEmail, sendPasswordChangedEmail, sendWelcomeEmail, sendNewRegistrationAlert } from '../services/email.service';
+import { sendPasswordResetEmail, sendPasswordChangedEmail, sendWelcomeEmail, sendNewRegistrationAlert, sendSensitiveAccountAlertEmail } from '../services/email.service';
 import { AuthenticatedRequest } from '../types';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
@@ -262,8 +262,32 @@ export async function changePassword(req: AuthenticatedRequest, res: Response, n
     if (!valid) throw new AppError(401, 'Current password is incorrect');
 
     const hash = await bcrypt.hash(newPassword, 12);
+    const previous = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { organizationId: true, firstName: true, lastName: true, email: true },
+    });
+
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hash } });
     await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+
+    if (previous) {
+      const owners = await prisma.membership.findMany({
+        where: { organizationId: previous.organizationId, status: 'ACTIVE', role: { in: ['COMPANY_OWNER', 'COMPANY_ADMIN'] } },
+        include: { user: { select: { email: true, firstName: true, lastName: true } } },
+      });
+      const org = await prisma.organization.findUnique({ where: { id: previous.organizationId }, select: { name: true } });
+      for (const owner of owners) {
+        if (!owner.user?.email) continue;
+        await sendSensitiveAccountAlertEmail(
+          owner.user.email,
+          owner.user.firstName,
+          `${previous.firstName} ${previous.lastName}`.trim() || previous.email,
+          'Password changed',
+          `${previous.firstName} ${previous.lastName}`.trim() || previous.email,
+          org?.name ?? 'your organization',
+        ).catch((err) => logger.warn(`[AUTH] Failed to notify org owner about password change: ${err.message}`));
+      }
+    }
 
     // Send confirmation email (non-blocking)
     sendPasswordChangedEmail(user.email, user.firstName).catch(err =>
@@ -344,12 +368,36 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
+    const targetUser = await prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { id: true, email: true, firstName: true, lastName: true, organizationId: true },
+    });
+
     // Update password, mark token used, kill all sessions — all in one transaction
     await prisma.$transaction([
       prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
       prisma.passwordResetToken.update({ where: { id: record.id }, data: { used: true } }),
       prisma.refreshToken.deleteMany({ where: { userId: record.userId } }),
     ]);
+
+    if (targetUser) {
+      const owners = await prisma.membership.findMany({
+        where: { organizationId: targetUser.organizationId, status: 'ACTIVE', role: { in: ['COMPANY_OWNER', 'COMPANY_ADMIN'] } },
+        include: { user: { select: { email: true, firstName: true, lastName: true } } },
+      });
+      const org = await prisma.organization.findUnique({ where: { id: targetUser.organizationId }, select: { name: true } });
+      for (const owner of owners) {
+        if (!owner.user?.email) continue;
+        await sendSensitiveAccountAlertEmail(
+          owner.user.email,
+          owner.user.firstName,
+          `${targetUser.firstName} ${targetUser.lastName}`.trim() || targetUser.email,
+          'Password reset',
+          `${targetUser.firstName} ${targetUser.lastName}`.trim() || targetUser.email,
+          org?.name ?? 'your organization',
+        ).catch((err) => logger.warn(`[AUTH] Failed to notify org owner about password reset: ${err.message}`));
+      }
+    }
 
     // Send confirmation email
     sendPasswordChangedEmail(record.user.email, record.user.firstName).catch(err =>

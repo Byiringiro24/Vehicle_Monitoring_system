@@ -31,6 +31,12 @@ import tripRoutes          from './routes/trip.routes';
 import ownerRoutes         from './routes/owner.routes';
 import healthRoutes        from './routes/health.routes';
 import invoiceRoutes       from './routes/invoice.routes';
+import auditRoutes         from './routes/audit.routes';
+import entitlementRoutes   from './routes/entitlement.routes';
+import payoutRoutes        from './routes/payout.routes';
+import notificationRoutes  from './routes/notification.routes';
+import attendanceRoutes    from './routes/attendance.routes';
+import remittanceRoutes    from './routes/remittance.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
@@ -99,6 +105,12 @@ app.use(`${api}/support`,       apiLimiter,  supportRoutes);
 app.use(`${api}/trips`,         apiLimiter,  tripRoutes);
 app.use(`${api}/owner`,         apiLimiter,  ownerRoutes);
 app.use(`${api}/invoices`,      apiLimiter,  invoiceRoutes);
+app.use(`${api}/audit`,         apiLimiter,  auditRoutes);
+app.use(`${api}/entitlements`,  apiLimiter,  entitlementRoutes);
+app.use(`${api}/payouts`,       apiLimiter,  payoutRoutes);
+app.use(`${api}/notifications`, apiLimiter,  notificationRoutes);
+app.use(`${api}/attendance`,    apiLimiter,  attendanceRoutes);
+app.use(`${api}/remittances`,   apiLimiter,  remittanceRoutes);
 
 // Serve uploaded files — in production replace with a CDN / object storage signed URL
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

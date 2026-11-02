@@ -1,8 +1,11 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
+import { useAuthStore } from '@/store/authStore';
+import { ROLE_HOME, type AppRole } from '@/lib/roles';
 import {
   Truck, MapPin, Shield, Activity, Lock, Satellite, ArrowRight,
   CheckCircle, Zap, Globe, DollarSign, Users, Wrench, FileText,
@@ -105,12 +108,20 @@ const FAQ = [
 function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { isAuthenticated, user } = useAuthStore();
+  const router = useRouter();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  const targetDashboard = (() => {
+    if (!isAuthenticated || !user) return '/login';
+    const roles = [user.role, ...(user.roles ?? [])].filter(Boolean) as AppRole[];
+    return ROLE_HOME[(roles[0] ?? user.role) as AppRole] ?? '/dashboard';
+  })();
 
   return (
     <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'glass-nav' : 'bg-transparent'}`}>
@@ -131,10 +142,12 @@ function LandingNav() {
         </div>
 
         <div className="hidden lg:flex items-center gap-2">
-          <Link href="/login"
+          <button
+            type="button"
+            onClick={() => router.push(targetDashboard)}
             className="h-9 px-4 text-sm font-medium text-white/80 hover:text-white border border-white/20 hover:border-white/40 rounded-lg transition">
-            Sign In
-          </Link>
+            {isAuthenticated ? 'Dashboard' : 'Sign In'}
+          </button>
           <Link href="/register"
             className="h-9 px-4 flex items-center gap-1.5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shadow-md shadow-blue-600/30">
             Get Started <ArrowRight size={13} />
@@ -159,7 +172,16 @@ function LandingNav() {
             ))}
           </div>
           <div className="mt-10 flex flex-col gap-3">
-            <Link href="/login" onClick={() => setMenuOpen(false)} className="h-12 grid place-items-center rounded-xl border border-white/30 text-white font-medium">Sign In</Link>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                router.push(targetDashboard);
+              }}
+              className="h-12 grid place-items-center rounded-xl border border-white/30 text-white font-medium"
+            >
+              {isAuthenticated ? 'Open Dashboard' : 'Sign In'}
+            </button>
             <Link href="/register" onClick={() => setMenuOpen(false)} className="h-12 grid place-items-center rounded-xl bg-blue-600 text-white font-semibold">Get Started</Link>
           </div>
         </div>
@@ -190,6 +212,16 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function LandingPage() {
+  const router = useRouter();
+  const { isAuthenticated, user } = useAuthStore();
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    const roles = [user.role, ...(user.roles ?? [])].filter(Boolean) as AppRole[];
+    const home = ROLE_HOME[(roles[0] ?? user.role) as AppRole] ?? '/dashboard';
+    router.replace(home);
+  }, [isAuthenticated, user, router]);
+
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans">
       <LandingNav />

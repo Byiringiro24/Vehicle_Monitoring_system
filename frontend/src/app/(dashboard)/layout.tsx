@@ -43,7 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     if (!user) return;
 
-    const roles = [user.role, ...(user.roles ?? [])].filter(Boolean) as AppRole[];
+    const role = user.role as AppRole;
     const status = user.organization?.status;
 
     if (status === 'PENDING' && pathname !== '/pending-approval') {
@@ -56,8 +56,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
 
-    if (status === 'ACTIVE' && !canAccess(roles, pathname)) {
-      const home = ROLE_HOME[(roles[0] ?? user.role) as AppRole] ?? '/dashboard';
+    if (status === 'ACTIVE' && !canAccess(role, pathname)) {
+      const home = ROLE_HOME[role] ?? '/dashboard';
       router.replace(home);
     }
   }, [isAuthenticated, user, pathname, router]);
@@ -65,8 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Don't render until auth confirmed
   if (!isAuthenticated || !user) return null;
 
-  const roles = [user.role, ...(user.roles ?? [])].filter(Boolean) as AppRole[];
-  if (!canAccess(roles, pathname)) return null;
+  if (!canAccess(user.role as AppRole, pathname)) return null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.08),_transparent_20%),linear-gradient(180deg,_#f8fafc_0%,_#eef3fb_100%)]">

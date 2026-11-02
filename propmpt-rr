@@ -1,0 +1,327 @@
+﻿solve this, and check what is done, and what is not done, 
+
+ 
+
+# ARTIC VMS — Complete Landing Page Specification
+
+The ARTIC VMS landing page should introduce the entire platform, attract companies and individual vehicle owners, help customers discover transport services, and guide drivers and other professionals into the correct registration or sign-in process.
+
+The most important design principle: ARTIC should have one public landing page, one shared identity system, and different dashboards based on each user's verified roles and permissions. A person must not need a new account simply because they become a driver, vehicle owner, company administrator, or customer.
+
+## 1. Recommended landing page structure
+
+[GPS Tracker Models India | Car, Bike & Fleet GPS Tracker India](https://images.openai.com/static-rsc-4/8O36ySwRqWU9rGuq7m-B26J4ztkAOalHcyNXqJeRN22c447j9f0kb0-HIC5Od99TVseuRKpeIBiiG_5eDjSgQRLzkEWEk0pJrW9C36Bds5IUdnrH1kSt2An6a5qDADmfozTxqIj2BAlquJYdkelM0yNh_xFk6Fq3qeiuIxcbv5w?purpose=inline)
+
+1\. Navigation and account access
+
+ARTIC logo, Services, For Businesses, Vehicle Owners, Drivers, Marketplace, About, Help, language/currency selector, Sign in, and Get started.
+
+[Numeo One | AI-powered TMS for trucking carriers | Numeo](https://images.openai.com/static-rsc-4/Qlv-CcYUD3fDPoSMmKWdN7Bp35rG5veH_ZcD41QyegUL9XnCgl_G72wqeMXhKEHtNylc8C7Jw2JpxrUAqoSZGAWlEwAnXM2OpoZseaScYBxdRRUFOxMQv8vHwP_a8mcGffpGhlv1E-Tpwjge98vtoJ8clVUtI4VORI30BFjEBAs?purpose=inline)
+
+2\. Main hero section
+
+A compelling headline, short explanation, primary calls to action and a strong mobility-themed visual. Clearly communicate that ARTIC serves companies, vehicle owners, drivers and customers.
+
+[Wholesale Vehicles Suppliers, Manufacturers & Exporters | Bulk Procurement](https://images.openai.com/static-rsc-4/J9XS5pg3f3HGjZmviP_0d8BKbCWiZqXiBYjThyM_ytCUzA1wJC5YbRVWkTTqhr9UjAjMMUCmMpBw0OFcFnJXICJnH5jZeQG6WjGW2mGh7iMvJaiHd4S-aobg_m0lEuLTDKiuJE6DllMzNMHV9pa1fGdMxyG8warkyY_O2YQOwUM?purpose=inline)
+
+3\. Explore services
+
+Discover transport, rentals, vehicle sales, leasing, freight, driver services, maintenance, recovery and fleet management.
+
+[See How the SafeMotos App Became Africa's Uber | National Geographic](https://images.openai.com/static-rsc-4/yH85I1sM_IQ_BMkA-xinr1W2dZEFSsi3ugldYxc5KCjLEox7TwkKp_NvMFj9YNH2ZFlGCNSUOgUg8BQ_wJpQ_SgdT_Q8cbXZnjBb2tZsJZWCIoFStXpsvmc6PjkRqzKDQCX-SVg6vSSmwp0ZFY21JisYAjZNHLOz_ysQO4k114s?purpose=inline)
+
+4\. Choose your journey
+
+Separate pathways for companies, individual vehicle owners, drivers and riders, customers, and service providers.
+
+[Fleet Budget Planning Guide for Cost Control and Forecasting](https://images.openai.com/static-rsc-4/wK1PwS2SXxoWbxIgZoQeh6n-Rf8B8QyiCxHFRnrWdGX5g6NKvqecLQGndYgwHNymf60fBZumuJyjes9j_BTHz4JL8LeFfkUCZDmtOnbtpJiAxso1UmsQphuSPSq9Yi4c5RLdRCfoH8O_JdW1BNogT_fzZYpJIayJ9_4-a5w1vV0?purpose=inline)
+
+5\. Platform capabilities
+
+Fleet tracking, bookings, contracts, collections, accounting, maintenance, driver management, reporting and document management.
+
+[Endliz Core — Contract & Compliance Platform](https://images.openai.com/static-rsc-4/lY6v0WJhjh4LHfMKM1eqWjBWM8XSjYxI_xFF7UaWUt8-6ZuCbVTIRQs5-lyaS_NP5Q3LQ8HwVqNkHXqgMyzRdiXTgWwmBh4OqFR38OsuJWBgd7yCAH-LoF53Hk_siOKsv-GK2QKu_HTr4eijlf7RZOnvEvGS1QQh_T2-KaLphWg?purpose=inline)
+
+6\. How ARTIC works
+
+Explain discovery, registration, verification, approval, booking or agreement, payment and ongoing management.
+
+[Data Protection Cybersecurity Shield with Identity Verification and Secure Authentication](https://images.openai.com/static-rsc-4/3fFk8sQ1Q7bUZ5CDQfTV8uNPHtZZhMvs3R5uhfCItTECd3bI7zhUUneibP4lHjMEGS10gXNJRK0JwfoaeVp0k2vuVZJSVpNsu2W-cUv9WfHmuRkXPN_ls70SvU6FNv7KSJ61WdRycjQl_v45Cx0pxDHPuXBVsV3iTxSH5oxlkjel6I3vk9L8Yy-cqBGGMPdN?purpose=inline)
+
+7\. Trust, security and transparency
+
+Explain identity verification, controlled access, document history, payment records and company-data separation. Publish only claims the platform can actually support.
+
+[10 Best CRMs for Phone Based Sales Teams – Leader](https://images.openai.com/static-rsc-4/kcpU7f95AGVv2oQIHIGtBneJFdpbdqV1qiLlB918MDLynIOXn-Tblq9LPUwJeFmaapVIS62MzT46CvOZgjLxtlJk8r511uMxSQh6w-y4yIuoKGy4rEJtFUBq_zyMc3YWm-cKQkmi0mbRzS6LpAk7xQnEmo9_UUjWal8AsxiDXBk?purpose=inline)
+
+8\. FAQs, contact and footer
+
+Answer questions about accounts, approvals, fees, vehicle ownership, contracts, security and supported countries. Include legal, support and social links.
+
+## 2. Recommended hero section and actual website wording
+
+The first screen should immediately tell visitors what ARTIC does and let them choose their next step.
+
+## ARTIC
+
+Mobility. Management. Growth.
+
+One platform. Multiple possibilities.
+
+# Move your business forward.
+
+Manage vehicles, grow your transport business, connect with trusted service providers and turn your mobility operations into measurable results.
+
+Explore services
+
+Manage my vehicles
+
+For businesses
+
+Manage fleets, teams, operations and finances.
+
+For vehicle owners
+
+Track vehicles, agreements and earnings.
+
+For drivers and riders
+
+Access assignments, schedules and earnings.
+
+For customers
+
+Discover transport, rentals and vehicle services.
+
+Illustrative design concept — not a live ARTIC website.
+
+## 3. Services and business categories
+
+The public marketplace should display categories based on the services ARTIC actually supports and the listings companies have published.
+
+[Трансфер – Цілодобово 24/7](https://images.openai.com/static-rsc-4/neI6saW2PSnAuC738-IC3vvcVAOrgqVxVQVLQAmDIEkWPoDxEy8jCHksT8tcqH7u-FPu83GkWUFzpSh00ZlW3qqyGjmQYBxBNe_Gtj1ODYUA6rex6jG8fiawLotL9cJp0AHzFtRibbMOxhCTjvelrlLDaNWK07qYeYeJt8H6Idk?purpose=inline)
+
+Transport and mobility
+
+Passenger transport, taxis, motorcycle taxis, scheduled routes, airport transfers, school transport, staff shuttles, tours and chauffeur services.
+
+[PeoLands | Land & Property in Sri Lanka](https://images.openai.com/static-rsc-4/5YAIdbWntlOavfdwRMl8sv2lWISUiphBTw1JM04vy6tMfaznSR75Vvkydyhjk7FNaFgVSJv4vbHtJn95SxfOGTmHDD_rW0jRhdNgf6BFT25fKgdplXSd2kEIx4pTqB6QT6Gai6Wids-lFuPOWqWyz7uzTxqgUW2tqWUagV7SI4k?purpose=inline)
+
+Vehicle rental and hire
+
+Cars, motorcycles, scooters, vans, trucks, buses, trailers and specialist vehicles. Offer self-drive, chauffeur-driven and contract rental where available.
+
+[Huayu Energy | Smart Energy Storage, EV Charging & Battery Swap Solutions](https://images.openai.com/static-rsc-4/v58kzzxOQJL9qCI4vFFFLnHNaJ3gkxfUXMz2sOPSXwkY4XbwWbreJhq210ZKRdxWVio-peDO3pUuYVvHbj2FGxWFeLZ-tItIZmmL6amvGunGwNwV23rgmLvT_v0Otjp0cM4s77ACxXPcXShUVCZGY83GPttey3kXwkWtizysdgs?purpose=inline)
+
+Cargo and logistics
+
+Goods transport, courier delivery, parcel delivery, freight, luggage, last-mile delivery and business logistics.
+
+[| M2B a.s.](https://images.openai.com/static-rsc-4/KIGPpDTwPypk00mbMwpQKRcFv1lz-KanQcXu7teEXw8jpaIIIy-navLX-rhbjPybzkcQe7gWet12NJ81blQv6Jxl8yeZhRm19OXTwLplsl1b8PEmEKoXiBzrfDBn6bXKoLTZj7tar3AKTZPe21iZGOvlVjB6uiDXfTNcWxQphUI?purpose=inline)
+
+Vehicle sales and ownership plans
+
+New and used vehicles, installment purchases, hire-purchase and lease-to-own offers where supported.
+
+[AST – Auto Service Thiem | KFZ-Meisterwerkstatt in Hildesheim](https://images.openai.com/static-rsc-4/eaW437MaS8rrIG4povmN90vRoSeL7fn-o4MsffqVdHF2inRyN2W-lxNG9__kJPdcv4-IML6I7Ag_YM-DPG12b5GmCnD2DCXAPc1Hx8UYXIVT_-EM_OCbpW3q9EUbIQwrY2thnHOlY1FASa_EQ6C19xNfXKaAWnm1ECxqYIzqINQ?purpose=inline)
+
+Vehicle services
+
+Maintenance, repairs, tyres, towing, recovery, inspections, washing, spare parts, GPS installation and fleet-management providers.
+
+[How to Choose the Best Fleet Management Software (Compared)  – DrivePro.io Ltd](https://images.openai.com/static-rsc-4/eo-8pp52Sio1EJbhAqZw1DLfvvP17G2yIeQM8rGDvR-J_B1UQVRwH4Z4zk6EkYCe_A1dAv-Hwte4YsxU9Tofuxpp5EjiFuQi9eYxOJ7oIUM4U94TC-GABtY063hds2UXlGD6QrNhZlKHfm_p5NUdMPKJ38RJJ66cZkv9yP2SLMs?purpose=inline)
+
+Fleet management and leasing
+
+Outsourced fleet operations, vehicle-owner management agreements, corporate fleets, operating leases and subscriptions.
+
+Each category should have a dedicated page with filters for country, location, price, availability, vehicle type, service type and booking method. Only show a price, rating, availability status or verification badge when supported by actual data.
+
+## 4. Separate journeys for each type of visitor
+
+Do not force everyone through the same registration form.
+
+| Visitor                   | Main action               | What happens next                                                                                                                  |
+| ------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Company or fleet business | Register a company        | Create a company application, verify details, submit for review if required, then configure services and invite staff              |
+| Individual vehicle owner  | Register as an owner      | Create a personal account, submit vehicle and ownership evidence, then manage privately or request a company to manage the vehicle |
+| Driver or rider           | Join as a driver          | Create or use an existing account, submit required information and qualifications, then apply to companies or accept invitations   |
+| Customer                  | Book or request a service | Select a service, register or sign in when needed, then track bookings, payments and documents                                     |
+| Service provider          | List services             | Register the business or provider profile, submit required verification and publish approved listings                              |
+| Existing ARTIC user       | Sign in                   | Enter the same account and see authorized workspaces, roles and tasks                                                              |
+
+Add a “Not sure where to start?” link that helps visitors choose a path without requiring them to understand ARTIC's internal role terminology.
+
+## 5. The most important feature: one account, multiple roles
+
+The landing page must lead to an identity system that supports these scenarios.
+
+Scenario A — A new user registers personally
+
+The user verifies their email and creates one account. They may then use the customer portal, register as a vehicle owner, or apply for a driver role, subject to the relevant requirements.
+
+Scenario B — An administrator invites an existing user
+
+The invitation is linked to the existing identity. After signing in and accepting the invitation, the user gains the new role or company membership once authorized. No duplicate account is created.
+
+Scenario C — A user works for several companies
+
+One account can have different roles in different companies. For example, the user can be a fleet manager in Company A, a driver in Company B and an individual vehicle owner. Company-specific permissions and records remain isolated.
+
+Scenario D — A user requests a role that requires approval
+
+The application remains pending until the authorized company administrator or designated reviewer approves it. The user must not gain the role's protected permissions merely by selecting it during registration.
+
+Scenario E — A driver later becomes a manager or owner
+
+Add the new role to the same identity. Keep the existing driver history, assignments and audit records. Use separate permissions and, where appropriate, separate workspaces for each role.
+
+Email policy: Reuse the verified email on the same account. Do not create a new user merely because an administrator assigns a new role. Invitations and role changes should use secure, expiring links where confirmation is required; never email passwords. If the invitation targets an email that cannot safely be matched to an existing account, require verification and a secure account-linking process.
+
+## 6. Company registration and approval
+
+Company registration should be accessible from both the landing page and the business section.
+
+The company onboarding flow should collect the legal or trading name, country, registration details where applicable, business category, contact details, authorized representative, service locations and relevant documents. The exact requirements must be configurable by country and business type.
+
+Recommended company states:
+
+- Draft
+- Submitted for review
+- Awaiting verification
+- Approved
+- Rejected with reason
+- Suspended
+- Closed
+
+A company may be allowed to set up a draft profile before approval, but only approved or explicitly permitted features should be publicly listed or operational. ARTIC Super Admin controls platform approval rules; company administrators control their own staff and operations within those rules.
+
+## 7. Essential content beyond the hero
+
+Include these sections on the homepage or dedicated pages linked from it.
+
+- Featured services and vehicles: Actual published listings, availability, locations and transparent pricing.
+- For companies: Fleet management, dispatch, maintenance, financial reporting, contracts, staff and configurable workflows.
+- For vehicle owners: Vehicle registration, ownership evidence, management proposals, income and expense statements, maintenance and payouts.
+- For drivers and riders: Applications, qualifications, assignments, shifts, trips, collections, earnings and notices.
+- For customers: Search, bookings, quotes, payments, agreements, receipts, cancellations and support.
+- How it works: A short explanation of registration, verification, approval, service delivery and payment.
+- Platform features: GPS tracking where devices are connected, alerts, fleet analytics, document expiry reminders, maintenance schedules and accounting.
+- Plans and pricing: ARTIC subscription plans for companies, if offered; marketplace service prices should remain separate.
+- Trust and security: Identity controls, access permissions, privacy, transaction records, support and complaint handling.
+- Testimonials and statistics: Only verified testimonials and real, substantiated metrics.
+- FAQs: Registration, multiple roles, company approvals, owner rights, payment handling, fees, refunds, contracts and account recovery.
+- Contact and support: Help centre, contact form, complaint channel and emergency contact details where relevant.
+- Footer: About ARTIC, service categories, company registration, owner portal, driver portal, terms, privacy, cookie settings, accessibility, supported countries and social links.
+
+## 8. The sign-in and registration experience
+
+Use clear entry points:
+
+- Sign in: Existing accounts.
+- Create personal account: Customers, vehicle owners and individuals.
+- Register a company: Company application and verification.
+- Join a company: Invitation or request-to-join flow.
+- Become a driver or rider: Driver application.
+- List a service: Business or service-provider onboarding.
+
+After sign-in, show a personalized landing dashboard based on the authenticated user's actual permissions. If the user has multiple roles, display a workspace selector and a unified notification centre. A role switch must not bypass authorization checks.
+
+Account pages should include email verification, password reset, change-email verification, MFA where enabled, active sessions, sign-in history, security alerts and a way to report suspicious activity. Recovery pages should not reveal whether an email address belongs to an account.
+
+## 9. Visual design and usability requirements
+
+Recommended design direction:
+
+- Deep navy for structure and trust.
+- White or light backgrounds for readability.
+- Electric blue and cyan/teal for primary actions.
+- Realistic photography of vehicles, transport operations, workshops and business users.
+- Consistent cards, icons, spacing and typography.
+- Responsive desktop, tablet and mobile layouts.
+- Accessible contrast, keyboard navigation, visible focus indicators and reduced-motion support.
+- Fast-loading images, optimized assets, meaningful alternative text and no intrusive animation.
+- A mobile menu that keeps sign-in and registration easy to find.
+
+Avoid making the homepage look like an internal admin dashboard. Public visitors need a simple way to understand the product, explore services and select their journey; complex fleet and accounting tools belong inside the authenticated application.
+
+## 10. Pages that should accompany the landing page
+
+| Page                                | Purpose                                              |
+| ----------------------------------- | ---------------------------------------------------- |
+| `/`                                 | Public homepage                                      |
+| `/services`                         | Search all public service categories                 |
+| `/services/[category]`              | Browse a particular category                         |
+| `/vehicles`                         | Browse published vehicles                            |
+| `/vehicles/[listing]`               | Listing details and booking/request flow             |
+| `/companies`                        | Approved public company directory                    |
+| `/companies/[slug]`                 | Public company profile and published services        |
+| `/for-businesses`                   | Fleet and business product overview                  |
+| `/for-owners`                       | Individual vehicle-owner information                 |
+| `/for-drivers`                      | Driver and rider onboarding                          |
+| `/register`                         | Choose the correct registration path                 |
+| `/register/company`                 | Company onboarding                                   |
+| `/register/driver`                  | Driver or rider application                          |
+| `/sign-in`                          | Shared authentication                                |
+| `/verify-email`                     | Email verification                                   |
+| `/forgot-password`                  | Secure recovery request                              |
+| `/reset-password`                   | Complete password reset                              |
+| `/invitations/accept`               | Accept a company or role invitation                  |
+| `/dashboard`                        | Route the authenticated user to permitted workspaces |
+| `/help`                             | Help centre and support                              |
+| `/legal/terms` and `/legal/privacy` | Legal documents                                      |
+
+The exact routes can change to match the existing codebase; this is a recommended structure, not a claim that these pages already exist.
+
+## 11. Make the landing page configurable
+
+ARTIC Super Admin should be able to manage public content without requiring a code change for every update. This includes:
+
+- Homepage headlines, descriptions, images and calls to action.
+- Enabled marketplace categories and business model templates.
+- Featured companies, services and vehicles.
+- Country, language and currency options.
+- Public company listing and verification display policies.
+- FAQs, announcements, support contacts and legal-document versions.
+- SEO titles, descriptions, social sharing images and indexing rules.
+- Homepage section ordering and visibility.
+
+Company administrators should manage their own public profiles, service listings, locations, images and pricing, but should not be able to edit ARTIC's global identity, other companies' listings or platform-wide legal and security policies.
+
+## 12. Search engine visibility and performance
+
+Build the public pages so people can find relevant transport and fleet services through search engines. Use descriptive page titles, unique descriptions, clean URLs, structured metadata where appropriate, sitemap generation, canonical URLs and controlled indexing.
+
+Only publicly approved listings should be indexed. Private owner details, customer information, contracts, account pages, internal dashboards, unpublished listings and private documents must not leak through search results, page source, APIs or file URLs.
+
+The landing page should load quickly on mobile connections, support modern browsers and remain usable on lower-powered devices. Use server-rendered or statically generated public content where appropriate, with private data fetched only through authorized application routes.
+
+## 13. Acceptance criteria before launch
+
+The landing page and its account flows should not be considered complete until these checks pass:
+
+- Every visitor category has a clear path to the right next step.
+- An existing user can accept an invitation without creating a duplicate account.
+- A single user can hold multiple approved roles and company memberships.
+- Self-selected roles never grant privileged permissions without required approval.
+- Company registration and company approval are separate, auditable states.
+- Marketplace listings display only information authorized for public viewing.
+- Public prices and availability come from actual configured records.
+- Sign-in, invitation, email verification and password recovery are secure.
+- Company A cannot access Company B's private information by changing a URL or API identifier.
+- The website works on mobile, keyboard navigation and accessible display settings.
+- Contact, privacy, terms and support information are present and accurate.
+- All advertised features, verification badges and trust claims reflect real capabilities.
+
+Final recommendation: Build ARTIC as a public marketplace connected to one shared identity and a modular, permission-controlled business application. The landing page should be the entry point to the whole ecosystem—not a separate website that creates disconnected accounts, duplicated vehicles or isolated booking and payment records.
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+also do this, in these documents (D:\Projectts 2026\SANO IRENE\New folder (2)\docs\ARTIC VMS - Complete Server Deployment Guide.md, and D:\Projectts 2026\SANO IRENE\New folder (2)\docs\ARTIC VMS - Project Status & User Guide.md, D:\Projectts 2026\SANO IRENE\New folder (2)\docs\ARTIC_VMS_Master_System_Specification.md,

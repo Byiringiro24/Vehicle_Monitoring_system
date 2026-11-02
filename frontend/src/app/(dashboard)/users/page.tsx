@@ -21,6 +21,8 @@ interface UserRecord {
   firstName: string;
   lastName: string;
   role: string;
+  roles?: string[];
+  pendingRoles?: string[];
   isActive: boolean;
   phone?: string;
   lastLoginAt?: string;
@@ -38,14 +40,17 @@ const ROLE_COLORS: Record<string, string> = {
   VIEWER:        'bg-gray-100 text-gray-700 border border-gray-200',
 };
 
-const ASSIGNABLE_ROLES = ['ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER', 'DRIVER', 'VIEWER'] as const;
+const ASSIGNABLE_ROLES = [
+  'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'DRIVER', 'VIEWER',
+  'DISPATCHER', 'HR_MANAGER', 'MECHANIC', 'COMPLIANCE_OFFICER', 'RENTAL_MANAGER', 'AUDITOR', 'SALES_AGENT',
+] as const;
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 const userSchema = z.object({
   email:     z.string().email('Valid email required'),
   firstName: z.string().min(1, 'Required'),
   lastName:  z.string().min(1, 'Required'),
-  role:      z.enum(ASSIGNABLE_ROLES),
+  roles:     z.array(z.enum(ASSIGNABLE_ROLES)).min(1, 'Select at least one role'),
   password:  z.string().min(8, 'Min 8 characters').optional().or(z.literal('')),
   phone:     z.string().optional(),
 });
@@ -96,11 +101,12 @@ export default function UsersPage() {
   const filtered = users.filter(u => {
     if (!search) return true;
     const q = search.toLowerCase();
+    const rolesText = (u.roles ?? [u.role]).join(' ').toLowerCase();
     return (
       u.firstName.toLowerCase().includes(q) ||
       u.lastName.toLowerCase().includes(q)  ||
       u.email.toLowerCase().includes(q)     ||
-      u.role.toLowerCase().includes(q)      ||
+      rolesText.includes(q)                 ||
       (u.organization?.name.toLowerCase().includes(q) ?? false)
     );
   });
@@ -148,13 +154,13 @@ export default function UsersPage() {
     useForm<UserForm>({ resolver: zodResolver(userSchema) });
 
   function openAdd() {
-    resetUser({ role: 'VIEWER' });
+    resetUser({ email: '', firstName: '', lastName: '', roles: ['VIEWER'], phone: '' });
     setEditing(null);
     setShowUserModal(true);
   }
   function openEdit(u: UserRecord) {
     resetUser({ email: u.email, firstName: u.firstName, lastName: u.lastName,
-      role: u.role as any, phone: u.phone ?? '' });
+      roles: (u.roles && u.roles.length ? u.roles : [u.role]) as any, phone: u.phone ?? '' });
     setEditing(u);
     setShowUserModal(true);
   }
@@ -305,10 +311,14 @@ export default function UsersPage() {
                       <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
                       {/* Role */}
                       <td className="px-4 py-3">
-                        <span className={cn('text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap',
-                          ROLE_COLORS[u.role] ?? 'bg-gray-100 text-gray-700')}>
-                          {u.role.replace(/_/g, ' ')}
-                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(u.roles && u.roles.length ? u.roles : [u.role]).map(role => (
+                            <span key={role} className={cn('text-[10px] px-2 py-1 rounded-full font-medium whitespace-nowrap',
+                              ROLE_COLORS[role] ?? 'bg-gray-100 text-gray-700')}>
+                              {role.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       {/* Organisation — SUPER_ADMIN all-org view only */}
                       {isSuperAdmin && viewAll && (
@@ -418,15 +428,31 @@ export default function UsersPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select
-                  {...regUser('role')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                >
-                  {ASSIGNABLE_ROLES.map(r => (
-                    <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
-                  ))}
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Roles</label>
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3">
+                  {ASSIGNABLE_ROLES.map(role => {
+                    const selected = (Array.isArray((regUser('roles') as any).value) ? (regUser('roles') as any).value : []).includes(role);
+                    return (
+                      <label key={role} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          value={role}
+                          checked={selected}
+                          onChange={(e) => {
+                            const current = Array.isArray((regUser('roles') as any).value) ? (regUser('roles') as any).value : [];
+                            const next = e.target.checked
+                              ? Array.from(new Set([...current, role]))
+                              : current.filter((item: string) => item !== role);
+                            (regUser('roles') as any).onChange(next);
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                        />
+                        {role.replace(/_/g, ' ')}
+                      </label>
+                    );
+                  })}
+                </div>
+                {errUser.roles && <p className="text-xs text-red-500 mt-1">{errUser.roles.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -1,6 +1,6 @@
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'FLEET_MANAGER' | 'DRIVER' | 'VIEWER';
+export type UserRole = 'SUPER_ADMIN' | 'PLATFORM_SUPPORT' | 'ADMIN' | 'FLEET_MANAGER' | 'DRIVER' | 'VIEWER';
 
 export type VehicleStatus = 'ACTIVE' | 'IDLE' | 'OFFLINE' | 'MAINTENANCE' | 'DECOMMISSIONED';
 

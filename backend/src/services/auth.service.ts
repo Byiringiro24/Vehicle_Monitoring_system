@@ -8,6 +8,8 @@ import { JwtPayload } from '../types';
 
 function mapMembershipRoleToLegacyRole(role?: string | null) {
   switch (role) {
+    case 'PLATFORM_SUPPORT':
+      return 'PLATFORM_SUPPORT';
     case 'COMPANY_OWNER':
     case 'COMPANY_ADMIN':
       return 'ADMIN';
@@ -18,6 +20,8 @@ function mapMembershipRoleToLegacyRole(role?: string | null) {
     case 'FINANCE_MANAGER':
     case 'ACCOUNTANT':
       return 'FINANCE_MANAGER';
+    case 'SALES_AGENT':
+      return 'SALES_AGENT';
     case 'HR_MANAGER':
       return 'HR_MANAGER';
     case 'MECHANIC':

@@ -155,6 +155,30 @@ export async function sendPasswordResetEmail(
   await send(to, 'Reset your ARTIC VMS password', layout('Reset your password', body));
 }
 
+export async function sendSuperAdminRemovalConfirmationEmail(
+  to: string,
+  firstName: string,
+  targetName: string,
+  confirmationUrl: string,
+): Promise<void> {
+  const body = `
+    <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">Confirm super admin removal</h2>
+    <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Hi ${firstName}, this is a removal confirmation for the Super Admin account of ${targetName}.
+      Until you confirm this action, they will remain a Super Admin and keep full platform access.
+    </p>
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0;color:#9a5b00;font-size:13px;">
+        <strong>Important:</strong> this confirmation is required before the platform removes a Super Admin. If you do not approve, the account stays active.
+      </p>
+    </div>
+    ${btn(confirmationUrl, 'Confirm Removal', '#d97706')}
+    <p style="color:#94a3b8;font-size:13px;margin:16px 0 0;">
+      If you did not expect this request, you can ignore this email and no removal will be applied.
+    </p>`;
+  await send(to, 'ARTIC VMS — Confirm Super Admin removal', layout('Confirm Super Admin removal', body));
+}
+
 // ── Password changed confirmation ─────────────────────────────────────────────
 export async function sendPasswordChangedEmail(to: string, firstName: string): Promise<void> {
   const appUrl = process.env.APP_URL ?? 'https://articvms.ddnsgeek.com';
@@ -175,6 +199,34 @@ export async function sendPasswordChangedEmail(to: string, firstName: string): P
       </p>
     </div>`;
   await send(to, 'Your ARTIC VMS password was changed', layout('Password changed', body));
+}
+
+export async function sendSensitiveAccountAlertEmail(
+  to: string,
+  firstName: string,
+  targetUserName: string,
+  action: string,
+  actorName: string,
+  organizationName: string,
+): Promise<void> {
+  const appUrl = process.env.APP_URL ?? 'https://articvms.ddnsgeek.com';
+  const body = `
+    <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">Sensitive account activity detected</h2>
+    <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Hi ${firstName}, we want to notify you that a sensitive account action was performed for <strong>${targetUserName}</strong> in <strong>${organizationName}</strong>.
+    </p>
+    <table width="100%" cellpadding="12" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:24px 0;">
+      <tr><td style="color:#475569;font-size:14px;"><strong>Action</strong></td><td style="color:#1e293b;font-size:14px;">${action}</td></tr>
+      <tr style="background:#ffffff;"><td style="color:#475569;font-size:14px;"><strong>Actor</strong></td><td style="color:#1e293b;font-size:14px;">${actorName}</td></tr>
+      <tr><td style="color:#475569;font-size:14px;"><strong>Time</strong></td><td style="color:#1e293b;font-size:14px;">${new Date().toLocaleString()}</td></tr>
+    </table>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0;color:#991b1b;font-size:13px;">
+        <strong>Security notice:</strong> This action may have changed credentials, permissions, access, or activation status. Review the account immediately if this was not expected.
+      </p>
+    </div>
+    ${btn(`${appUrl}/users`, 'Review users', '#dc2626')}`;
+  await send(to, 'ARTIC VMS — Sensitive account activity', layout('Sensitive account activity', body));
 }
 
 // ── Overdue payment reminder ──────────────────────────────────────────────────

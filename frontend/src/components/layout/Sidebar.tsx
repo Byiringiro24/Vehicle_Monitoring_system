@@ -13,6 +13,7 @@ import {
   Headphones, Lock as LockIcon, Ban, Navigation, Hammer, ShieldCheck,
   CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
   Bike, ShoppingBag, Tag,
+  Eye,
 } from 'lucide-react';
 
 const ICONS: Record<string, React.ElementType> = {
@@ -22,6 +23,7 @@ const ICONS: Record<string, React.ElementType> = {
   Headphones, Navigation, Hammer, ShieldCheck,
   CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
   Bike, ShoppingBag, Tag,
+  Eye,
   HeadphonesIcon: Headphones,
 };
 
@@ -44,10 +46,10 @@ interface SidebarProps { onClose?: () => void; }
 export function Sidebar({ onClose }: SidebarProps) {
   const pathname  = usePathname();
   const { user }  = useAuthStore();
-  const roles = [user?.role ?? 'VIEWER', ...(user?.roles ?? [])].filter(Boolean) as AppRole[];
+  const role = (user?.role ?? 'VIEWER') as AppRole;
 
   const allItems = getNavItems('SUPER_ADMIN' as AppRole);
-  const allowed  = new Set(getNavItems(roles).map(i => i.href));
+  const allowed  = new Set(getNavItems(role).map(i => i.href));
 
   return (
     <aside className="w-64 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.28),_transparent_24%),linear-gradient(180deg,_#0b1220_0%,_#101b35_100%)] text-white flex flex-col shrink-0 shadow-[0_20px_60px_rgba(15,23,42,0.35)] h-full">
@@ -90,7 +92,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           // Role-blocked: org has it, but this user's role doesn't include it
           const isRoleBlocked = !isAllowed && !isPlanLocked &&
             ROLE_SENSITIVE[href] !== undefined &&
-            !(ROLE_SENSITIVE[href] as string[]).some(role => roles.includes(role as AppRole));
+            !(ROLE_SENSITIVE[href] as string[]).some(r => r === role);
 
           if (!isAllowed && !isPremiumFeature && !isRoleBlocked) {
             // Truly hidden (not relevant to this role context at all)

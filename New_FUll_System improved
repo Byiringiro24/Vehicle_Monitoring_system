@@ -1,0 +1,635 @@
+﻿# ARTIC VMS — Full System Improvement Plan
+**What exists, what's missing, how to build it, and what to adopt from the new spec**
+Date: October 2026 | Based on: existing codebase + master spec + UI/UX spec + landing page spec
+
+---
+
+## PART 1 — WHAT IS ALREADY BUILT (Keep, polish, extend)
+
+### Backend (Node.js + Express + TypeScript + Prisma)
+- ✅ Auth: login, register (company), forgot/reset password, JWT + refresh tokens, logout
+- ✅ POST /auth/register-personal — personal accounts (owner/driver/customer) — just added
+- ✅ POST /users/invite — invite by email with setup link — just added
+- ✅ Organization approval flow: PENDING → ACTIVE → REJECTED (Super Admin)
+- ✅ 6 roles: SUPER_ADMIN, ADMIN, FLEET_MANAGER, FINANCE_MANAGER, DRIVER, VIEWER
+- ✅ Vehicles: 70+ field profiles, status, engine lock/unlock, GPS history
+- ✅ Drivers: 5-step wizard data model, license tracking, vehicle assignment
+- ✅ GPS real-time: ESP32 → MQTT (Aedes) → Socket.IO → last_locations table
+- ✅ Telemetry: history, latest position, device ping, trip recording
+- ✅ Alerts: 17 types, 5 severities, acknowledge/resolve, alert rules
+- ✅ Geofences: polygon/circle, entry/exit events, per-vehicle scoping
+- ✅ Maintenance: service records, schedule, cost tracking
+- ✅ Documents: upload (local filesystem), verify, expiry tracking
+- ✅ Finance: P&L, expenses (20 categories), driver payroll, cash flow
+- ✅ Contracts: rental/hire-purchase/daily-submission, payment schedules
+- ✅ Agreements: configurable business models, payment generation, overdue escalation
+- ✅ Customers: CRM, credit scoring, agreement history
+- ✅ Reports: fleet, vehicle profitability, driver payroll, daily payments, CSV
+- ✅ Support: contact links, ticket submission, Super Admin replies
+- ✅ Platform: company management, pending approvals, subscription plans, audit logs
+- ✅ Users: list, create, force-reset (Super Admin), activate/deactivate
+- ✅ Settings: org info, subscription, alert rules, members
+- ✅ Memberships: multi-company tables (foundation exists)
+- ✅ Email: SMTP Gmail, password reset, welcome, overdue reminder, document expiry, vehicle offline, invitation
+- ✅ MQTT: Aedes broker, device token auth per vehicle, engine lock commands
+- ✅ Redis: session caching
+- ✅ Docker Compose: frontend + backend + postgres + redis + nginx + MQTT
+- ✅ Nginx: HTTPS on articvms.ddnsgeek.com, Let's Encrypt
+
+### Frontend (Next.js 14 + React 18 + TypeScript + Tailwind + framer-motion)
+- ✅ Landing page: multi-pathway hero, framer-motion, pricing, contact strip, footer
+- ✅ Login: dark premium design with ARTIC branding
+- ✅ Register: 4-step animated wizard (type → plan/role → details)
+- ✅ Forgot/reset password pages
+- ✅ /pending-approval: 3-step timeline (Registered → Under Review → Approved)
+- ✅ /rejected: rejection reason + contacts
+- ✅ /onboarding: personal role selection checklist
+- ✅ /support: contact links + ticket form
+- ✅ Dashboard: 6 role-specific dashboards (Admin, Fleet, Finance, Driver, Viewer, SuperAdmin)
+- ✅ /map: live Leaflet map, Socket.IO markers, dark tile layer
+- ✅ /vehicles: list + pagination + vehicle detail (5 tabs: overview, GPS history, telemetry, device, documents)
+- ✅ /drivers: list + 5-step wizard + vehicle assignment
+- ✅ /alerts: list + search + pagination + acknowledge/resolve
+- ✅ /geofences: Leaflet draw + CRUD + events
+- ✅ /maintenance: service records + upcoming schedule
+- ✅ /documents: upload + compliance dashboard + expiry tracking
+- ✅ /finance: P&L overview + expenses + driver payroll
+- ✅ /agreements: business models + payment schedules + overdue
+- ✅ /customers: CRM list + credit scoring
+- ✅ /reports: trips, alerts summary, daily payments, CSV export
+- ✅ /users: list + create + force-reset (Super Admin)
+- ✅ /settings: org info + subscription + alert rules + members
+- ✅ /platform: 4 tabs (Companies, Pending, Tickets, Contacts)
+- ✅ Role-based sidebar (roles.ts single source of truth, fixed TypeScript error)
+- ✅ Auth guard (layout.tsx): PENDING → /pending-approval, REJECTED → /rejected
+- ✅ Sidebar: canAccess() + getNavItems() per role
+
+---
+
+## PART 2 — WHAT IS MISSING (Build next, in priority order)
+
+### Priority 1 — Visual & UX improvements (adopt from spec, build in existing codebase)
+
+#### 1a. Landing page hero animation (SVG moving vehicles)
+**Why:** The spec describes a "living mobility interface" — vehicles moving on an animated map. 
+**Currently:** Static hero with framer-motion fade-in only.
+**Build:** Add `components/landing/HeroAnimation.tsx` — pure SVG + CSS animateMotion.
+- 6 vehicle markers moving along pre-drawn routes
+- Cyan/blue color scheme matching brand
+- Geofence pulse rings
+- Radar ping dots
+- prefers-reduced-motion: static fallback
+- IntersectionObserver: pause when scrolled away
+- No JS animation loop — SVG SMIL runs on compositor thread
+
+#### 1b. Nav scroll behavior
+**Currently:** Nav is always white/styled.
+**Build:** At scroll position 0 → transparent on hero. After 40px → blur backdrop navy.
+Transition: 300ms. Already have the CSS class pattern in spec.
+
+#### 1c. Login page vehicle-door animation
+**Currently:** Clean dark card, good quality.
+**Adopt from spec (partial):** Keep the existing form exactly. Add a subtle animated element — a vehicle silhouette SVG on the right half of the desktop layout. On mobile, keep current centered card. This adds brand identity without breaking the working auth flow.
+
+#### 1d. Feature-gated sidebar items with lock icons
+**Currently:** Items are hidden if not accessible.
+**Spec says:** Show them with 🔒 or ⛔ icon, let them click and see an explanatory message.
+**Build:** Update `Sidebar.tsx` — grayed items instead of hidden ones + Message A/B pages.
+
+#### 1e. Dark map tiles (currently uses OpenStreetMap default light)
+**Adopt from spec:** Switch to CartoDB Dark Matter tiles in authenticated map.
+`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png`
+Matches the navy brand palette. One-line change in LiveMap.tsx.
+
+#### 1f. Tailwind color token extension
+**Currently:** Uses `brand-` prefix with some inline hex.
+**Build:** Add navy-950 through navy-500, cyan, teal, auditor/delegate/impersonate to tailwind.config.ts.
+This is a non-breaking config change only.
+
+---
+
+### Priority 2 — Missing pages (new screens to build)
+
+#### 2a. /dispatch — Dispatcher board
+**What:** Kanban-style trip assignment board (Unassigned / Assigned / In Progress / Completed).
+**Who needs it:** DISPATCHER role (needs to be added to roles.ts).
+**Build:**
+- Frontend: 4-column drag-free board (click to assign, not drag — simpler + accessible)
+- Assign drawer: pick driver + vehicle, check availability conflicts
+- Backend: `/api/v1/trips` routes (list, create, assign, update status)
+- Schema: `Trip` model already exists in Prisma (extend it)
+
+#### 2b. /owner — Vehicle owner portal
+**What:** Owner sees their own vehicles, income/expenses, management proposals, statements, payouts.
+**Who needs it:** Users with personal VEHICLE_OWNER role.
+**Build:**
+- Page: vehicle cards (plate, make, income this month, net, managed by)
+- Tabs per vehicle: Overview, Statement, Agreement, Maintenance
+- Payout history table
+- Backend: filter vehicles WHERE ownerUserId = req.user.userId (add ownerUserId to Vehicle schema)
+
+#### 2c. /customer — Customer portal
+**What:** Customer sees their bookings, agreements, payment history, active vehicle map.
+**Who needs it:** Users with personal CUSTOMER role.
+**Build:**
+- Booking list + agreement detail
+- Payment history with receipts
+- Live map scoped to their booking vehicle only
+- Backend: agreements WHERE customerId = customer record for this user
+
+#### 2d. /driver (personal) — Driver dashboard (already exists as role dashboard)
+**Currently:** DriverDashboard.tsx shows in /dashboard.
+**Enhancement:** Add trip history, earnings breakdown, document upload.
+
+#### 2e. /rider — Rider portal
+**What:** Like driver but for motorcycle daily remittance model.
+**Build:** remittance obligations table, record payment, arrears indicator, agreement view.
+
+#### 2f. /account/contexts — Context/workspace switcher page
+**What:** User sees all their roles, memberships, invitations, delegations. Can request new access.
+**Build:** list of active grants + status, pending invitations (accept/decline), pending role requests.
+
+#### 2g. /select-context — Context chooser after login
+**What:** If user has multiple contexts (roles in different orgs), show picker before dashboard.
+**Currently:** Auto-redirects to dashboard.
+**Build:** List all memberships, personal roles, pending ones. User clicks → sets context in store.
+
+#### 2h. /workshop — Mechanic work order queue
+**What:** Mechanic sees assigned work orders, updates status, logs parts/hours.
+**Who:** MECHANIC role (add to roles.ts).
+**Build:** work orders table filtered to assigned mechanic, status update drawer.
+
+#### 2i. /compliance — Compliance officer dashboard
+**What:** Document verification queue, non-compliant vehicle flagging, licence/permit expiry.
+**Who:** COMPLIANCE_OFFICER role.
+**Build:** Extends existing /documents page with a verification workflow and non-compliant flag.
+
+#### 2j. /staff — HR manager page
+**What:** Employee records, qualifications, attendance, shifts, leave.
+**Who:** HR_MANAGER role.
+**Build:** People table, qualifications tab (feeds dispatch conflict warnings), leave requests.
+
+#### 2k. /rentals — Rental manager
+**What:** Vehicle availability calendar, reservations, handovers, deposits, damage.
+**Who:** RENTAL_MANAGER role.
+**Build:** Calendar grid (vehicle × date), reservation create/edit, handover checklist PDF.
+
+#### 2l. /approvals — Approval inbox
+**What:** Owner + Finance Manager see pending items needing approval (payouts, refunds, role grants, ownership transfers).
+**Build:** Unified inbox table, approve/reject with reason, separation of duties enforced (requester ≠ approver).
+
+#### 2m. /provider — Service provider portal
+**What:** List services, manage availability, accept bookings.
+**Build:** Listings table, booking requests, profile + verification status.
+
+#### 2n. /seller — Vehicle seller portal
+**What:** List vehicles for sale, manage inquiries, create installment offers.
+**Build:** Listings with photos, inquiry threads, order creation.
+
+#### 2o. Platform console expansion (from 4 to 8+ tabs)
+**Currently:** Companies, Pending, Tickets, Contacts.
+**Add:**
+- Plans (CRUD plan versions — foundation exists in backend)
+- Audit log (immutable event viewer)
+- System health (API, DB, Redis, MQTT, SMTP status)
+- Feature catalog (enable/disable per company)
+- Countries (per-country config: currency, tax, payment providers)
+
+---
+
+### Priority 3 — Backend additions needed
+
+#### 3a. Personal user role system
+**Currently:** Every user must have organizationId (required in schema).
+**Problem:** Personal accounts (owner/driver/customer) get a throwaway "personal org" — workable but not clean.
+**Fix (Phase 2):** Make organizationId nullable, add PersonalRole model, context-based API scoping.
+**For now:** The "personal org" approach works. Document it and live with it until Phase 2.
+
+#### 3b. Context-scoped API middleware
+**Currently:** API routes check `req.user.organizationId` for scoping.
+**Spec says:** Add `X-Context-Type` + `X-Context-Id` headers for multi-role users.
+**Build:** Middleware that reads the context header, validates the grant, and attaches `req.context` with scoped permissions. Existing routes continue to work (backward compatible — fallback to organizationId if no context header).
+
+#### 3c. Trip/dispatch model
+**Currently:** Trip table exists in schema but no routes.
+**Build:** `POST /trips`, `GET /trips`, `PATCH /trips/:id/assign`, `PATCH /trips/:id/status`.
+
+#### 3d. Owner portal backend
+**Build:** `GET /owner/vehicles` (filter by ownerUserId), `GET /owner/statements`, `GET /owner/payouts`.
+Requires adding `ownerUserId` field to Vehicle schema + migration.
+
+#### 3e. Feature entitlement system
+**Currently:** No feature-gating — all features available to all companies.
+**Build (Phase 2):** `feature_catalog`, `plan_features`, `company_entitlements` tables.
+For now: skip feature gating on backend, but build the `FeatureGate` component on frontend as a no-op wrapper (always passes). This way the UI is ready when backend catches up.
+
+#### 3f. Cloud/S3 file storage
+**Currently:** Documents stored in `/uploads` on server filesystem.
+**Risk:** Data loss if container restarts without a volume mount.
+**Check:** Verify docker-compose.yml has a named volume for uploads.
+**Fix:** Add `./uploads:/app/uploads` volume mount in docker-compose (quick fix). 
+**Phase 2:** Migrate to S3/R2 with signed URLs.
+
+#### 3g. Prisma migrations for new features
+When adding owner portal, trips, context system — each needs a migration.
+Always test locally: `npx prisma migrate dev --name <name>` before pushing.
+
+---
+
+### Priority 4 — Architecture improvements (spec best practices to adopt)
+
+#### 4a. Socket.IO context scoping
+**Currently:** All users in an org see all their org's vehicle updates.
+**Spec says:** Scope subscriptions by context (customer sees only booking vehicle, driver sees only their vehicle).
+**Build:** In the Socket.IO connection handler, validate the user's context and only join rooms for vehicles they're authorized to see.
+
+#### 4b. Vehicle status freshness indicators
+**Currently:** Markers change color by status (ACTIVE/IDLE/OFFLINE) but no "last seen X seconds ago" shown.
+**Adopt from spec:** Add `ageSeconds` and `accuracyM` to Socket.IO `location:update` payload.
+Show "last seen 3s ago · ±8m" in vehicle popup and vehicle list.
+
+#### 4c. Map marker visual improvements
+**Currently:** Custom Leaflet divIcon markers exist.
+**Adopt from spec:** Add CSS pulse animation on ACTIVE markers, dim + no pulse on OFFLINE, status color transitions (240ms ease).
+**Build:** Update `marker.css` or inline styles in `LiveMap.tsx`.
+
+#### 4d. Tabular numbers for data
+**Currently:** Plain text for speeds, amounts, distances.
+**Adopt:** Add `font-variant-numeric: tabular-nums; font-family: monospace` to all numeric cells in tables.
+One CSS class `.tabular` applied to cells. Prevents column width jitter on live updates.
+
+#### 4e. Page transition animations
+**Currently:** No page transition.
+**Adopt:** Framer-motion `AnimatePresence` on page content only (not sidebar/topbar).
+Outgoing: opacity 0, 100ms. Incoming: opacity 0→1 + translateY(8px)→0, 200ms.
+Low-risk improvement — framer-motion is already installed.
+
+#### 4f. Reduced-motion compliance
+**Currently:** framer-motion respects this by default via `useReducedMotion()`.
+**Audit:** Check all CSS keyframe animations (loading spinner, etc.) have `@media (prefers-reduced-motion: reduce)` overrides.
+
+---
+
+## PART 3 — WHAT TO DISCARD / NOT ADOPT FROM THE SPEC
+
+These parts of the spec are visionary but too far ahead of the current build stage. Do not build these now:
+
+- ❌ Full context engine with `role_grants` table migration (spec Part 0) — major schema refactor. Current role system works. Plan for Phase 3.
+- ❌ `X-Context-Type` + `X-Context-Id` middleware — needs role_grants table first.
+- ❌ Workspace/context switcher at full complexity — build a simple version (3a above) first.
+- ❌ Delegation system (user delegates access to another) — Phase 4.
+- ❌ Auditor grant system — Phase 4.
+- ❌ Impersonation with timed sessions — Phase 4 (Super Admin can already force-reset passwords).
+- ❌ Double-entry general ledger — Phase 5.
+- ❌ Invoice PDF generation — Phase 5.
+- ❌ AI assistant — Phase 8.
+- ❌ Payment gateway (MTN MoMo, Airtel) — Phase 8.
+- ❌ Mobile PWA — Phase 8.
+- ❌ Service marketplace public directory (with real bookings + payments) — Phase 6.
+- ❌ Vehicle seller portal with installment applications — Phase 6.
+- ❌ Owner management proposals workflow (just add ownerUserId lookup for now) — Phase 3.
+- ❌ Multi-root workspace architecture — current single-org-per-user-session works fine.
+
+---
+
+## PART 4 — BUILD ORDER FOR NEW_FULL_SYSTEM_IMPROVED
+
+This is the exact sequence to build the improved system. Each phase is deployable.
+
+---
+
+### PHASE A — Visual polish (1–2 days, no backend changes)
+
+**Files to create/edit:**
+
+1. `frontend/src/components/landing/HeroAnimation.tsx` — SVG moving vehicles
+2. `frontend/src/app/page.tsx` — import HeroAnimation, replace static map placeholder
+3. `frontend/src/components/layout/LandingNav.tsx` — scroll-blur behavior
+4. `frontend/src/components/layout/Sidebar.tsx` — show locked items (🔒/⛔) instead of hiding
+5. `frontend/src/components/maps/LiveMap.tsx` — dark CartoDB tiles + pulse marker CSS
+6. `frontend/tailwind.config.ts` — add navy-*, teal-*, auditor/delegate tokens
+7. `frontend/src/styles/globals.css` — add `.vehicle-marker` CSS + reduced-motion overrides
+8. `frontend/src/app/(auth)/login/page.tsx` — add vehicle SVG silhouette on desktop
+
+**How each one is built:**
+
+- HeroAnimation: copy the SVG code from spec Part 2, section 2.4. Wrap in `useEffect` for IntersectionObserver pause. Test prefers-reduced-motion.
+- Sidebar locked items: add `featureEnabled` and `permissionOk` checks. For now both always return `true` (no-op gate). Show 🔒 icon if `item.planRequired` exists (new optional field in NAV_ITEMS).
+- Dark map tiles: single string change in `L.tileLayer(...)` URL.
+- Tailwind tokens: extend `theme.colors` in config — non-breaking.
+- Marker CSS: add `.vehicle-marker__pulse` keyframe animation with `prefers-reduced-motion` override.
+
+**Commit:** `feat: visual polish — hero animation, dark map tiles, sidebar lock icons, brand tokens`
+
+---
+
+### PHASE B — New roles + pages (3–5 days)
+
+**Roles to add to roles.ts:**
+- DISPATCHER
+- HR_MANAGER  
+- MECHANIC
+- COMPLIANCE_OFFICER
+- RENTAL_MANAGER
+
+**Pages to build (in order of importance):**
+
+1. `/dispatch` — Dispatcher board
+   - Frontend: 4 status columns, TripCard component, AssignDrawer
+   - Backend: `GET/POST /api/v1/trips`, `PATCH /trips/:id/assign`, `PATCH /trips/:id/status`
+   - Schema: extend Trip model (no migration needed if Trip already exists)
+
+2. `/approvals` — Approval inbox (Owner + Finance Manager)
+   - Frontend: table of pending items, approve/reject drawer
+   - Backend: `GET /api/v1/approvals` (aggregate query across payouts, role requests, refunds)
+
+3. `/owner` — Vehicle owner portal
+   - Frontend: vehicle cards with income/expense/net, payout history
+   - Backend: add `ownerUserId String?` to Vehicle schema + migration, `GET /api/v1/owner/vehicles`
+
+4. `/account/contexts` — My roles & memberships
+   - Frontend: list all memberships + personal roles, accept invitations, request new access
+   - Backend: `GET /api/v1/memberships/me` (already exists), extend with personal roles
+
+5. `/workshop` — Mechanic queue (if MECHANIC role exists)
+6. `/compliance` — Compliance dashboard (if COMPLIANCE_OFFICER role exists)
+7. `/staff` — HR manager (if HR_MANAGER role exists)
+8. `/rentals` — Rental manager (if RENTAL_MANAGER role exists)
+
+**Commit:** `feat: dispatch board, approvals inbox, owner portal, new roles`
+
+---
+
+### PHASE C — Platform console expansion (2–3 days)
+
+**Add tabs to existing /platform/page.tsx:**
+
+1. Plans tab — CRUD plan definitions (backend `/api/v1/platform/plans` already exists, just add UI for create/edit/version)
+2. Audit tab — event log viewer (backend `/api/v1/platform/audit-logs` already exists)
+3. System health tab — ping API, DB, Redis, MQTT, SMTP. Show green/amber/red status.
+4. Feature entitlement tab (skeleton) — per-company feature enable/disable. Backend is a future task; UI can show "Coming soon" for now.
+
+**Commit:** `feat: platform console — plans, audit log, system health tabs`
+
+---
+
+### PHASE D — Customer & personal portals (2–3 days)
+
+1. `/customer` — customer portal
+   - Agreements list, payment history, active booking map (scoped to their vehicle)
+   
+2. `/rider` — rider portal  
+   - Remittance table, record payment, agreement view
+
+3. `/driver` improvements (extends existing DriverDashboard)
+   - Add trip history tab, earnings breakdown, document upload
+
+4. Update `/onboarding` — link to correct portal after role selection
+
+**Commit:** `feat: customer portal, rider portal, driver improvements`
+
+---
+
+### PHASE E — Socket.IO enhancements (1 day, backend + frontend)
+
+1. Backend: add `ageSeconds` and `accuracyM` to `location:update` Socket.IO payload
+2. Backend: add `status:update` event when vehicle transitions ACTIVE → IDLE → OFFLINE
+3. Frontend: show "last seen Xs ago · ±Xm" in vehicle popup
+4. Frontend: marker status color transitions (240ms CSS transition on background-color)
+5. Frontend: OFFLINE marker gets dimmed + clock icon
+
+**Commit:** `feat: real-time improvements — freshness, accuracy, status events`
+
+---
+
+### PHASE F — File storage fix (1 hour, critical)
+
+Check `docker-compose.yml`:
+```yaml
+backend:
+  volumes:
+    - ./uploads:/app/uploads   # ← MUST exist to prevent data loss on rebuild
+```
+If missing, add it. Rebuild backend container.
+
+**Commit:** `fix: ensure uploads volume is persisted in docker-compose`
+
+---
+
+## PART 5 — FULL FILE STRUCTURE OF THE IMPROVED SYSTEM
+
+This is what the complete frontend structure looks like after all phases:
+
+```
+frontend/src/app/
+  (public)/               ← NEW group for public pages
+    page.tsx              ← landing (exists, improving)
+    services/
+    vehicles/             ← public marketplace listings
+    companies/            ← public company profiles
+    for-businesses/
+    for-owners/
+    for-drivers/
+    layout.tsx            ← public shell with landing nav + footer
+
+  (auth)/
+    login/                ← exists (improve with vehicle SVG)
+    register/             ← exists (4-step wizard)
+    forgot-password/      ← exists
+    reset-password/       ← exists
+    invitations/accept/   ← NEW
+    select-context/       ← NEW (Phase B)
+    pending-approval/     ← exists (rebuilt with timeline)
+    rejected/             ← exists
+    layout.tsx
+
+  (dashboard)/
+    dashboard/            ← exists (6 role variants)
+    map/                  ← exists (improve dark tiles + markers)
+    vehicles/             ← exists (add 2 tabs: Ownership, Assignments)
+    vehicles/[id]/        ← exists
+    drivers/              ← exists
+    dispatch/             ← NEW (Phase B)
+    rentals/              ← NEW (Phase B)
+    maintenance/          ← exists
+    workshop/             ← NEW (Phase B)
+    compliance/           ← NEW (Phase B)
+    staff/                ← NEW (Phase B)
+    customers/            ← exists
+    agreements/           ← exists
+    agreements/[id]/
+    finance/              ← exists (add invoices, payments, owner-statements tabs)
+    reports/              ← exists
+    documents/            ← exists
+    users/                ← exists
+    users/roles/          ← NEW (Phase B)
+    settings/             ← exists
+    support/              ← exists
+    approvals/            ← NEW (Phase B)
+    onboarding/           ← exists (improve)
+    pending-approval/     ← exists
+    rejected/             ← exists
+    platform/             ← exists (expand to 8+ tabs)
+    account/
+      profile/            ← exists (/profile)
+      security/           ← NEW
+      sessions/           ← NEW
+      contexts/           ← NEW (Phase B)
+      notifications/      ← NEW
+    customer/             ← NEW (Phase D)
+      bookings/[id]/
+    owner/                ← NEW (Phase B)
+      vehicles/[id]/
+      proposals/
+      statements/
+      payouts/
+    driver/               ← NEW (Phase D, extends existing)
+    rider/                ← NEW (Phase D)
+    provider/             ← NEW (Phase D)
+    seller/               ← NEW (Phase D)
+    layout.tsx
+
+components/
+  landing/                ← NEW folder
+    HeroAnimation.tsx     ← SVG moving vehicles
+    HeroSection.tsx       ← full hero with animation
+    PathwayCards.tsx
+    HowItWorks.tsx
+    Capabilities.tsx
+    TrustSection.tsx
+    Chooser.tsx
+    Footer.tsx
+  layout/
+    Sidebar.tsx           ← improve: locked items
+    TopBar.tsx
+    ContextSwitcher.tsx   ← NEW
+    WorkspaceBanner.tsx   ← NEW (auditor/delegate banners)
+  gates/                  ← NEW folder
+    FeatureGate.tsx
+    Can.tsx
+    FeatureNotEnabled.tsx
+    PermissionDenied.tsx
+    RequestAccessModal.tsx
+  maps/
+    LiveMap.tsx           ← improve: dark tiles, pulse markers
+    MapMarker.tsx         ← improve: status transitions
+    VehiclePopup.tsx      ← improve: age + accuracy
+    GeofenceLayer.tsx
+  ui/                     ← exists (add Drawer, ContextMenu)
+  vehicles/               ← exists
+  alerts/                 ← exists
+  charts/                 ← exists
+  documents/              ← exists
+```
+
+---
+
+## PART 6 — WHAT TO TAKE FROM THE SPEC, WHAT TO SKIP
+
+### Take now (Phase A-B):
+
+| From spec | What to adopt | How |
+|-----------|--------------|-----|
+| SVG hero animation | Moving vehicles on map canvas | HeroAnimation.tsx (SVG SMIL) |
+| Dark map tiles | CartoDB Dark Matter | 1-line change in LiveMap.tsx |
+| Sidebar locked items | 🔒/⛔ icons, not hidden | Sidebar.tsx update |
+| Tailwind color tokens | navy-*, teal-*, cyan-* | tailwind.config.ts |
+| Marker pulse animation | CSS keyframes | globals.css |
+| Tabular numbers | font-variant-numeric | CSS class `.tabular` |
+| Reduced-motion | @media override | globals.css |
+| Nav scroll blur | glass-nav class | LandingNav.tsx |
+| Two-layer gate messages | Message A and Message B pages | FeatureNotEnabled.tsx, PermissionDenied.tsx |
+| Page fade transition | AnimatePresence | layout.tsx |
+| Vehicle detail 7 tabs | +Ownership +Assignments | vehicles/[id]/page.tsx |
+| Finance 6 tabs | +Invoices +Payments +Owner statements | finance/page.tsx |
+
+### Skip for now (Phase 3+):
+
+| From spec | Why skip | When |
+|-----------|----------|------|
+| role_grants table migration | Major schema refactor | Phase 3 |
+| X-Context-Id middleware | Needs role_grants first | Phase 3 |
+| Full workspace switcher | Needs context engine | Phase 3 |
+| Delegation system | Complex, low priority | Phase 4 |
+| Auditor grants | Low frequency feature | Phase 4 |
+| Impersonation | Super Admin can force-reset | Phase 4 |
+| Double-entry ledger | Major feature | Phase 5 |
+| Invoice PDF | Needs PDF library | Phase 5 |
+| S3 cloud storage | Needs S3 bucket + costs | Phase 5 |
+| Public marketplace | Needs real listings + booking | Phase 6 |
+| Payment gateway | Needs MoMo API | Phase 8 |
+| AI assistant | Needs LLM integration | Phase 8 |
+| Mobile PWA | Needs service worker | Phase 8 |
+
+---
+
+## PART 7 — QUICK WINS (Can be done in under 1 hour each)
+
+1. **Dark map tiles** — 1 line in LiveMap.tsx. CartoDB dark looks premium, matches navy brand.
+2. **Tabular numbers** — add `.tabular` CSS class, apply to speed/amount/odometer cells.
+3. **Reduced-motion in globals.css** — add the @media block, prevents accessibility issues.
+4. **Tailwind color tokens** — extend config, gives future components the right colors.
+5. **uploads volume in docker-compose** — prevents data loss on every rebuild.
+6. **Footer links fix on landing page** — some links go to "#", update to correct routes.
+7. **Vehicle popup: "last seen X ago"** — already have `updatedAt` in last_locations, just format and display it.
+8. **Marker status CSS transitions** — add `transition: background-color 240ms ease` to `.vehicle-marker__dot`.
+
+---
+
+## PART 8 — KNOWN BUGS TO FIX BEFORE NEXT DEPLOY
+
+1. **Frontend build error** (FIXED in a145adb): `useSearchParams()` without Suspense on /register. Added Suspense wrapper.
+2. **Server .git ownership** (FIXED on server): `sudo chown -R articadmin:articadmin /home/articadmin/artic-vms` — prevents fetch failures.
+3. **uploads directory persistence** — verify `./uploads:/app/uploads` volume in docker-compose.yml or documents uploaded before a rebuild are lost.
+4. **auth.service.ts loginUser**: Does not include `organization.status` in the returned user object. The frontend `canAccess()` check uses `user.organization?.status` — if status is missing, PENDING orgs might bypass the redirect. Verify `loginUser` returns `status`.
+5. **Personal accounts**: When `registerPersonal` is called, it creates an org with status `ACTIVE`. The layout.tsx guard redirects PENDING → /pending-approval. This means personal accounts correctly skip the pending flow. Verify this works end-to-end.
+
+---
+
+## PART 9 — COMMIT HISTORY & WHAT'S LIVE ON SERVER
+
+As of last push (a145adb):
+- Server git is on a145adb (confirmed by chown + fetch + reset --hard)
+- Frontend rebuild failed with Suspense error — FIXED in a145adb
+- Server rebuild in progress when this document was written
+
+### Commands to verify server is fully updated:
+```bash
+ssh articadmin@185.208.207.100
+cd /home/articadmin/artic-vms
+git log --oneline -3        # should show a145adb at top
+docker compose ps           # all 4 containers Up
+docker compose logs --tail=10 frontend  # should show Next.js ready, no errors
+```
+
+### If frontend container shows build error:
+```bash
+docker compose build --no-cache frontend
+docker compose up -d frontend
+docker compose logs --tail=40 frontend
+```
+
+---
+
+## PART 10 — THE SINGLE MOST IMPORTANT IMPROVEMENT
+
+From all the spec documents, one principle stands out as the highest-leverage change for the current codebase:
+
+> **Show locked features — don't hide them.**
+
+Currently: if a user can't access a page, it disappears from the sidebar.
+Spec says: keep it visible but grayed, let them click, show who to contact.
+
+This single change:
+- Makes users aware of features their org could unlock (drives upgrade requests)
+- Reduces "why is X missing?" support tickets  
+- Makes the product feel complete rather than bare
+- Takes about 2 hours to implement (Sidebar.tsx + 2 message pages)
+
+Build this in Phase A before anything else.
+
+---
+
+*This document is the master build plan for the improved ARTIC VMS system.*
+*Cross-reference: ARTIC_VMS_Master_System_Specification.md for feature requirements.*
+*Cross-reference: docs/Existing System Structure.md for current system inventory.*
