@@ -155,6 +155,17 @@ router.patch('/:id/assign', authorize(...DISPATCH_ROLES) as any, async (req: any
       if (v.status === 'MAINTENANCE' || v.status === 'OUT_OF_SERVICE') {
         conflicts.push(`Vehicle ${v.licensePlate} is in ${v.status} status — cannot be dispatched`);
       }
+
+      // Check for non-compliant documents (insurance or inspection expired)
+      if (v.insuranceExpiry && new Date(v.insuranceExpiry) < new Date()) {
+        conflicts.push(`Vehicle ${v.licensePlate} insurance has expired — cannot dispatch until renewed`);
+      }
+      if (v.inspectionExpiry && new Date(v.inspectionExpiry) < new Date()) {
+        conflicts.push(`Vehicle ${v.licensePlate} inspection has expired — cannot dispatch until renewed`);
+      }
+      if (v.roadTaxExpiry && new Date(v.roadTaxExpiry) < new Date()) {
+        conflicts.push(`Vehicle ${v.licensePlate} road tax has expired — cannot dispatch until renewed`);
+      }
     }
 
     if (driverId) {

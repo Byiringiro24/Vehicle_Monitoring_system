@@ -4,6 +4,7 @@ import { listVehicles, getVehicle, createVehicle, updateVehicle, deleteVehicle,
          regenerateToken, getGpsHistory, getTrips } from '../controllers/vehicle.controller';
 import { prisma } from '../config/database';
 import { getSocketServer, markLockCommandSent } from '../websocket/socketServer';
+import { auditLog, getIp } from '../utils/audit';
 import { publishCommand } from '../services/mqttClient';
 import { pingGpsDevice } from '../services/mqttBroker';
 
@@ -84,6 +85,17 @@ router.patch('/:id/lock', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'), as
     }
     res.json({ vehicleId: vehicle.id, licensePlate: vehicle.licensePlate, engineLocked: locked,
       message: locked ? 'Engine lock command sent' : 'Engine unlock command sent' });
+
+    // Audit log the lock/unlock action
+    auditLog({
+      organizationId: req.user.organizationId,
+      userId: req.user.userId,
+      action: locked ? 'vehicle.lock' : 'vehicle.unlock',
+      targetType: 'vehicle',
+      targetId: vehicle.id,
+      after: { licensePlate: vehicle.licensePlate, locked },
+      ipAddress: getIp(req),
+    });
   } catch (err) { next(err); }
 });
 

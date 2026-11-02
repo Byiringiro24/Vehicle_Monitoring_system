@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, CheckCircle2, Clock3, CreditCard, FileText, ShoppingBag } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, CreditCard, FileText, ShoppingBag, MapPin } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
@@ -136,6 +136,13 @@ export default function CustomerPage() {
                     <p className="mt-1 text-xs text-slate-500">Paid: {contract.currency} {(contract.totalPaid ?? 0).toLocaleString()}</p>
                     {(contract.totalBalance ?? 0) > 0 && (
                       <p className="mt-1 text-xs font-medium text-amber-600">Balance: {contract.currency} {(contract.totalBalance ?? 0).toLocaleString()}</p>
+                    )}
+                    {/* Track vehicle button — only for active contracts */}
+                    {contract.status === 'ACTIVE' && contract.vehicleId && (
+                      <a href={`/map?vehicle=${contract.vehicleId}`}
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline transition">
+                        <MapPin size={12} /> Track my vehicle
+                      </a>
                     )}
                   </div>
                 </div>

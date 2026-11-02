@@ -9,6 +9,7 @@ import { authenticate, authorize } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { sendWelcomeEmail } from '../services/email.service';
+import { auditLog, getIp } from '../utils/audit';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -171,6 +172,18 @@ router.post('/admin/orgs/:id/approve', authorize('SUPER_ADMIN') as any, async (r
     }
 
     logger.info(`[APPROVAL] Organization "${org.name}" approved by ${req.user.userId}`);
+
+    // Audit log
+    auditLog({
+      organizationId: org.id,
+      userId: req.user.userId,
+      action: 'org.approve',
+      targetType: 'organization',
+      targetId: org.id,
+      after: { name: org.name, status: 'ACTIVE', planId: planId ?? null },
+      ipAddress: getIp(req),
+    });
+
     res.json({ message: `Organization "${org.name}" approved successfully` });
   } catch (err) { next(err); }
 });
@@ -190,6 +203,18 @@ router.post('/admin/orgs/:id/reject', authorize('SUPER_ADMIN') as any, async (re
     });
 
     logger.info(`[APPROVAL] Organization "${org.name}" rejected: ${reason}`);
+
+    // Audit log
+    auditLog({
+      organizationId: org.id,
+      userId: req.user.userId,
+      action: 'org.reject',
+      targetType: 'organization',
+      targetId: org.id,
+      after: { name: org.name, status: 'REJECTED', reason },
+      ipAddress: getIp(req),
+    });
+
     res.json({ message: `Organization "${org.name}" rejected` });
   } catch (err) { next(err); }
 });
