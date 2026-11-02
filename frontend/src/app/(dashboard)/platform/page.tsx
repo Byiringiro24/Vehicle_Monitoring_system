@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { platformApi, supportApi } from '@/lib/api';
+import { platformApi, supportApi, auditApi } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
@@ -92,7 +92,7 @@ export default function PlatformPage() {
 
   const { data: auditLogs = [] } = useQuery({
     queryKey: ['platform-audit'],
-    queryFn:  () => platformApi.auditLogs({ limit: 100 }),
+    queryFn:  () => auditApi.platform({ limit: 100 }),
     enabled:  tab === 'audit',
   });
 

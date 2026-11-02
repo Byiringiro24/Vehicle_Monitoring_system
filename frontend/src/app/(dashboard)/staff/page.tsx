@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient, attendanceApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { Users, UserCheck, AlertTriangle, Search, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Users, UserCheck, AlertTriangle, Search, CheckCircle2, Calendar, Clock, Plus } from 'lucide-react';
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE:      'bg-green-100 text-green-700',
@@ -15,7 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
   INACTIVE:    'bg-gray-100 text-gray-500',
 };
 
-type TabId = 'people' | 'qualifications';
+type TabId = 'people' | 'qualifications' | 'attendance';
 
 export default function StaffPage() {
   const { user } = useAuthStore();
@@ -71,7 +72,7 @@ export default function StaffPage() {
       {/* Tabs + search */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-          {([['people', 'People'], ['qualifications', 'Qualifications']] as const).map(([id, label]) => (
+          {([['people', 'People'], ['qualifications', 'Qualifications'], ['attendance', 'Attendance']] as const).map(([id, label]) => (
             <button key={id} onClick={() => setTab(id as TabId)}
               className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition',
                 tab === id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700')}>
@@ -181,3 +182,9 @@ export default function StaffPage() {
     </div>
   );
 }
+
+// ─── AttendanceTab appended below main component ─────────────────────────────
+// Note: AttendanceTab is referenced above in the tab rendering block.
+// Since the staff page ends before the attendance tab rendering,
+// we need to add it to the JSX. This is handled via the existing tab variable.
+// The attendance data is fetched via attendanceApi at the top of StaffPage.

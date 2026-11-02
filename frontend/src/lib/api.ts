@@ -322,3 +322,58 @@ export const ownerApi = {
   statements: (months?: number) => apiClient.get('/owner/statements', { params: { months } }).then(r => r.data),
   claim:      (vehicleId: string) => apiClient.patch(`/owner/vehicles/${vehicleId}/claim`).then(r => r.data),
 };
+
+// ─── Payouts ─────────────────────────────────────────────────────────────────
+export const payoutApi = {
+  list:     () => apiClient.get('/payouts').then(r => r.data),
+  create:   (data: object) => apiClient.post('/payouts', data).then(r => r.data),
+  approve:  (id: string) => apiClient.patch(`/payouts/${id}/approve`).then(r => r.data),
+  execute:  (id: string, reference?: string) => apiClient.patch(`/payouts/${id}/execute`, { reference }).then(r => r.data),
+  reject:   (id: string, reason: string) => apiClient.patch(`/payouts/${id}/reject`, { reason }).then(r => r.data),
+};
+
+// ─── Audit log ──────────────────────────────────────────────────────────────
+export const auditApi = {
+  list:     (params?: object) => apiClient.get('/audit', { params }).then(r => r.data),
+  platform: (params?: object) => apiClient.get('/audit/platform', { params }).then(r => r.data),
+};
+
+// ─── Entitlements ────────────────────────────────────────────────────────────
+export const entitlementApi = {
+  list:   () => apiClient.get('/entitlements').then(r => r.data),
+  check:  (code: string) => apiClient.get(`/entitlements/check/${code}`).then(r => r.data),
+  grant:  (data: { organizationId: string; featureCode: string; expiresAt?: string; notes?: string }) =>
+    apiClient.post('/entitlements', data).then(r => r.data),
+  revoke: (id: string) => apiClient.delete(`/entitlements/${id}`).then(r => r.data),
+};
+
+// ─── Notification preferences ─────────────────────────────────────────────────
+export const notificationApi = {
+  getPreferences: () => apiClient.get('/notifications/preferences').then(r => r.data),
+  updatePreferences: (prefs: object[]) => apiClient.put('/notifications/preferences', prefs).then(r => r.data),
+  toggleType: (type: string, data: { emailEnabled?: boolean; inAppEnabled?: boolean }) =>
+    apiClient.patch(`/notifications/preferences/${type}`, data).then(r => r.data),
+};
+
+// ─── Attendance ──────────────────────────────────────────────────────────────
+export const attendanceApi = {
+  my:      () => apiClient.get('/attendance/my').then(r => r.data),
+  list:    (params?: object) => apiClient.get('/attendance', { params }).then(r => r.data),
+  checkIn: (data: object) => apiClient.post('/attendance', data).then(r => r.data),
+  update:  (id: string, data: object) => apiClient.patch(`/attendance/${id}`, data).then(r => r.data),
+};
+
+// ─── Remittances (rider daily payments) ───────────────────────────────────────
+export const remittanceApi = {
+  today:    () => apiClient.get('/remittances/today').then(r => r.data),
+  history:  (months?: number) => apiClient.get('/remittances', { params: { months } }).then(r => r.data),
+  record:   (data: { amount: number; method?: string; notes?: string }) =>
+    apiClient.post('/remittances', data).then(r => r.data),
+};
+
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+export const sessionApi = {
+  list:   () => apiClient.get('/auth/sessions').then(r => r.data),
+  revoke: (id: string) => apiClient.delete(`/auth/sessions/${id}`).then(r => r.data),
+  revokeAll: (currentToken?: string) => apiClient.delete('/auth/sessions', { data: { currentToken } }).then(r => r.data),
+};

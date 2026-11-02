@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { apiClient, payoutApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ export default function PayoutsPage() {
 
   const { data: payouts = [], isLoading } = useQuery({
     queryKey: ['payouts'],
-    queryFn: () => apiClient.get('/payouts').then(r => r.data),
+    queryFn: () => payoutApi.list(),
   });
 
   const { data: owners = [] } = useQuery({
@@ -36,27 +36,27 @@ export default function PayoutsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => apiClient.post('/payouts', { ...form, amount: parseFloat(form.amount) }).then(r => r.data),
+    mutationFn: () => payoutApi.create({ ...form, amount: parseFloat(form.amount) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); toast.success('Payout request created'); setShowCreate(false); setForm({ ownerId:'', amount:'', periodFrom:'', periodTo:'', notes:'', method:'MOBILE_MONEY' }); },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => apiClient.patch(`/payouts/${id}/approve`).then(r => r.data),
+    mutationFn: (id: string) => payoutApi.approve(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); toast.success('Payout approved'); },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed — remember: you cannot approve your own request'),
   });
 
   const executeMutation = useMutation({
     mutationFn: ({ id, reference }: { id: string; reference?: string }) =>
-      apiClient.patch(`/payouts/${id}/execute`, { reference }).then(r => r.data),
+      payoutApi.execute(id, reference),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); toast.success('Payout executed — marked as paid'); },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
   });
 
   const rejectMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      apiClient.patch(`/payouts/${id}/reject`, { reason }).then(r => r.data),
+      payoutApi.reject(id, reason),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); toast.success('Payout rejected'); setRejectModal(null); setRejectReason(''); },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
   });

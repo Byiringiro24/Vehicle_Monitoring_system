@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { apiClient, remittanceApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -42,7 +42,14 @@ export default function RiderPage() {
   // Driver payments (remittances)
   const { data: payments = [] } = useQuery({
     queryKey: ['rider-payments'],
-    queryFn: () => apiClient.get('/financial/driver-payments').then(r => r.data ?? []),
+    queryFn: () => remittanceApi.history(3),
+    enabled: !!myProfile,
+  });
+
+  // Today's remittance status
+  const { data: todayStatus } = useQuery({
+    queryKey: ['rider-today'],
+    queryFn: () => remittanceApi.today(),
     enabled: !!myProfile,
   });
 
@@ -51,20 +58,12 @@ export default function RiderPage() {
     p.month === today.getMonth() + 1 && p.year === today.getFullYear()
   );
 
-  const dailyObligation = activeContract?.periodicAmount ?? 0;
-  const paidToday = 0; // would come from daily tracking — show 0 for now
+  const dailyObligation = todayStatus?.obligation ?? activeContract?.periodicAmount ?? 0;
+  const paidToday = todayStatus?.paidToday ?? 0;
   const remaining = Math.max(0, dailyObligation - paidToday);
 
   const recordPayment = useMutation({
-    mutationFn: () => {
-      if (!myProfile) throw new Error('No driver profile');
-      return apiClient.post('/financial/driver-payments', {
-        driverId: myProfile.id,
-        month: today.getMonth() + 1,
-        year: today.getFullYear(),
-        paidAmount: Number(payAmount),
-      }).then(r => r.data);
-    },
+    mutationFn: () => remittanceApi.record({ amount: Number(payAmount) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rider-payments'] });
       toast.success(`Payment of RWF ${Number(payAmount).toLocaleString()} recorded`);
