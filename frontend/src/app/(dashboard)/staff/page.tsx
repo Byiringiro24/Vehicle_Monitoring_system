@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, attendanceApi } from '@/lib/api';
@@ -35,7 +35,7 @@ export default function StaffPage() {
     return !q || name.includes(q) || d.licenseNumber?.toLowerCase().includes(q) || d.status?.toLowerCase().includes(q);
   });
 
-  // Qualifications tab — drivers with expiring/expired licences
+  // Qualifications tab â€” drivers with expiring/expired licences
   const now = Date.now();
   const in30 = now + 30 * 86400000;
   const licenceIssues = (drivers as any[]).filter((d: any) => {
@@ -48,7 +48,7 @@ export default function StaffPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Staff & HR</h1>
-        <p className="text-gray-500 text-sm mt-0.5">{formatDate(new Date())} · {user?.firstName} {user?.lastName}</p>
+        <p className="text-gray-500 text-sm mt-0.5">{formatDate(new Date())} Â· {user?.firstName} {user?.lastName}</p>
       </div>
 
       {/* KPIs */}
@@ -88,7 +88,7 @@ export default function StaffPage() {
         {tab === 'people' && (
           <div className="relative flex-1 max-w-xs">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search staff…"
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search staffâ€¦"
               className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
         )}
@@ -128,7 +128,7 @@ export default function StaffPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{d.position ?? 'Driver'}</td>
                       <td className="px-4 py-3 text-xs text-gray-600">
-                        <span>{d.licenseNumber ?? '—'}</span>
+                        <span>{d.licenseNumber ?? 'â€”'}</span>
                         {d.licenseExpiry && (
                           <span className={cn('block text-[10px]', new Date(d.licenseExpiry) < new Date() ? 'text-red-500' : new Date(d.licenseExpiry) < new Date(Date.now() + 30*86400000) ? 'text-amber-500' : 'text-gray-400')}>
                             Exp: {formatDate(d.licenseExpiry)}
@@ -140,7 +140,7 @@ export default function StaffPage() {
                           {d.status?.replace(/_/g,' ')}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{d.user?.phone ?? d.altPhone ?? '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{d.user?.phone ?? d.altPhone ?? 'â€”'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -166,7 +166,7 @@ export default function StaffPage() {
                 <AlertTriangle size={18} className={days <= 0 ? 'text-red-500' : days <= 7 ? 'text-orange-500' : 'text-amber-500'} />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900">{d.user?.firstName} {d.user?.lastName}</p>
-                  <p className="text-sm text-gray-600">Licence: {d.licenseNumber} · Class {d.licenseClass}</p>
+                  <p className="text-sm text-gray-600">Licence: {d.licenseNumber} Â· Class {d.licenseClass}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className={cn('text-sm font-bold', days <= 0 ? 'text-red-600' : days <= 7 ? 'text-orange-600' : 'text-amber-600')}>
@@ -179,12 +179,78 @@ export default function StaffPage() {
           })}
         </div>
       )}
+      )}
+
+      {/* Attendance tab */}
+      {tab === 'attendance' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-800 text-sm">Today's Attendance</h2>
+            <span className="text-xs text-gray-400">{formatDate(new Date())}</span>
+          </div>
+          {attLoading ? (
+            <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />)}</div>
+          ) : (attendance as any[]).length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+              <Calendar size={32} className="text-gray-200 mx-auto mb-3" />
+              <p className="font-semibold text-gray-600">No attendance records today</p>
+              <p className="text-sm text-gray-400 mt-1">Use the check-in button to record attendance.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>{['Employee','Date','Check In','Check Out','Status'].map(h =>
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(attendance as any[]).map((a: any) => (
+                    <tr key={a.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 text-sm font-medium text-gray-900">
+                        {a.userId?.slice(0, 8)}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500">{formatDate(a.date)}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-600">
+                        {a.checkIn ? new Date(a.checkIn).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-gray-600">
+                        {a.checkOut ? new Date(a.checkOut).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
+                          a.status === 'PRESENT' ? 'bg-green-100 text-green-700' :
+                          a.status === 'ABSENT'  ? 'bg-red-100 text-red-700' :
+                          a.status === 'LEAVE'   ? 'bg-blue-100 text-blue-700' :
+                                                   'bg-gray-100 text-gray-500')}>
+                          {a.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {/* Quick check-in */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <Clock size={14} className="text-brand-600" /> Quick Check-in
+            </h3>
+            <p className="text-xs text-gray-400 mb-3">Check in an employee for today.</p>
+            <div className="flex gap-2">
+              {(drivers as any[]).slice(0, 5).map((d: any) => (
+                <button
+                  key={d.id}
+                  onClick={() => checkInMutation.mutate(d.userId)}
+                  disabled={checkInMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:border-brand-300 hover:bg-brand-50 transition disabled:opacity-40">
+                  <UserCheck size={11} /> {d.user?.firstName} {d.user?.lastName?.[0]}.
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// ─── AttendanceTab appended below main component ─────────────────────────────
-// Note: AttendanceTab is referenced above in the tab rendering block.
-// Since the staff page ends before the attendance tab rendering,
-// we need to add it to the JSX. This is handled via the existing tab variable.
-// The attendance data is fetched via attendanceApi at the top of StaffPage.

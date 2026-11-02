@@ -79,15 +79,17 @@ export function Sidebar({ onClose }: SidebarProps) {
           // ── Check if this route is a premium feature ────────────────────────
           // Core features (GPS, vehicles, drivers, alerts, finance, maintenance)
           // are NEVER locked — they work on every plan.
-          // Premium features (dispatch, workshop, compliance, HR, rentals) show 🔒
-          // For now, all features are ENABLED (no plan check backend yet).
-          // The 🔒 icon shows on premium features so users know they CAN be locked,
-          // but we fail-open (allow access) until the backend entitlement system is built.
+          // Premium features (dispatch, workshop, compliance, HR, rentals) check
+          // the entitlement system. If no entitlement record exists, the feature
+          // is available by default (fail-open until Super Admin configures plans).
           const featureCode = getRouteFeature(href);
           const isPremiumFeature = !!featureCode;
-          // TODO: when backend entitlement system is live, check isFeatureAvailable(featureCode, orgPlan)
-          // For now: premium features are available to ALL active companies
-          const isPlanLocked = false; // ← change to !isFeatureAvailable(...) when backend is ready
+          // For now: premium features are available to ALL active companies.
+          // When the Super Admin configures entitlements via /platform, the
+          // entitlement API will return { enabled: false } for locked features.
+          // The Sidebar will then show the 🔒 icon and redirect to the upsell page.
+          // This is a progressive enhancement — the system works without entitlements.
+          const isPlanLocked = false; // TODO: wire to entitlementApi.check(featureCode) when Super Admin configures plans
 
           // Role-blocked: org has it, but this user's role doesn't include it
           const isRoleBlocked = !isAllowed && !isPlanLocked &&

@@ -1,7 +1,7 @@
 # ARTIC VMS — REST API Documentation
 
-**Base URL:** `http://172.209.217.176:5000/api/v1`  
-**Authentication:** Bearer JWT token  
+**Base URL:** `https://articvms.ddnsgeek.com/api/v1`
+**Authentication:** Bearer JWT token (`Authorization: Bearer <accessToken>`)
 **Content-Type:** `application/json`
 
 ---
@@ -12,7 +12,36 @@
 ```
 POST /auth/login
 Body: { "email": "admin@artic.io", "password": "Admin1234!" }
-Response: { "accessToken": "...", "refreshToken": "...", "user": {...} }
+Response: { "accessToken": "...", "refreshToken": "...", "user": { id, email, firstName, lastName, role, phone, organization: { id, name, slug, status } } }
+```
+
+### Register Company
+```
+POST /auth/register
+Body: { "orgName", "firstName", "lastName", "email", "password", "country" }
+Response: { "accessToken", "refreshToken", "user": {...}, "orgStatus": "PENDING" }
+```
+
+### Register Personal Account
+```
+POST /auth/register-personal
+Body: { "firstName", "lastName", "email", "password", "phone?", "intendedRole": "owner"|"driver"|"customer" }
+Response: { "accessToken", "refreshToken", "user": {...}, "intendedRole": "owner" }
+```
+
+### SSO (Single Sign-On for external projects)
+```
+POST /auth/sso
+Body: { "email", "password" }
+Response: { "redirectUrl": "https://articvms.ddnsgeek.com/sso?token=xxx", "expiresIn": 60, "user": {...} }
+```
+Redirect the user to `redirectUrl` — they land on ARTIC VMS already logged in.
+
+### Exchange SSO Token
+```
+POST /auth/sso/exchange
+Body: { "token": "xxx" }
+Response: { "accessToken", "refreshToken", "user": {...} }
 ```
 
 ### Refresh Token
@@ -22,391 +51,376 @@ Body: { "refreshToken": "..." }
 Response: { "accessToken": "..." }
 ```
 
-### Logout
+### Get Current User
 ```
-POST /auth/logout
-Body: { "refreshToken": "..." }
-```
-
----
-
-## Live Fleet Tracking
-
-### Get All Vehicle Locations (for live map)
-```
-GET /telemetry/locations
-Auth: Required
-Response: [
-  {
-    "vehicleId": "uuid",
-    "latitude": -1.9763,
-    "longitude": 30.1366,
-    "speed": 0.6,
-    "heading": 0,
-    "engineOn": true,
-    "updatedAt": "2026-07-08T14:22:00.000Z",
-    "vehicle": {
-      "id": "uuid",
-      "name": "Truck Alpha",
-      "licensePlate": "RAB 002 B",
-      "status": "ACTIVE"
-    }
-  }
-]
+GET /auth/me
+Response: { id, email, firstName, lastName, role, phone, organization: { id, name, slug, status } }
 ```
 
-### Get GPS History for Replay
+### Change Password
 ```
-GET /vehicles/:id/gps-history?from=2026-07-08T08:00:00Z&to=2026-07-08T09:00:00Z&limit=3000
-Auth: Required
-Response: {
-  "vehicle": { "id": "...", "licensePlate": "RAB 002 B" },
-  "points": [
-    { "latitude": -1.9763, "longitude": 30.1366, "speed": 12.3, "timestamp": "..." }
-  ],
-  "count": 1800
-}
+POST /auth/change-password
+Body: { "currentPassword", "newPassword" }
 ```
 
-### Get Latest Telemetry for a Vehicle
+### Forgot Password
 ```
-GET /telemetry/:vehicleId/latest
-Auth: Required
-Response: {
-  "id": "...", "vehicleId": "...", "latitude": -1.9763, "longitude": 30.1366,
-  "speed": 0, "engineOn": true, "fuelLevel": null, "timestamp": "..."
-}
+POST /auth/forgot-password
+Body: { "email" }
 ```
 
-### Get Telemetry History with Date Range
+### Reset Password
 ```
-GET /telemetry/:vehicleId?from=2026-07-08&to=2026-07-09&limit=1000
-Auth: Required
-Response: { "data": [...telemetry records], "from": "...", "to": "..." }
+POST /auth/reset-password
+Body: { "token", "newPassword" }
 ```
 
-### Delete Telemetry (by date range)
+### Sessions
 ```
-DELETE /telemetry/:vehicleId?from=2026-07-01&to=2026-07-07
-Auth: Required (Admin only)
-Response: { "telemetryDeleted": 500, "gpsDeleted": 500, "message": "..." }
+GET    /auth/sessions          — list active sessions
+DELETE /auth/sessions/:id      — revoke one session
+DELETE /auth/sessions          — revoke all other sessions (body: { currentToken })
+```
+
+### Switch Organization
+```
+POST /auth/switch-organization
+Body: { "organizationId" }
 ```
 
 ---
 
 ## Vehicles
 
-### List Vehicles
 ```
-GET /vehicles?search=RAB&status=ACTIVE&fleetId=uuid&page=1&limit=20
-Auth: Required
-Response: {
-  "data": [{ "id": "...", "licensePlate": "...", "status": "ACTIVE", "lastLocation": {...} }],
-  "pagination": { "total": 5, "page": 1, "limit": 20, "totalPages": 1 }
-}
-```
-
-### Get Single Vehicle
-```
-GET /vehicles/:id
-Auth: Required
-Response: { ...full vehicle object with lastLocation, fleet, gpsDevice, currentDriver }
-```
-
-### Create Vehicle
-```
-POST /vehicles
-Auth: Required (Admin/Fleet Manager)
-Body: { "name": "Truck Alpha", "licensePlate": "RAB 001 A", "manufacturer": "Toyota", "model": "Hilux", "year": 2024 }
-Response: { ...vehicle with deviceToken }
-```
-
-### Update Vehicle
-```
-PUT /vehicles/:id
-Auth: Required (Admin/Fleet Manager)
-Body: { any vehicle fields to update }
-Response: { ...updated vehicle }
-```
-
-### Lock / Unlock Engine
-```
-PATCH /vehicles/:id/lock
-Auth: Required (Admin/Fleet Manager)
-Body: { "locked": true }   // true = lock, false = unlock
-Response: { "vehicleId": "...", "engineLocked": true, "message": "Engine lock command sent" }
-```
-
-### Ping GPS Module
-```
-POST /vehicles/:id/gps-ping
-Auth: Required
-Response: { "gpsOnline": true, "checkedAt": "...", "message": "GPS module is online" }
-```
-
-### Get GPS History
-```
-GET /vehicles/:vehicleId/gps-history?from=2026-07-08T14:00:00Z&to=2026-07-08T15:00:00Z
-Auth: Required
-Response: { "points": [...], "count": 360 }
-```
-
-### Regenerate Device Token
-```
-POST /vehicles/:id/regenerate-token
-Auth: Required (Admin only)
-Response: { "deviceToken": "new-uuid-here" }
+GET    /vehicles               — list (params: page, limit, search, fleetId, status)
+GET    /vehicles/:id            — detail
+POST   /vehicles                — create (SUPER_ADMIN, ADMIN, FLEET_MANAGER)
+PUT    /vehicles/:id            — update
+DELETE /vehicles/:id            — delete (SUPER_ADMIN, ADMIN)
+POST   /vehicles/:id/regenerate-token
+PATCH  /vehicles/:id/lock       — engine lock/unlock (body: { locked: true })
+POST   /vehicles/:id/gps-ping   — ping GPS device
+GET    /vehicles/:id/gps-history — GPS path (params: from, to)
+GET    /vehicles/:vehicleId/trips
 ```
 
 ---
 
-## Device Remote Commands
+## Drivers
 
-### Send Command to GPS Device
 ```
-POST /devices/:vehicleId/command
-Auth: Required (Admin/Fleet Manager)
-Body: { "command": "ping" }
-       { "command": "check_internet" }
-       { "command": "restart" }
-       { "command": "lock" }
-       { "command": "unlock" }
-       { "command": "ussd", "code": "*175#" }
-
-Response: { "sent": true, "command": "check_internet", "topic": "artic/.../command" }
-Note: Response from device arrives via MQTT → telemetry topic (subscribe via Socket.IO)
+GET    /drivers                — list
+POST   /drivers                — create (5-step wizard data)
+PATCH  /drivers/:id/assign     — assign vehicle (body: { vehicleId })
+GET    /drivers/:id/activity    — driver activity
 ```
 
-### Update SIM Card Number (with verification)
-```
-PATCH /devices/:vehicleId/sim
-Auth: Required
-Body: { "simNumber": "+250780123456" }
-Response: {
-  "success": true,
-  "simNumber": "+250780123456",
-  "verified": true,
-  "message": "✅ SIM number verified! Matches the SIM reported by the GPS device."
-}
-Note: verified=true only if ESP32 has already reported the same number in telemetry
-```
+---
 
-### Record Data Plan Purchase
+## Trips / Dispatch
+
 ```
-PATCH /devices/:vehicleId/data-plan
-Auth: Required
-Body: {
-  "dataPlanType": "MONTHLY",
-  "dataPlanBoughtAt": "2026-07-08T10:00:00Z",
-  "dataPlanExpiry":   "2026-08-08T10:00:00Z"
-}
-Response: { "dataPlanType": "MONTHLY", "dataPlanExpiry": "...", "message": "MONTHLY data plan recorded" }
-Alert thresholds: MONTHLY=3 days | WEEKLY=1 day | DAILY=3 hours before expiry
+GET    /trips                   — list (params: status, vehicleId, driverId, date)
+POST   /trips                   — create (body: vehicleId, scheduledAt, purpose, notes)
+PATCH  /trips/:id/assign        — assign driver+vehicle (with conflict detection)
+PATCH  /trips/:id/status        — update status (UNASSIGNED, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELLED)
+DELETE /trips/:id               — cancel trip
 ```
 
 ---
 
 ## Alerts
 
-### List Alerts
 ```
-GET /alerts?status=ACTIVE&page=1&limit=20
-Auth: Required
-Response: { "data": [...alerts], "pagination": {...} }
-```
-
-### Acknowledge Alert
-```
-PATCH /alerts/:id/acknowledge
-Auth: Required
-```
-
-### Resolve Alert
-```
-PATCH /alerts/:id/resolve
-Auth: Required
+GET    /alerts                  — list (params: status, severity, type, vehicleId)
+PATCH  /alerts/:id/acknowledge
+PATCH  /alerts/:id/resolve
+GET    /alerts/rules            — list alert rules
+POST   /alerts/rules            — create rule
+DELETE /alerts/rules/:id
 ```
 
 ---
 
 ## Geofences
 
-### List Geofences
 ```
-GET /geofences
-Auth: Required
-Response: [{ "id": "...", "name": "Kigali Centre", "vehicleIds": ["uuid1"], "isActive": true }]
-```
-
-### Create Geofence
-```
-POST /geofences
-Auth: Required
-Body: {
-  "name": "Warehouse Zone",
-  "coordinates": [[-1.94, 30.06], [-1.95, 30.07], [-1.94, 30.08], [-1.94, 30.06]],
-  "type": "polygon",
-  "alertOnEntry": true,
-  "alertOnExit": true,
-  "vehicleIds": ["uuid1", "uuid2"],
-  "color": "#EF4444"
-}
-```
-
-### Assign Vehicles to Geofence
-```
-PATCH /geofences/:id/vehicles
-Body: { "vehicleIds": ["uuid1", "uuid2"] }   // [] = all vehicles
+GET    /geofences               — list
+POST   /geofences               — create
+PUT    /geofences/:id           — update
+DELETE /geofences/:id
+GET    /geofences/:id/events     — events
+PATCH  /geofences/:id/vehicles   — assign vehicles
 ```
 
 ---
 
-## Reports
+## Finance
 
-### Daily Payment Report (spreadsheet format)
 ```
-GET /reports/daily-payments?month=7&year=2026
-Auth: Required
-Response: {
-  "month": 7, "year": 2026, "daysInMonth": 31,
-  "vehicles": [{ "id": "...", "plate": "RAB 001 A", "name": "Truck Alpha" }],
-  "grid": { "2026-07-01": { "vehicleId": 7000 }, ... },
-  "totals": { "vehicleId": 49000 },
-  "grandTotal": 175000
-}
-```
-
-### GPS Activity Summary
-```
-GET /reports/trips?from=2026-07-01&to=2026-07-07
-Auth: Required
-```
-
-### Alerts Summary
-```
-GET /reports/alerts-summary?from=2026-07-01&to=2026-07-07
-Auth: Required
+GET    /financial/dashboard             — P&L summary
+GET    /financial/vehicle-profitability  — per-vehicle profit
+GET    /financial/cash-flow             — cash flow records
+GET    /financial/statement              — financial statement
+GET    /financial/driver-payments        — driver payroll
+POST   /financial/driver-payments        — create payment
+PATCH  /financial/driver-payments/:id/mark-paid
 ```
 
 ---
 
-## Socket.IO Real-Time Events
+## Invoices
 
-Connect: `ws://172.209.217.176:5000`  
-Auth: `{ auth: { token: "Bearer ..." } }`
-
-### Events you receive:
-```javascript
-socket.on('location:update', (data) => {
-  // Vehicle position updated (every 2s when GPS online)
-  // { vehicleId, latitude, longitude, speed, heading, updatedAt, vehicle }
-})
-
-socket.on('device:heartbeat', (data) => {
-  // Device is online but may have no GPS fix
-  // { vehicleId, updatedAt, engineOn, engineLocked, gpsModuleOn }
-})
-
-socket.on('gps:online', (data) => {
-  // GPS device connected to MQTT broker
-  // { vehicleId, licensePlate, timestamp }
-})
-
-socket.on('gps:offline', (data) => {
-  // GPS device disconnected
-  // { vehicleId, licensePlate, timestamp }
-})
-
-socket.on('telemetry:update', (data) => {
-  // Raw telemetry for charts
-  // { vehicleId, data: {...}, timestamp }
-})
-
-socket.on('vehicle:lock', (data) => {
-  // Engine lock state changed from dashboard
-  // { vehicleId, locked, triggeredBy, timestamp }
-})
-
-socket.on('alert:new', (data) => {
-  // New alert triggered
-  // { title, message, severity, vehicle }
-})
-
-socket.on('vehicles:offline', (data) => {
-  // Backend detected stale vehicles
-  // { vehicleIds: [...], timestamp }
-})
 ```
-
-### Subscribe to a specific vehicle room:
-```javascript
-socket.emit('subscribe:vehicle', vehicleId)
-socket.emit('unsubscribe:vehicle', vehicleId)
+GET    /invoices                — list
+POST   /invoices                — create (body: customerId, description, amount, dueDate)
+PATCH  /invoices/:id/mark-paid  — mark as paid
+DELETE /invoices/:id            — cancel
 ```
 
 ---
 
-## Integration Example — React Live Map
+## Payouts (Owner payout approval workflow)
 
-```javascript
-import { io } from 'socket.io-client';
-
-// 1. Login
-const { accessToken } = await fetch('/api/v1/auth/login', {
-  method: 'POST',
-  body: JSON.stringify({ email, password })
-}).then(r => r.json());
-
-// 2. Get initial locations
-const locations = await fetch('/api/v1/telemetry/locations', {
-  headers: { Authorization: `Bearer ${accessToken}` }
-}).then(r => r.json());
-
-// 3. Connect Socket.IO for live updates
-const socket = io('ws://172.209.217.176:5000', {
-  auth: { token: accessToken }
-});
-
-const markers = {};
-
-// Seed from REST
-locations.forEach(loc => {
-  markers[loc.vehicleId] = { lat: loc.latitude, lng: loc.longitude };
-  drawMarker(loc.vehicleId, loc.latitude, loc.longitude);
-});
-
-// Update on new GPS packet
-socket.on('location:update', ({ vehicleId, latitude, longitude, speed }) => {
-  if (markers[vehicleId]) {
-    moveMarker(vehicleId, latitude, longitude); // smooth move
-  } else {
-    drawMarker(vehicleId, latitude, longitude); // new marker
-  }
-  markers[vehicleId] = { lat: latitude, lng: longitude, speed };
-});
-
-// Handle device going offline
-socket.on('gps:offline', ({ vehicleId }) => {
-  greyOutMarker(vehicleId);
-});
+```
+GET    /payouts                 — list (params: status)
+POST   /payouts                 — request payout (body: ownerId, amount, periodFrom, periodTo)
+PATCH  /payouts/:id/approve     — approve (separation of duties enforced)
+PATCH  /payouts/:id/execute      — mark as executed/paid
+PATCH  /payouts/:id/reject       — reject with reason
 ```
 
 ---
 
-## MQTT Topic Reference (for direct ESP32 integration)
+## Contracts
 
-| Topic | Direction | Payload |
-|---|---|---|
-| `artic/<TOKEN>/telemetry` | ESP32 → Server | GPS + engine data JSON |
-| `artic/<TOKEN>/command` | Server → ESP32 | `{"command":"lock"}` etc |
-| `artic/<TOKEN>/ping` | Server → ESP32 | `{"ts":123456}` |
-| `artic/<TOKEN>/pong` | ESP32 → Server | `{"pong":true,"simNumber":"..."}` |
-
-**Where `<TOKEN>` is the vehicle's deviceToken (UUID from dashboard).**
-
-Broker: `mqtt://172.209.217.176:1883`  
-Auth: username = deviceToken, password = deviceToken
+```
+GET    /contracts/customers     — list customers
+POST   /contracts/customers     — create customer
+PUT    /contracts/customers/:id — update
+GET    /contracts/contracts     — list contracts
+GET    /contracts/contracts/:id — detail
+POST   /contracts/contracts     — create
+PUT    /contracts/contracts/:id — update
+GET    /contracts/contracts/:id/payments  — payment schedule
+POST   /contracts/contracts/:id/payments  — add payment
+PATCH  /contracts/payments/:id/mark-paid
+```
 
 ---
 
-*ARTIC VMS API v1 — July 2026*
+## Agreements (Business Model Builder)
+
+```
+GET    /agreements/business-models  — list models
+POST   /agreements/business-models  — create model
+GET    /agreements                    — list agreements
+GET    /agreements/:id                — detail
+POST   /agreements                    — create
+POST   /agreements/:id/activate       — activate + generate schedule
+PATCH  /agreements/:id                — update
+GET    /agreements/:id/payments       — payment schedule
+POST   /agreements/:id/payments       — record payment
+```
+
+---
+
+## Expenses
+
+```
+GET    /expenses              — list
+POST   /expenses              — create
+PUT    /expenses/:id          — update
+DELETE /expenses/:id          — delete
+GET    /expenses/summary      — summary by category
+```
+
+---
+
+## Owner Portal
+
+```
+GET    /owner/vehicles        — vehicles owned by current user
+GET    /owner/statements      — monthly income/expense statements
+PATCH  /owner/vehicles/:id/claim  — claim ownership of a vehicle
+```
+
+---
+
+## Remittances (Rider daily payments)
+
+```
+GET    /remittances/today     — today's remittance status
+GET    /remittances           — history (params: months)
+POST   /remittances           — record payment (body: amount, method?, notes?)
+```
+
+---
+
+## Maintenance
+
+```
+GET    /maintenance           — list records
+GET    /maintenance/:id       — detail
+POST   /maintenance           — create
+PUT    /maintenance/:id       — update
+DELETE /maintenance/:id       — delete
+GET    /maintenance/upcoming  — upcoming schedule
+```
+
+---
+
+## Documents
+
+```
+GET    /documents             — list
+GET    /documents/compliance  — compliance dashboard
+GET    /documents/:id         — detail
+POST   /documents             — create slot
+PUT    /documents/:id         — update
+POST   /documents/:id/verify  — verify (SUPER_ADMIN, ADMIN, FLEET_MANAGER)
+POST   /documents/:id/reject  — reject with reason
+DELETE /documents/:id
+POST   /documents/:id/upload  — upload file (multipart)
+POST   /documents/upload-and-create  — create + upload in one step
+```
+
+---
+
+## Users
+
+```
+GET    /users                 — list users in org
+GET    /users/all             — list all users (SUPER_ADMIN only)
+POST   /users                 — create user (SUPER_ADMIN, ADMIN)
+PUT    /users/:id             — update user
+POST   /users/:id/reset-password  — force reset (SUPER_ADMIN only)
+PATCH  /users/:id/status      — activate/deactivate
+POST   /users/invite          — invite by email (sends setup link)
+```
+
+---
+
+## Platform (Super Admin only)
+
+```
+GET    /platform/stats                    — platform KPIs
+GET    /platform/organizations            — all companies
+GET    /platform/organizations/:id         — company detail
+POST   /platform/organizations/:id/subscription  — activate plan
+GET    /platform/plans                    — list plans
+POST   /platform/plans                    — create plan
+PUT    /platform/plans/:id                — update plan
+GET    /platform/audit-logs               — audit logs
+```
+
+---
+
+## Support
+
+```
+GET    /support/contacts                  — public, no auth needed
+POST   /support/tickets                   — submit ticket (public)
+GET    /support/my-tickets                — user's own tickets
+GET    /support/admin/tickets             — all tickets (SUPER_ADMIN)
+PATCH  /support/admin/tickets/:id         — update ticket
+GET    /support/admin/pending-orgs        — pending registrations
+POST   /support/admin/orgs/:id/approve    — approve org
+POST   /support/admin/orgs/:id/reject     — reject org
+PUT    /support/admin/contacts            — update all contacts
+PATCH  /support/admin/contacts/:id        — update one contact
+```
+
+---
+
+## Audit Log
+
+```
+GET    /audit                — org-level logs (SUPER_ADMIN, ADMIN)
+GET    /audit/platform       — all platform logs (SUPER_ADMIN)
+```
+
+---
+
+## Entitlements (Feature flags)
+
+```
+GET    /entitlements              — list this org's enabled features
+GET    /entitlements/check/:code  — check if a feature is enabled
+POST   /entitlements              — grant feature (SUPER_ADMIN)
+DELETE /entitlements/:id          — revoke feature (SUPER_ADMIN)
+```
+
+---
+
+## Notifications
+
+```
+GET    /notifications/preferences              — get user's alert prefs
+PUT    /notifications/preferences              — bulk update
+PATCH  /notifications/preferences/:type        — toggle one alert type
+```
+
+---
+
+## Attendance (HR)
+
+```
+GET    /attendance/my     — own records
+GET    /attendance        — org-wide (SUPER_ADMIN, ADMIN, HR_MANAGER)
+POST   /attendance        — check in
+PATCH  /attendance/:id    — update / check out
+```
+
+---
+
+## Health
+
+```
+GET    /health            — public liveness check
+GET    /health/detailed   — full system health (SUPER_ADMIN)
+```
+
+---
+
+## Devices (GPS commands)
+
+```
+POST   /devices/:vehicleId/command     — send command (lock, unlock, restart, ussd, ping)
+PATCH  /devices/:vehicleId/sim          — update SIM number
+PATCH  /devices/:vehicleId/data-plan    — update data plan
+```
+
+---
+
+## 14 User Roles
+
+| Role | Description |
+|------|-------------|
+| SUPER_ADMIN | Platform owner |
+| PLATFORM_SUPPORT | Support tickets only |
+| ADMIN | Company management |
+| FLEET_MANAGER | Fleet operations |
+| FINANCE_MANAGER | Full finance |
+| DISPATCHER | Trip assignment |
+| HR_MANAGER | Staff management |
+| MECHANIC | Workshop |
+| COMPLIANCE_OFFICER | Document verification |
+| RENTAL_MANAGER | Rental calendar |
+| SALES_AGENT | Vehicle sales |
+| AUDITOR | Read-only |
+| DRIVER | Drives vehicles (includes rider) |
+| VIEWER | Personal accounts (owner/customer/seller/provider) |
+
+---
+
+## Rate Limits
+
+- Auth endpoints: 20 requests per 15 minutes per IP
+- Register: 5 per hour per IP
+- API endpoints: 300 per minute per IP
+
+---
+
+*API documentation last updated: November 2026*
