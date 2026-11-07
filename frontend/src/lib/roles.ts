@@ -60,6 +60,10 @@ export const NAV_ITEMS: NavItem[] = [
   // ── Core operations ───────────────────────────────────────────────────────
   { href: '/dashboard',   label: 'Dashboard',     icon: 'LayoutDashboard' },
   { href: '/moto',         label: 'Moto Fleet',    icon: 'Bike',            roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER','DISPATCHER'] },
+  { href: '/moto/payments', label: 'Daily Collection', icon: 'DollarSign',  roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER','DISPATCHER'] },
+  { href: '/moto/garage',   label: 'Garage',        icon: 'Wrench',           roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
+  { href: '/moto/fines',    label: 'Fines',         icon: 'AlertTriangle',   roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
+  { href: '/moto/reports',  label: 'Moto Reports',  icon: 'BarChart3',        roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER'] },
   { href: '/map',         label: 'Live Map',       icon: 'Map',             roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','DISPATCHER','VIEWER','AUDITOR'] },
   { href: '/vehicles',    label: 'Vehicles',       icon: 'Truck',           roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','DISPATCHER','RENTAL_MANAGER','SALES_AGENT','VIEWER','AUDITOR'] },
   { href: '/drivers',     label: 'Drivers',        icon: 'UserCheck',       roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','DISPATCHER'] },
