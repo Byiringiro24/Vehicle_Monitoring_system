@@ -179,7 +179,6 @@ export default function StaffPage() {
           })}
         </div>
       )}
-      )}
 
       {/* Attendance tab */}
       {tab === 'attendance' && (
