@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { DollarSign, Search, Loader2, CheckCircle2, AlertTriangle, Phone, Bike, Save } from 'lucide-react';
+import { DollarSign, Search, Loader2, CheckCircle2, AlertTriangle, Phone, Bike, Save, Smartphone, Wallet, Calculator, Wrench, Plus } from 'lucide-react';
 
 export default function MotoPaymentsPage() {
   const { user } = useAuthStore();
@@ -17,6 +17,11 @@ export default function MotoPaymentsPage() {
   const [payPhone, setPayPhone] = useState('');
   const [payCash, setPayCash] = useState('');
   const [payNotes, setPayNotes] = useState('');
+
+  // Account balance tracking (from AUTOEARN daily report: BALANCE/PHONE + BALANCE/MACHINE)
+  const [showBalance, setShowBalance] = useState(false);
+  const [phoneBalance, setPhoneBalance] = useState('');
+  const [machineBalance, setMachineBalance] = useState('');
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -165,6 +170,168 @@ export default function MotoPaymentsPage() {
         <p>• If they pay more than the daily rate, the extra amount covers their previous debt first.</p>
         <p>• If they don't pay at all, the full daily rate is added to their debt.</p>
       </div>
+
+      {/* Account Balance Reconciliation — from AUTOEARN daily report */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <button onClick={() => setShowBalance(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+              <Calculator size={18} className="text-purple-600" />
+            </div>
+            <div className="text-left">
+              <p className="font-semibold text-gray-900 text-sm">Account Balance Reconciliation</p>
+              <p className="text-xs text-gray-400">Record phone + machine balance to reconcile with collections</p>
+            </div>
+          </div>
+          <span className="text-xs text-gray-400">{showBalance ? '▲ Hide' : '▼ Show'}</span>
+        </button>
+
+        {showBalance && (
+          <div className="px-5 pb-5 space-y-4 border-t border-gray-100">
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              {/* Phone balance */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Smartphone size={16} className="text-blue-600" />
+                  <p className="text-sm font-semibold text-blue-900">Phone Balance (Mobile Money)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">RWF</span>
+                  <input type="number" value={phoneBalance} onChange={e => setPhoneBalance(e.target.value)}
+                    placeholder="0"
+                    className="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-sm tabular outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Recorded: {new Date().toLocaleTimeString()}</p>
+              </div>
+
+              {/* Machine/cash balance */}
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wallet size={16} className="text-green-600" />
+                  <p className="text-sm font-semibold text-green-900">Machine/Cash Balance</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">RWF</span>
+                  <input type="number" value={machineBalance} onChange={e => setMachineBalance(e.target.value)}
+                    placeholder="0"
+                    className="flex-1 px-3 py-2 border border-green-300 rounded-lg text-sm tabular outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Recorded: {new Date().toLocaleTimeString()}</p>
+              </div>
+            </div>
+
+            {/* Reconciliation comparison */}
+            {todaySummary && (phoneBalance || machineBalance) && (
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Reconciliation</p>
+                {[
+                  { label: 'Collected today',     value: todaySummary.totalCollected ?? 0,                        color: 'text-gray-900' },
+                  { label: 'Phone balance',        value: parseFloat(phoneBalance || '0'),                        color: 'text-blue-600' },
+                  { label: 'Machine balance',      value: parseFloat(machineBalance || '0'),                      color: 'text-green-600' },
+                  { label: 'Total in accounts',    value: parseFloat(phoneBalance || '0') + parseFloat(machineBalance || '0'), color: 'text-gray-900' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">{label}</span>
+                    <span className={`font-bold tabular ${color}`}>RWF {value.toLocaleString()}</span>
+                  </div>
+                ))}
+                <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Difference (should be 0):</span>
+                  <span className={`text-sm font-bold tabular ${
+                    Math.abs(parseFloat(phoneBalance || '0') + parseFloat(machineBalance || '0') - (todaySummary.totalCollected ?? 0)) < 1
+                      ? 'text-green-600' : 'text-red-600'}`}>
+                    RWF {Math.abs(parseFloat(phoneBalance || '0') + parseFloat(machineBalance || '0') - (todaySummary.totalCollected ?? 0)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Save balance button */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  motoApi.addGarage({
+                    date: new Date().toISOString(),
+                    product: `Balance check — Phone: RWF ${phoneBalance || '0'}, Machine: RWF ${machineBalance || '0'}`,
+                    amount: parseFloat(phoneBalance || '0') + parseFloat(machineBalance || '0'),
+                    category: 'BALANCE_CHECK',
+                    notes: `Phone: ${phoneBalance}, Machine: ${machineBalance}`,
+                  }).then(() => {
+                    toast.success('Balance recorded');
+                    setPhoneBalance(''); setMachineBalance('');
+                  }).catch(() => toast.error('Failed to save'));
+                }}
+                disabled={!phoneBalance && !machineBalance}
+                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl transition disabled:opacity-60">
+                <Save size={14} /> Save balance record
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Garage quick entry */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h2 className="font-semibold text-gray-800 text-sm mb-3 flex items-center gap-2">
+          <Wrench size={14} className="text-amber-500" /> Quick Garage Expense
+        </h2>
+        <GarageQuickEntry />
+      </div>
+    </div>
+  );
+}
+
+function GarageQuickEntry() {
+  const [plate, setPlate] = useState('');
+  const [product, setProduct] = useState('');
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('MAINTENANCE');
+
+  const addMutation = useMutation({
+    mutationFn: () => motoApi.addGarage({
+      date: new Date().toISOString(),
+      plateNumber: plate || undefined,
+      product,
+      amount: parseFloat(amount),
+      category,
+    }),
+    onSuccess: () => {
+      toast.success('Garage expense recorded');
+      setPlate(''); setProduct(''); setAmount(''); setCategory('MAINTENANCE');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
+  });
+
+  return (
+    <div className="flex flex-wrap gap-2 items-end">
+      <div className="flex-1 min-w-[120px]">
+        <label className="block text-[10px] text-gray-400 mb-0.5">Plate (optional)</label>
+        <input value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} placeholder="RAC 456 B"
+          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-500 font-mono" />
+      </div>
+      <div className="flex-[2] min-w-[150px]">
+        <label className="block text-[10px] text-gray-400 mb-0.5">Product / Service *</label>
+        <input value={product} onChange={e => setProduct(e.target.value)} placeholder="e.g. Tire, Mechanic fee, Helmet"
+          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+      </div>
+      <div className="w-24">
+        <label className="block text-[10px] text-gray-400 mb-0.5">Amount *</label>
+        <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="15000"
+          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-500 tabular" />
+      </div>
+      <div className="w-32">
+        <label className="block text-[10px] text-gray-400 mb-0.5">Category</label>
+        <select value={category} onChange={e => setCategory(e.target.value)}
+          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-500">
+          {['MAINTENANCE','FUEL','FINE','INSURANCE','TAX','ACCESSORIES','OTHER'].map(c =>
+            <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      <button onClick={() => addMutation.mutate()} disabled={!product || !amount || addMutation.isPending}
+        className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg transition disabled:opacity-60">
+        {addMutation.isPending ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />} Add
+      </button>
     </div>
   );
 }

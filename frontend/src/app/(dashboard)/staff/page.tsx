@@ -29,6 +29,19 @@ export default function StaffPage() {
     refetchInterval: 60000,
   });
 
+  const { data: attendance = [], isLoading: attLoading } = useQuery({
+    queryKey: ['attendance-today'],
+    queryFn: () => attendanceApi.list({ limit: 100 }),
+    enabled: tab === 'attendance',
+  });
+
+  const qc = useQueryClient();
+  const checkInMutation = useMutation({
+    mutationFn: (userId: string) => attendanceApi.checkIn({ userId, status: 'PRESENT' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['attendance-today'] }); toast.success('Checked in'); },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
+  });
+
   const filtered = (drivers as any[]).filter((d: any) => {
     const q = search.toLowerCase();
     const name = `${d.user?.firstName ?? ''} ${d.user?.lastName ?? ''}`.toLowerCase();
