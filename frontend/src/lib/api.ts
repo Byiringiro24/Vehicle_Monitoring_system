@@ -377,3 +377,31 @@ export const sessionApi = {
   revoke: (id: string) => apiClient.delete(`/auth/sessions/${id}`).then(r => r.data),
   revokeAll: (currentToken?: string) => apiClient.delete('/auth/sessions', { data: { currentToken } }).then(r => r.data),
 };
+
+// ─── Motorcycle Fleet (Boda-boda / E-moto) ────────────────────────────────────
+export const motoApi = {
+  // Drivers
+  listDrivers:   (params?: object) => apiClient.get('/moto/drivers', { params }).then(r => r.data),
+  getDriver:     (id: string) => apiClient.get(`/moto/drivers/${id}`).then(r => r.data),
+  createDriver:  (data: object) => apiClient.post('/moto/drivers', data).then(r => r.data),
+  updateDriver:  (id: string, data: object) => apiClient.put(`/moto/drivers/${id}`, data).then(r => r.data),
+  assignBike:    (id: string, data: { plateNumber?: string; bikeModel?: string }) =>
+    apiClient.patch(`/moto/drivers/${id}/assign-bike`, data).then(r => r.data),
+
+  // Daily payments
+  listPayments:  (params?: object) => apiClient.get('/moto/payments', { params }).then(r => r.data),
+  recordPayment:  (data: { driverId: string; date: string; paidAmount?: number; paidViaPhone?: number; paidViaCash?: number; notes?: string }) =>
+    apiClient.post('/moto/payments', data).then(r => r.data),
+  todaySummary:  () => apiClient.get('/moto/payments/today').then(r => r.data),
+
+  // Garage expenses
+  listGarage:    (params?: object) => apiClient.get('/moto/garage', { params }).then(r => r.data),
+  addGarage:     (data: object) => apiClient.post('/moto/garage', data).then(r => r.data),
+
+  // Fines
+  listFines:     (params?: object) => apiClient.get('/moto/fines', { params }).then(r => r.data),
+  addFine:       (data: object) => apiClient.post('/moto/fines', data).then(r => r.data),
+
+  // Reports
+  reportSummary: (params?: object) => apiClient.get('/moto/reports/summary', { params }).then(r => r.data),
+};

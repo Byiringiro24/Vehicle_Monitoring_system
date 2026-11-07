@@ -37,6 +37,7 @@ import payoutRoutes        from './routes/payout.routes';
 import notificationRoutes  from './routes/notification.routes';
 import attendanceRoutes    from './routes/attendance.routes';
 import remittanceRoutes    from './routes/remittance.routes';
+import motoRoutes          from './routes/moto.routes';
 
 import deviceRoutes       from './routes/device.routes';
 
@@ -111,6 +112,7 @@ app.use(`${api}/payouts`,       apiLimiter,  payoutRoutes);
 app.use(`${api}/notifications`, apiLimiter,  notificationRoutes);
 app.use(`${api}/attendance`,    apiLimiter,  attendanceRoutes);
 app.use(`${api}/remittances`,   apiLimiter,  remittanceRoutes);
+app.use(`${api}/moto`,          apiLimiter,  motoRoutes);
 
 // Serve uploaded files — in production replace with a CDN / object storage signed URL
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

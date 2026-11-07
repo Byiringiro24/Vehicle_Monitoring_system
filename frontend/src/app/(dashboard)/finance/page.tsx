@@ -8,6 +8,7 @@ import { DollarSign, Plus, TrendingUp, TrendingDown, AlertCircle,
   BarChart3, Users2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 
 type FinTab = 'dashboard' | 'contracts' | 'expenses' | 'requisitions' | 'payroll' | 'payouts' | 'invoices' | 'statements';
@@ -633,10 +634,22 @@ function InvoicesTab() {
                   </td>
                   <td className="px-3 py-2">
                     {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && (
-                      <button onClick={() => markPaid.mutate(inv.id)}
-                        className="text-xs text-green-600 hover:text-green-700 font-medium hover:underline whitespace-nowrap">
-                        Mark paid
-                      </button>
+                      <div className="flex gap-2">
+                        <Link href={`/invoices/${inv.id}`}
+                          className="text-xs text-brand-600 hover:text-brand-700 font-medium hover:underline whitespace-nowrap">
+                          View
+                        </Link>
+                        <button onClick={() => markPaid.mutate(inv.id)}
+                          className="text-xs text-green-600 hover:text-green-700 font-medium hover:underline whitespace-nowrap">
+                          Mark paid
+                        </button>
+                      </div>
+                    )}
+                    {(inv.status === 'PAID' || inv.status === 'CANCELLED') && (
+                      <Link href={`/invoices/${inv.id}`}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium hover:underline whitespace-nowrap">
+                        View
+                      </Link>
                     )}
                   </td>
                 </tr>

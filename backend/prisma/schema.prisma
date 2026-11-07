@@ -1816,3 +1816,117 @@ model Payout {
   @@index([ownerId])
   @@map("payouts")
 }
+
+// =============================================================================
+//  MOTORCYCLE FLEET MANAGEMENT (Boda-boda / E-moto)
+//  Based on business docs: FABU.xlsx, AUTOEARN daily report, AMASEZERANO contract
+// =============================================================================
+
+model MotoDriver {
+  id             String   @id @default(uuid())
+  organizationId String
+  // Personal info
+  firstName      String
+  lastName       String
+  phone          String
+  altPhone       String?
+  nationalId     String?
+  licenseNumber  String?
+  licenseClass   String?   @default("B")
+  address        String?   // where they live
+  // Referrals (2 people required by contract)
+  referral1Name  String?
+  referral1Phone String?
+  referral2Name  String?
+  referral2Phone String?
+  // Contract
+  contractSignedAt DateTime?
+  contractNotes    String?
+  // Bike assignment
+  plateNumber    String?   // current assigned bike plate
+  bikeModel      String?
+  bikeAssignedAt DateTime?
+  // Payment config (from contract: 6000 RWF/day or 7000×6 days/week)
+  dailyRate      Float     @default(6000)
+  weeklyRate     Float     @default(42000)  // 7000 × 6 days
+  paymentType    String    @default("DAILY")  // DAILY | WEEKLY | MONTHLY
+  paymentDeadline String   @default("21:00")  // due by 9 PM per contract
+  // Status
+  status         String    @default("ACTIVE")  // ACTIVE | INACTIVE | SUSPENDED
+  totalDebt      Float     @default(0)   // running debt balance
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  payments       DailyPayment[]
+  fines          MotoFine[]
+
+  @@index([organizationId, status])
+  @@index([plateNumber])
+  @@map("moto_drivers")
+}
+
+model DailyPayment {
+  id             String   @id @default(uuid())
+  organizationId String
+  driverId       String
+  driver         MotoDriver @relation(fields: [driverId], references: [id])
+  plateNumber    String   // plate at time of payment
+  date           DateTime // the day this payment covers
+  expectedAmount Float    // daily rate
+  paidAmount     Float    @default(0)
+  difference     Float    @default(0)   // paid - expected (negative = debt, positive = credit/overpay)
+  status         String   @default("PENDING")  // PENDING | PAID | PARTIAL | DEBT | ABSENT | GARAGE | ACCIDENT
+  recordedAt     DateTime @default(now())
+  recordedBy     String?  // userId who recorded it
+  // Phone vs machine tracking (from AUTOEARN report)
+  paidViaPhone   Float    @default(0)   // amount received via mobile money
+  paidViaCash    Float    @default(0)   // cash amount
+  notes          String?
+  // Debt management: if they pay extra, it covers previous debt
+  debtBefore     Float    @default(0)   // debt at start of this payment
+  debtAfter      Float    @default(0)   // debt after this payment applied
+
+  @@index([organizationId, date(sort: Desc)])
+  @@index([driverId, date(sort: Desc)])
+  @@index([plateNumber])
+  @@map("daily_payments")
+}
+
+model MotoFine {
+  id             String   @id @default(uuid())
+  organizationId String
+  driverId       String?
+  driver         MotoDriver? @relation(fields: [driverId], references: [id])
+  plateNumber    String
+  fineDate       DateTime
+  reason         String   // TRAFFIC, POLICE, ACCIDENT, OTHER
+  amount         Float
+  paidByDriver   Boolean  @default(false)  // driver owes it
+  paidByCompany  Boolean  @default(false)  // company paid on behalf
+  recovered      Boolean  @default(false)  // recovered from driver
+  recoveredDate  DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, fineDate(sort: Desc)])
+  @@index([plateNumber])
+  @@map("moto_fines")
+}
+
+model GarageExpense {
+  id             String   @id @default(uuid())
+  organizationId String
+  date           DateTime
+  plateNumber    String?
+  product        String   // what was bought/paid (mechanic fee, tire, helmet, etc.)
+  amount         Float
+  category       String   @default("MAINTENANCE")  // MAINTENANCE | FINE | INSURANCE | TAX | FUEL | ACCESSORIES | OTHER
+  recordedBy     String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, date(sort: Desc)])
+  @@index([plateNumber])
+  @@map("garage_expenses")
+}

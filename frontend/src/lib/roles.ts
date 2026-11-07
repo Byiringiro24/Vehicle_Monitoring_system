@@ -59,6 +59,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ── Core operations ───────────────────────────────────────────────────────
   { href: '/dashboard',   label: 'Dashboard',     icon: 'LayoutDashboard' },
+  { href: '/moto',         label: 'Moto Fleet',    icon: 'Bike',            roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','FINANCE_MANAGER','DISPATCHER'] },
   { href: '/map',         label: 'Live Map',       icon: 'Map',             roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','DISPATCHER','VIEWER','AUDITOR'] },
   { href: '/vehicles',    label: 'Vehicles',       icon: 'Truck',           roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','DISPATCHER','RENTAL_MANAGER','SALES_AGENT','VIEWER','AUDITOR'] },
   { href: '/drivers',     label: 'Drivers',        icon: 'UserCheck',       roles: ['SUPER_ADMIN','ADMIN','FLEET_MANAGER','DISPATCHER'] },
