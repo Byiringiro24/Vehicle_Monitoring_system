@@ -5,10 +5,10 @@ import { financialApi, contractApi, expenseApi, apiClient, requisitionApi } from
 import { format, subDays } from 'date-fns';
 import { DollarSign, Plus, TrendingUp, TrendingDown, AlertCircle,
   CheckCircle, Clock, Shield, FileText, Fuel, Wrench, Receipt,
-  BarChart3, Users2 } from 'lucide-react';
+  BarChart3, Users2, Bike } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
 
 type FinTab = 'dashboard' | 'contracts' | 'expenses' | 'requisitions' | 'payroll' | 'payouts' | 'invoices' | 'statements';
@@ -108,6 +108,59 @@ function FinanceDashboard() {
                 <p className="text-sm font-bold text-green-700">{fmt(c._sum?.amount ?? 0)}</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Moto Fleet KPIs ─────────────────────────────────────────────── */}
+      {data?.moto && (
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Bike size={16} className="text-brand-600" /> Moto Fleet (Boda-boda) — This Month
+            </h3>
+            <Link href="/moto" className="text-xs text-brand-600 hover:underline font-medium">
+              Manage fleet →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {[
+              { label: 'Today collected',  value: fmt(data.moto.todayCollected), color: 'text-green-700', border: 'border-green-200', bg: 'bg-green-50' },
+              { label: 'Month collected',  value: fmt(data.moto.monthCollected), color: 'text-blue-700',  border: 'border-blue-200',  bg: 'bg-blue-50' },
+              { label: 'Total debt',        value: fmt(data.moto.totalDebt),       color: 'text-red-700',  border: 'border-red-200',   bg: 'bg-red-50' },
+              { label: 'Active drivers',   value: `${data.moto.activeDrivers} drivers`, color: 'text-gray-800', border: 'border-gray-200', bg: 'bg-gray-50' },
+            ].map(({ label, value, color, border, bg }) => (
+              <div key={label} className={`rounded-xl border ${border} ${bg} px-4 py-3`}>
+                <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+                <p className={`text-base font-bold tabular ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-3 border-t border-gray-100 pt-4">
+            {[
+              { label: 'Garage (month)',  value: fmt(data.moto.monthGarage), color: 'text-amber-600' },
+              { label: 'Fines (month)',   value: fmt(data.moto.monthFines),  color: 'text-orange-600' },
+              { label: 'Month net',       value: fmt(data.moto.monthNet),    color: data.moto.monthNet >= 0 ? 'text-teal-700' : 'text-red-700' },
+            ].map(({ label, value, color }) => (
+              <div key={label}>
+                <p className="text-xs text-gray-400">{label}</p>
+                <p className={`text-sm font-semibold tabular mt-0.5 ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-2 flex-wrap">
+            <Link href="/moto/payments"
+              className="text-xs px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-lg font-medium transition">
+              Record payment
+            </Link>
+            <Link href="/moto/reports"
+              className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition">
+              View reports
+            </Link>
+            <Link href="/moto/garage"
+              className="text-xs px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg font-medium transition">
+              Garage expenses
+            </Link>
           </div>
         </div>
       )}

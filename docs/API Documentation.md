@@ -364,6 +364,111 @@ PATCH  /notifications/preferences/:type        — toggle one alert type
 
 ---
 
+## Moto Fleet (Boda-boda / E-moto)
+
+All routes require authentication. Roles: SUPER_ADMIN, ADMIN, FLEET_MANAGER, FINANCE_MANAGER, DISPATCHER (write). All roles can read.
+
+### Drivers
+
+```
+GET    /moto/drivers
+  params: status, plate, search, active (true|false)
+  Returns: enriched list with hasBike, todayStatus, todayPaid, unpaidDays, totalDebt, finesCount
+
+GET    /moto/drivers/:id
+  Returns: driver + payments[] (last 90 days) + fines[] (last 50) + summary stats
+
+POST   /moto/drivers
+  Body: { firstName*, lastName*, phone*, altPhone?, nationalId?, licenseNumber?, licenseClass?,
+          address?, referral1Name?, referral1Phone?, referral2Name?, referral2Phone?,
+          plateNumber?, bikeModel?, dailyRate? (default 6000), weeklyRate? (default 42000),
+          paymentType? (DAILY|WEEKLY|MONTHLY), paymentDeadline? (default "21:00"),
+          status? (ACTIVE|INACTIVE|SUSPENDED), notes? }
+
+PUT    /moto/drivers/:id
+  Body: any subset of POST fields (partial update)
+
+PATCH  /moto/drivers/:id/assign-bike
+  Body: { plateNumber?, bikeModel? }
+  Note: if plateNumber is already assigned to another driver, it is automatically transferred
+        and that driver is set to INACTIVE
+```
+
+### Daily Payments
+
+```
+GET    /moto/payments
+  params: date, from, to, driverId, plate, status, limit (max 500)
+  Returns: payments[] with nested driver info
+
+GET    /moto/payments/today
+  Returns: { date, totalCollected, totalExpected, totalDebt, paidCount, debtCount,
+             notRecorded, activeDrivers, payments[] }
+
+POST   /moto/payments
+  Body: { driverId*, date*, paidAmount?, paidViaPhone?, paidViaCash?, notes? }
+  — paidAmount OR (paidViaPhone + paidViaCash) — one or the other
+  — If paid < expected   → status=DEBT, shortfall added to driver totalDebt
+  — If paid = 0          → status=DEBT, full rate added to driver totalDebt
+  — If paid >= expected  → excess covers previous debt first, then status=PAID
+  — Upserts: one record per (driverId, date)
+  Returns: payment + { driverName, plateNumber, debtAfter, message }
+```
+
+### Garage Expenses
+
+```
+GET    /moto/garage
+  params: from, to, plate, limit (max 500)
+  Returns: { data: expenses[], total }
+
+POST   /moto/garage
+  Body: { product*, amount*, date?, plateNumber?, category? (MAINTENANCE|REPAIR|PART|TYRES|
+          BATTERY|CLEANING|FUEL|BALANCE_CHECK|OTHER), notes? }
+```
+
+### Fines
+
+```
+GET    /moto/fines
+  params: plate, driverId, from, to
+
+POST   /moto/fines
+  Body: { plateNumber*, reason*, amount*, fineDate?, driverId?, paidByCompany? (bool), notes? }
+```
+
+### Reports
+
+```
+GET    /moto/reports/summary
+  params: from, to, driverId, plate
+  Returns:
+    period: { from, to }
+    totals: { totalCollected, totalExpected, totalDebt, totalFines, totalGarage, net,
+              paymentCount, daysCovered }
+    byDay:  [ { date, collected, expected, debt } ]  — sorted asc
+    fines:  MotoFine[]
+    garage: GarageExpense[]
+```
+
+### Finance Dashboard — Moto KPIs
+
+The `/financial/dashboard` endpoint now includes a `moto` object:
+```json
+"moto": {
+  "todayCollected":  <RWF collected today from all moto drivers>,
+  "monthCollected":  <RWF collected this month>,
+  "monthGarage":     <garage expenses this month>,
+  "monthFines":      <fines this month>,
+  "monthNet":        <monthCollected - monthGarage - monthFines>,
+  "totalDebt":       <sum of all driver totalDebt>,
+  "activeDrivers":   <count of active drivers with a bike assigned>
+}
+```
+Moto income is also merged into the top-level `today.income` and `month.income` figures.
+
+---
+
 ## Attendance (HR)
 
 ```
@@ -423,4 +528,4 @@ PATCH  /devices/:vehicleId/data-plan    — update data plan
 
 ---
 
-*API documentation last updated: November 2026*
+*API documentation last updated: October 2026*

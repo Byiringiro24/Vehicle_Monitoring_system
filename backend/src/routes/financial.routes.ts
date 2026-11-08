@@ -410,6 +410,61 @@ router.get('/dashboard', async (req: any, res, next) => {
       });
     }
 
+    // ── Moto fleet KPIs ──────────────────────────────────────────────────────
+    const tomorrow = new Date(todayStart.getTime() + 86400000);
+    const [
+      motoTodayPayments,
+      motoMonthPayments,
+      motoTodayGarage,
+      motoMonthGarage,
+      motoActiveDrivers,
+      motoTotalDebt,
+      motoMonthFines,
+    ] = await Promise.all([
+      // Today's moto collections
+      prisma.dailyPayment.aggregate({
+        where: { organizationId: orgId, date: { gte: todayStart, lt: tomorrow } },
+        _sum:  { paidAmount: true },
+      }),
+      // This month's moto collections
+      prisma.dailyPayment.aggregate({
+        where: { organizationId: orgId, date: { gte: monthStart } },
+        _sum:  { paidAmount: true },
+      }),
+      // Today's garage expenses
+      prisma.garageExpense.aggregate({
+        where: { organizationId: orgId, date: { gte: todayStart, lt: tomorrow } },
+        _sum:  { amount: true },
+      }),
+      // This month's garage expenses
+      prisma.garageExpense.aggregate({
+        where: { organizationId: orgId, date: { gte: monthStart } },
+        _sum:  { amount: true },
+      }),
+      // Active moto drivers (with bike)
+      prisma.motoDriver.count({
+        where: { organizationId: orgId, status: 'ACTIVE', plateNumber: { not: null } },
+      }),
+      // Total outstanding moto debt across all drivers
+      prisma.motoDriver.aggregate({
+        where: { organizationId: orgId },
+        _sum:  { totalDebt: true },
+      }),
+      // This month's moto fines
+      prisma.motoFine.aggregate({
+        where: { organizationId: orgId, fineDate: { gte: monthStart } },
+        _sum:  { amount: true },
+      }),
+    ]);
+
+    const motoTodayCollected  = motoTodayPayments._sum.paidAmount   ?? 0;
+    const motoMonthCollected  = motoMonthPayments._sum.paidAmount   ?? 0;
+    const motoMonthGarageAmt  = motoMonthGarage._sum.amount         ?? 0;
+    const motoTodayGarageAmt  = motoTodayGarage._sum.amount         ?? 0;
+    const motoDebtTotal       = motoTotalDebt._sum.totalDebt        ?? 0;
+    const motoMonthFinesAmt   = motoMonthFines._sum.amount          ?? 0;
+    const motoMonthNet        = motoMonthCollected - motoMonthGarageAmt - motoMonthFinesAmt;
+
     const ti = todayIncome._sum.amount  ?? 0;
     const te = todayExpenses._sum.amount ?? 0;
     const mi = monthIncome._sum.amount  ?? 0;
@@ -417,8 +472,8 @@ router.get('/dashboard', async (req: any, res, next) => {
     const netBusinessValue = vehicles.reduce((s, v) => s + (v.currentValue ?? v.purchasePrice ?? 0), 0);
 
     res.json({
-      today:  { income: ti, expenses: te, profit: ti - te },
-      month:  { income: mi, expenses: me, profit: mi - me },
+      today:  { income: ti + motoTodayCollected, expenses: te + motoTodayGarageAmt, profit: (ti + motoTodayCollected) - (te + motoTodayGarageAmt) },
+      month:  { income: mi + motoMonthCollected, expenses: me + motoMonthGarageAmt, profit: (mi + motoMonthCollected) - (me + motoMonthGarageAmt) },
       outstanding:     outstandingBalance._sum.amount ?? 0,
       dueTodayCount:   dueTodayPayments,
       overdueCount:    overduePayments,
@@ -432,6 +487,16 @@ router.get('/dashboard', async (req: any, res, next) => {
       topCustomers:       topCustomersWithNames,
       mostExpensiveVehicle,
       netBusinessValue,
+      // Moto fleet section (separate so the frontend can show it distinctly)
+      moto: {
+        todayCollected:  motoTodayCollected,
+        monthCollected:  motoMonthCollected,
+        monthGarage:     motoMonthGarageAmt,
+        monthFines:      motoMonthFinesAmt,
+        monthNet:        motoMonthNet,
+        totalDebt:       motoDebtTotal,
+        activeDrivers:   motoActiveDrivers,
+      },
     });
   } catch (err) { next(err); }
 });
