@@ -8,6 +8,8 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'http',  hostname: 'localhost' },
       { protocol: 'https', hostname: 'articvms.ddnsgeek.com' },
+      { protocol: 'https', hostname: '*.up.railway.app' },
+      { protocol: 'https', hostname: '*.supabase.co' },
     ],
   },
   env: {

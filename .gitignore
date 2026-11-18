@@ -11,6 +11,7 @@ out/
 # Environment — local overrides are never committed
 .env.local
 .env.*.local
+frontend/.env.local
 
 # Logs
 logs/

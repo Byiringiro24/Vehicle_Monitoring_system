@@ -3,8 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl is only needed when DATABASE_URL uses a connection pooler (e.g. Supabase PgBouncer).
+  // Set DIRECT_URL to the non-pooled Supabase URI. Leave it unset for Docker/VPS deploys.
+  directUrl = env("DIRECT_URL")
 }
 
 // =============================================================================
