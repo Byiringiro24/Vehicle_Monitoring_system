@@ -17,7 +17,6 @@ enum UserRole {
   ADMIN
   FLEET_MANAGER
   FINANCE_MANAGER
-  DISPATCHER
   HR_MANAGER
   MECHANIC
   COMPLIANCE_OFFICER
@@ -1840,8 +1839,12 @@ model MotoDriver {
   referral2Name  String?
   referral2Phone String?
   // Contract
-  contractSignedAt DateTime?
-  contractNotes    String?
+  contractSignedAt   DateTime?
+  contractNotes      String?
+  contractStatus     String    @default("DRAFT")  // DRAFT | PENDING_APPROVAL | APPROVED | REJECTED
+  contractCreatedBy  String?   // userId who drafted the contract
+  contractApprovedBy String?   // userId of ADMIN who approved
+  contractApprovedAt DateTime?
   // Bike assignment
   plateNumber    String?   // current assigned bike plate
   bikeModel      String?

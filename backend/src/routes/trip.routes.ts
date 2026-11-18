@@ -1,7 +1,7 @@
 /**
  * /api/v1/trips
  * Trip / dispatch management
- * Accessible to: SUPER_ADMIN, ADMIN, FLEET_MANAGER, DISPATCHER
+ * Accessible to: SUPER_ADMIN, ADMIN, FLEET_MANAGER
  */
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
@@ -11,7 +11,7 @@ import { AppError } from '../middleware/errorHandler';
 const router = Router();
 router.use(authenticate as any);
 
-const DISPATCH_ROLES = ['SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'DISPATCHER'] as const;
+const DISPATCH_ROLES = ['SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER'] as const;
 
 // ── GET /trips — list trips for this org ──────────────────────────────────────
 router.get('/', async (req: any, res, next) => {

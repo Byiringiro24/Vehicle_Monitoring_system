@@ -227,7 +227,7 @@ export async function me(req: AuthenticatedRequest, res: Response, next: NextFun
     for (const membership of membershipRoles) {
       const mapped = membership.role === 'COMPANY_OWNER' || membership.role === 'COMPANY_ADMIN' ? 'ADMIN' :
         membership.role === 'FLEET_MANAGER' ? 'FLEET_MANAGER' :
-        membership.role === 'DISPATCHER' ? 'DISPATCHER' :
+        membership.role === 'DISPATCHER' ? 'FLEET_MANAGER' :
         membership.role === 'FINANCE_MANAGER' || membership.role === 'ACCOUNTANT' ? 'FINANCE_MANAGER' :
         membership.role === 'HR_MANAGER' ? 'HR_MANAGER' :
         membership.role === 'MECHANIC' ? 'MECHANIC' :

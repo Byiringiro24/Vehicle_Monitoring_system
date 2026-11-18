@@ -119,7 +119,7 @@ function FinanceDashboard() {
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <Bike size={16} className="text-brand-600" /> Moto Fleet (Boda-boda) — This Month
             </h3>
-            <Link href="/moto" className="text-xs text-brand-600 hover:underline font-medium">
+            <Link href="/vehicle-report" className="text-xs text-brand-600 hover:underline font-medium">
               Manage fleet →
             </Link>
           </div>
@@ -149,15 +149,15 @@ function FinanceDashboard() {
             ))}
           </div>
           <div className="mt-3 flex gap-2 flex-wrap">
-            <Link href="/moto/payments"
+            <Link href="/vehicle-report/payments"
               className="text-xs px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-lg font-medium transition">
               Record payment
             </Link>
-            <Link href="/moto/reports"
+            <Link href="/vehicle-report/reports"
               className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition">
               View reports
             </Link>
-            <Link href="/moto/garage"
+            <Link href="/vehicle-report/garage"
               className="text-xs px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg font-medium transition">
               Garage expenses
             </Link>

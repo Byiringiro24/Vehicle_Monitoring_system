@@ -8,11 +8,11 @@ import logger from '../utils/logger';
 
 const VALID_ROLES = new Set([
   'SUPER_ADMIN', 'PLATFORM_SUPPORT', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT',
-  'DRIVER', 'VIEWER', 'SALES_AGENT', 'DISPATCHER', 'HR_MANAGER', 'MECHANIC', 'COMPLIANCE_OFFICER',
+  'DRIVER', 'VIEWER', 'SALES_AGENT', 'HR_MANAGER', 'MECHANIC', 'COMPLIANCE_OFFICER',
   'RENTAL_MANAGER', 'AUDITOR',
 ]);
 
-const ORG_APPROVAL_ROLES = new Set(['HR_MANAGER', 'MECHANIC', 'COMPLIANCE_OFFICER', 'FINANCE_MANAGER', 'DISPATCHER', 'RENTAL_MANAGER']);
+const ORG_APPROVAL_ROLES = new Set(['HR_MANAGER', 'MECHANIC', 'COMPLIANCE_OFFICER', 'FINANCE_MANAGER', 'RENTAL_MANAGER']);
 
 function normalizeRoleList(value: unknown): string[] {
   const list = Array.isArray(value) ? value : value ? [value] : [];

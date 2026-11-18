@@ -12,7 +12,7 @@ import { auditLog, getIp } from '../utils/audit';
 const router = Router();
 router.use(authenticate as any);
 
-const MOTO_ROLES = ['SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER', 'DISPATCHER'] as const;
+const MOTO_ROLES = ['SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER'] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  MOTO DRIVERS — CRUD + bike assignment + active filter
@@ -267,7 +267,7 @@ router.get('/payments', async (req: any, res, next) => {
 // - If they pay less → it's debt (difference added to totalDebt)
 // - If they pay more → it covers previous debt first, then credit
 // - If they don't pay → status DEBT, expected amount added to totalDebt
-router.post('/payments', authorize('SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'DISPATCHER') as any, async (req: any, res, next) => {
+router.post('/payments', authorize('SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'FLEET_MANAGER') as any, async (req: any, res, next) => {
   try {
     const { driverId, date, paidAmount, paidViaPhone, paidViaCash, notes } = req.body;
 
@@ -557,6 +557,117 @@ router.get('/reports/summary', async (req: any, res, next) => {
       fines,
       garage,
     });
+  } catch (err) { next(err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CONTRACT APPROVAL WORKFLOW
+//  - FLEET_MANAGER: initialise contract (set to PENDING_APPROVAL)
+//  - ADMIN / SUPER_ADMIN: approve or reject
+// ═══════════════════════════════════════════════════════════════════════════
+
+// PATCH /moto/drivers/:id/contract/submit — FLEET_MANAGER submits for approval
+router.patch('/drivers/:id/contract/submit', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER') as any, async (req: any, res, next) => {
+  try {
+    const driver = await prisma.motoDriver.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
+    });
+    if (!driver) throw new AppError(404, 'Driver not found');
+    if ((driver as any).contractStatus === 'APPROVED') {
+      res.status(400).json({ error: 'Contract is already approved. Create a new revision to change it.' });
+      return;
+    }
+
+    const { contractNotes } = req.body;
+    const updated = await (prisma.motoDriver as any).update({
+      where: { id: req.params.id },
+      data: {
+        contractStatus:    'PENDING_APPROVAL',
+        contractCreatedBy: req.user.userId,
+        ...(contractNotes !== undefined && { contractNotes }),
+      },
+    });
+
+    auditLog({ organizationId: req.user.organizationId, userId: req.user.userId,
+      action: 'moto_contract.submit', targetType: 'moto_driver', targetId: driver.id,
+      after: { driver: `${driver.firstName} ${driver.lastName}`, status: 'PENDING_APPROVAL' },
+      ipAddress: getIp(req) });
+
+    res.json({ ...updated, message: 'Contract submitted for admin approval.' });
+  } catch (err) { next(err); }
+});
+
+// PATCH /moto/drivers/:id/contract/approve — ADMIN / SUPER_ADMIN approves
+router.patch('/drivers/:id/contract/approve', authorize('SUPER_ADMIN', 'ADMIN') as any, async (req: any, res, next) => {
+  try {
+    const driver = await prisma.motoDriver.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
+    });
+    if (!driver) throw new AppError(404, 'Driver not found');
+    if ((driver as any).contractStatus !== 'PENDING_APPROVAL') {
+      res.status(400).json({ error: `Contract must be in PENDING_APPROVAL state to approve. Current state: ${(driver as any).contractStatus}` });
+      return;
+    }
+
+    const { contractNotes } = req.body;
+    const updated = await (prisma.motoDriver as any).update({
+      where: { id: req.params.id },
+      data: {
+        contractStatus:    'APPROVED',
+        contractSignedAt:  new Date(),
+        contractApprovedBy: req.user.userId,
+        contractApprovedAt: new Date(),
+        ...(contractNotes !== undefined && { contractNotes }),
+      },
+    });
+
+    auditLog({ organizationId: req.user.organizationId, userId: req.user.userId,
+      action: 'moto_contract.approve', targetType: 'moto_driver', targetId: driver.id,
+      after: { driver: `${driver.firstName} ${driver.lastName}`, approvedBy: req.user.userId },
+      ipAddress: getIp(req) });
+
+    res.json({ ...updated, message: `Contract approved for ${driver.firstName} ${driver.lastName}.` });
+  } catch (err) { next(err); }
+});
+
+// PATCH /moto/drivers/:id/contract/reject — ADMIN / SUPER_ADMIN rejects
+router.patch('/drivers/:id/contract/reject', authorize('SUPER_ADMIN', 'ADMIN') as any, async (req: any, res, next) => {
+  try {
+    const driver = await prisma.motoDriver.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
+    });
+    if (!driver) throw new AppError(404, 'Driver not found');
+
+    const { reason } = req.body;
+    const updated = await prisma.motoDriver.update({
+      where: { id: req.params.id },
+      data: {
+        contractNotes:  reason ? `REJECTED: ${reason}` : 'REJECTED',
+      },
+    });
+    // Also update contractStatus via raw to avoid prisma client type lag
+    await (prisma.motoDriver as any).update({
+      where: { id: req.params.id },
+      data: { contractStatus: 'REJECTED' },
+    });
+
+    auditLog({ organizationId: req.user.organizationId, userId: req.user.userId,
+      action: 'moto_contract.reject', targetType: 'moto_driver', targetId: driver.id,
+      after: { driver: `${driver.firstName} ${driver.lastName}`, reason },
+      ipAddress: getIp(req) });
+
+    res.json({ ...updated, contractStatus: 'REJECTED', message: 'Contract rejected.' });
+  } catch (err) { next(err); }
+});
+
+// GET /moto/contracts/pending — ADMIN list all contracts pending approval in this org
+router.get('/contracts/pending', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER') as any, async (req: any, res, next) => {
+  try {
+    const drivers = await (prisma.motoDriver as any).findMany({
+      where: { organizationId: req.user.organizationId, contractStatus: 'PENDING_APPROVAL' },
+      orderBy: { updatedAt: 'asc' },
+    });
+    res.json(drivers);
   } catch (err) { next(err); }
 });
 

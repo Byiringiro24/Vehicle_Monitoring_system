@@ -9,7 +9,6 @@ const FinanceDashboard     = dynamic(() => import('./_dashboards/FinanceDashboar
 const DriverDashboard      = dynamic(() => import('./_dashboards/DriverDashboard'),      { ssr: false });
 const ViewerDashboard      = dynamic(() => import('./_dashboards/ViewerDashboard'),      { ssr: false });
 const AdminDashboard       = dynamic(() => import('./_dashboards/AdminDashboard'),       { ssr: false });
-const DispatcherDashboard  = dynamic(() => import('./_dashboards/DispatcherDashboard'),  { ssr: false });
 const HRDashboard          = dynamic(() => import('./_dashboards/HRDashboard'),          { ssr: false });
 const MechanicDashboard    = dynamic(() => import('./_dashboards/MechanicDashboard'),    { ssr: false });
 const ComplianceDashboard  = dynamic(() => import('./_dashboards/ComplianceDashboard'),  { ssr: false });
@@ -25,7 +24,6 @@ export default function DashboardPage() {
   if (role === 'FINANCE_MANAGER')                        return <FinanceDashboard />;
   if (role === 'DRIVER')                                 return <DriverDashboard />;
   if (role === 'FLEET_MANAGER')                          return <FleetDashboard />;
-  if (role === 'DISPATCHER')                             return <DispatcherDashboard />;
   if (role === 'HR_MANAGER')                             return <HRDashboard />;
   if (role === 'MECHANIC')                               return <MechanicDashboard />;
   if (role === 'COMPLIANCE_OFFICER')                     return <ComplianceDashboard />;

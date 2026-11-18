@@ -16,7 +16,7 @@ function mapMembershipRoleToLegacyRole(role?: string | null) {
     case 'FLEET_MANAGER':
       return 'FLEET_MANAGER';
     case 'DISPATCHER':
-      return 'DISPATCHER';
+      return 'FLEET_MANAGER';
     case 'FINANCE_MANAGER':
     case 'ACCOUNTANT':
       return 'FINANCE_MANAGER';

@@ -378,7 +378,7 @@ export const sessionApi = {
   revokeAll: (currentToken?: string) => apiClient.delete('/auth/sessions', { data: { currentToken } }).then(r => r.data),
 };
 
-// ─── Motorcycle Fleet (Boda-boda / E-moto) ────────────────────────────────────
+// ─── Vehicle Fleet Report (Boda-boda / E-moto / any vehicle) ─────────────────
 export const motoApi = {
   // Drivers
   listDrivers:   (params?: object) => apiClient.get('/moto/drivers', { params }).then(r => r.data),
@@ -404,4 +404,14 @@ export const motoApi = {
 
   // Reports
   reportSummary: (params?: object) => apiClient.get('/moto/reports/summary', { params }).then(r => r.data),
+
+  // Contract approval workflow
+  submitContract: (driverId: string, notes?: string) =>
+    apiClient.patch(`/moto/drivers/${driverId}/contract/submit`, { contractNotes: notes }).then(r => r.data),
+  approveContract: (driverId: string, notes?: string) =>
+    apiClient.patch(`/moto/drivers/${driverId}/contract/approve`, { contractNotes: notes }).then(r => r.data),
+  rejectContract:  (driverId: string, reason?: string) =>
+    apiClient.patch(`/moto/drivers/${driverId}/contract/reject`, { reason }).then(r => r.data),
+  pendingContracts: () => apiClient.get('/moto/contracts/pending').then(r => r.data),
 };
+
