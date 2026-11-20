@@ -235,6 +235,12 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
       return;
     }
 
+    // SUPER_ADMIN can only create ADMIN users — all other roles are created by ADMIN
+    if (req.user.role === 'SUPER_ADMIN' && !requestedRoles.every(r => r === 'ADMIN')) {
+      res.status(403).json({ error: 'Super Admin can only create Company Admin accounts. All other roles must be created by a Company Admin.' });
+      return;
+    }
+
     const orgId = req.user.organizationId;
     const subscription = await prisma.subscription.findUnique({ where: { organizationId: orgId }, select: { seats: true, seatsUsed: true, status: true } });
     if (subscription && subscription.status !== 'TRIAL' && subscription.status !== 'ACTIVE' && subscription.status !== 'PAST_DUE') {
