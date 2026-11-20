@@ -17,9 +17,14 @@ async function bootstrap() {
   await prisma.$connect();
   logger.info('PostgreSQL connected');
 
-  // Test Redis
-  await redis.ping();
-  logger.info('Redis connected');
+  // Test Redis (non-fatal — sessions degrade gracefully if Redis is unavailable)
+  try {
+    await redis.connect();
+    await redis.ping();
+    logger.info('Redis connected');
+  } catch {
+    logger.warn('Redis not available — rate limiting and session blacklisting disabled');
+  }
 
   // Verify SMTP (non-blocking — a misconfigured SMTP should not prevent startup)
   verifySmtpConnection().catch(() => {});

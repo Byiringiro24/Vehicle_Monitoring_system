@@ -37,6 +37,19 @@ export function initMqttClient() {
     clientId:        'artic-backend-bridge',
     reconnectPeriod: 5000,
     connectTimeout:  10000,
+    // Stop retrying after 5 attempts when no broker is available (e.g. local dev)
+  });
+
+  // Stop retrying after 5 failed attempts to avoid log spam in local dev
+  let reconnectCount = 0;
+  client.on('reconnect', () => {
+    reconnectCount++;
+    if (reconnectCount >= 5) {
+      logger.warn('MQTT broker not available after 5 attempts — disabling reconnect. Start a local MQTT broker to enable GPS features.');
+      client!.end(true);
+    } else {
+      logger.info('MQTT client reconnecting…');
+    }
   });
 
   client.on('connect', () => {
@@ -161,7 +174,6 @@ export function initMqttClient() {
 
   client.on('error',   (err) => logger.warn(`MQTT client error: ${err.message}`));
   client.on('offline', () => logger.warn('MQTT client offline'));
-  client.on('reconnect', () => logger.info('MQTT client reconnecting…'));
 
   // ── Offline detection — check every 5s if any device has gone silent ────────
   setInterval(async () => {
