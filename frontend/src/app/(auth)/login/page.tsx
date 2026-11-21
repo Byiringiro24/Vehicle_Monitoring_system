@@ -49,15 +49,20 @@ function LoginForm() {
       setAuth(result.user, result.accessToken, result.refreshToken);
       toast.success(`Welcome back, ${result.user.firstName}!`);
 
-      // FIX #8: For personal accounts (VIEWER/DRIVER), check stored intendedRole
-      // to route them to the correct portal instead of always /dashboard
+      const allRoles = Array.from(new Set([result.user.role, ...(result.user.roles ?? [])])).filter(Boolean) as string[];
+      const intendedRole = (result.user as any).intendedRole as string | undefined;
+
+      // If user has multiple roles, let them pick before entering the dashboard
+      if (allRoles.length > 1 && !intendedRole) {
+        router.push('/select-role');
+        return;
+      }
+
       const PERSONAL_ROLE_HOME: Record<string, string> = {
         owner:    '/owner',
         driver:   '/dashboard',
         customer: '/dashboard',
       };
-      const allRoles = [result.user.role, ...(result.user.roles ?? [])].filter(Boolean) as string[];
-      const intendedRole = (result.user as any).intendedRole as string | undefined;
       const personalHome = intendedRole ? PERSONAL_ROLE_HOME[intendedRole] : undefined;
       const primaryRole = allRoles[0] ?? result.user.role;
       const home = personalHome ?? ROLE_HOME[primaryRole] ?? '/dashboard';

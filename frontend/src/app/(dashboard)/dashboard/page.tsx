@@ -17,8 +17,8 @@ const SalesDashboard       = dynamic(() => import('./_dashboards/SalesDashboard'
 const AuditorDashboard     = dynamic(() => import('./_dashboards/AuditorDashboard'),     { ssr: false });
 
 export default function DashboardPage() {
-  const { user } = useAuthStore();
-  const role = (user?.role ?? 'VIEWER') as AppRole;
+  const { user, activeRole } = useAuthStore();
+  const role = (activeRole ?? user?.role ?? 'VIEWER') as AppRole;
 
   if (role === 'SUPER_ADMIN' || role === 'ADMIN')        return <AdminDashboard />;
   if (role === 'FINANCE_MANAGER')                        return <FinanceDashboard />;

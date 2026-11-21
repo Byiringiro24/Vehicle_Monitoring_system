@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Bell, LogOut, Moon, Sun, X, Menu } from 'lucide-react';
+import { Bell, LogOut, Moon, Sun, X, Menu, ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { useRouter } from 'next/navigation';
@@ -10,16 +10,41 @@ import toast from 'react-hot-toast';
 import { useTheme } from 'next-themes';
 import { getSeverityColor, formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { ROLE_HOME } from '@/lib/roles';
+
+const ROLE_COLORS: Record<string, string> = {
+  SUPER_ADMIN:        'bg-red-100 text-red-700 border-red-200',
+  ADMIN:              'bg-orange-100 text-orange-700 border-orange-200',
+  FLEET_MANAGER:      'bg-blue-100 text-blue-700 border-blue-200',
+  FINANCE_MANAGER:    'bg-purple-100 text-purple-700 border-purple-200',
+  HR_MANAGER:         'bg-indigo-100 text-indigo-700 border-indigo-200',
+  MECHANIC:           'bg-yellow-100 text-yellow-700 border-yellow-200',
+  COMPLIANCE_OFFICER: 'bg-teal-100 text-teal-700 border-teal-200',
+  RENTAL_MANAGER:     'bg-cyan-100 text-cyan-700 border-cyan-200',
+  SALES_AGENT:        'bg-pink-100 text-pink-700 border-pink-200',
+  AUDITOR:            'bg-slate-100 text-slate-700 border-slate-200',
+  DRIVER:             'bg-green-100 text-green-700 border-green-200',
+  VIEWER:             'bg-gray-100 text-gray-600 border-gray-200',
+  PLATFORM_SUPPORT:   'bg-rose-100 text-rose-700 border-rose-200',
+};
 
 export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
-  const { user, logout, refreshToken, accessToken } = useAuthStore();
+  const { user, logout, refreshToken, accessToken, activeRole, switchRole } = useAuthStore();
   const { notifications, unreadCount, addNotification, markAllRead, clearAll } = useNotificationStore();
-  const router = useRouter();
+  const router  = useRouter();
   const { theme, setTheme } = useTheme();
-  const [showNotifs, setShowNotifs] = useState(false);
-  const bellRef = useRef<HTMLDivElement>(null);
 
-  // Listen for real-time alerts and add to notification store
+  const [showNotifs,     setShowNotifs]     = useState(false);
+  const [showRolePicker, setShowRolePicker] = useState(false);
+
+  const bellRef    = useRef<HTMLDivElement>(null);
+  const roleRef    = useRef<HTMLDivElement>(null);
+
+  const allRoles   = Array.from(new Set([user?.role, ...(user?.roles ?? [])])).filter(Boolean) as string[];
+  const currentRole = activeRole ?? user?.role ?? '';
+  const hasMultipleRoles = allRoles.length > 1;
+
+  // Listen for real-time alerts
   useEffect(() => {
     if (!accessToken) return;
     const socket = getSocket(accessToken);
@@ -34,10 +59,11 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
     return () => { socket.off('alert:new'); };
   }, [accessToken, addNotification]);
 
-  // Close notification panel on outside click
+  // Close panels on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setShowNotifs(false);
+      if (bellRef.current && !bellRef.current.contains(e.target as Node))  setShowNotifs(false);
+      if (roleRef.current && !roleRef.current.contains(e.target as Node))  setShowRolePicker(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -51,10 +77,18 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
     toast.success('Logged out');
   }
 
+  function handleSwitchRole(role: string) {
+    switchRole(role);
+    setShowRolePicker(false);
+    const home = ROLE_HOME[role as keyof typeof ROLE_HOME] ?? '/dashboard';
+    router.push(home);
+    toast.success(`Switched to ${role.replace(/_/g, ' ')}`);
+  }
+
   return (
     <header className="h-16 bg-white/80 border-b border-slate-200/80 backdrop-blur-xl flex items-center justify-between px-4 md:px-6 shrink-0 shadow-[0_8px_28px_rgba(15,23,42,0.04)] z-10">
+      {/* Left — hamburger + org name */}
       <div className="flex items-center gap-3">
-        {/* Hamburger — mobile only */}
         <button
           onClick={onMenuClick}
           className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition"
@@ -66,7 +100,71 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400 leading-tight">Vehicle Monitoring System</p>
         </div>
       </div>
+
+      {/* Right — role switcher + theme + bell + avatar + logout */}
       <div className="flex items-center gap-1.5">
+
+        {/* ── Role switcher ──────────────────────────────────────────────── */}
+        {hasMultipleRoles && (
+          <div className="relative" ref={roleRef}>
+            <button
+              onClick={() => setShowRolePicker(v => !v)}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition',
+                ROLE_COLORS[currentRole] ?? 'bg-gray-100 text-gray-700 border-gray-200',
+                'hover:opacity-80'
+              )}
+              title="Switch role">
+              <ArrowLeftRight size={12} />
+              <span className="hidden sm:inline">{currentRole.replace(/_/g, ' ')}</span>
+              <ChevronDown size={11} className={cn('transition-transform', showRolePicker && 'rotate-180')} />
+            </button>
+
+            {showRolePicker && (
+              <div className="absolute right-0 top-11 w-56 bg-white rounded-2xl shadow-[0_25px_50px_rgba(15,23,42,0.18)] border border-slate-200 z-50 overflow-hidden">
+                <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+                  <p className="text-xs font-semibold text-slate-600">Switch operating role</p>
+                </div>
+                <div className="py-1.5 max-h-72 overflow-y-auto">
+                  {allRoles.map(role => (
+                    <button
+                      key={role}
+                      onClick={() => handleSwitchRole(role)}
+                      className={cn(
+                        'w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm transition',
+                        currentRole === role
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      )}>
+                      <span className={cn(
+                        'w-2 h-2 rounded-full shrink-0',
+                        currentRole === role ? 'bg-brand-500' : 'bg-slate-200'
+                      )} />
+                      <div className="flex-1">
+                        <p className="font-medium text-xs">{role.replace(/_/g, ' ')}</p>
+                      </div>
+                      {currentRole === role && (
+                        <span className="text-[9px] font-bold text-brand-500 uppercase tracking-wider">Active</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Single role badge — no switcher */}
+        {!hasMultipleRoles && (
+          <span className={cn(
+            'hidden sm:inline-flex items-center px-2.5 py-1 rounded-xl border text-xs font-semibold',
+            ROLE_COLORS[currentRole] ?? 'bg-gray-100 text-gray-700 border-gray-200'
+          )}>
+            {currentRole.replace(/_/g, ' ')}
+          </span>
+        )}
+
+        {/* Theme toggle */}
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           className="p-2.5 rounded-xl text-slate-600 hover:bg-slate-100 transition border border-slate-200/80 bg-white/70"
@@ -114,16 +212,16 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
           )}
         </div>
 
-        {/* User avatar + profile link */}
+        {/* User avatar */}
         <a href="/profile"
           className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-gray-100 transition group"
-          title={`${user?.firstName} ${user?.lastName} — ${user?.role?.replace(/_/g,' ')}`}>
+          title={`${user?.firstName} ${user?.lastName} — ${currentRole.replace(/_/g,' ')}`}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0">
             {user?.firstName?.[0]}{user?.lastName?.[0]}
           </div>
           <div className="hidden md:block text-left">
             <p className="text-xs font-semibold text-gray-800 leading-tight">{user?.firstName} {user?.lastName}</p>
-            <p className="text-[10px] text-gray-400 leading-tight">{user?.role?.replace(/_/g,' ')}</p>
+            <p className="text-[10px] text-gray-400 leading-tight">{currentRole.replace(/_/g,' ')}</p>
           </div>
         </a>
 
