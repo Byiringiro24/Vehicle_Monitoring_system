@@ -74,15 +74,26 @@ async function notifyOrgOwnersOfSensitiveUserAction(
 const router = Router();
 router.use(authenticate);
 
-// ── GET /users — list users in the caller's organisation (all authenticated users) ──
-router.get('/', async (req: any, res, next) => {
+// ── GET /users — list users in the caller's organisation ─────────────────────
+// ADMIN: sees only their org's users, SUPER_ADMIN excluded from results
+router.get('/', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER', 'HR_MANAGER'), async (req: any, res, next) => {
   try {
+    const isAdmin      = req.user.role === 'ADMIN';
+    const isSuperAdmin = req.user.role === 'SUPER_ADMIN';
+
+    const where: any = { organizationId: req.user.organizationId };
+
+    // ADMIN must NOT see SUPER_ADMIN accounts in their list
+    if (isAdmin) {
+      where.role = { not: 'SUPER_ADMIN' };
+    }
+
     const users = await prisma.user.findMany({
-      where: { organizationId: req.user.organizationId },
+      where,
       select: {
         id: true, email: true, firstName: true, lastName: true,
-        role: true, isActive: true, lastLoginAt: true, createdAt: true,
-        phone: true,
+        role: true, roles: true, pendingRoles: true,
+        isActive: true, lastLoginAt: true, createdAt: true, phone: true,
       },
       orderBy: { createdAt: 'desc' },
     });

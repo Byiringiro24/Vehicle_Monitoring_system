@@ -13,12 +13,13 @@ import {
   Clock, XCircle, MessageSquare, Headphones, Plus, Trash2, Save,
   Mail, Phone, MessageCircle, Instagram, Video,
   BarChart3, FileText, Cpu, Database, Wifi, RefreshCw,
-  CheckCircle, Circle, Edit2,
+  CheckCircle, Circle, Edit2, ToggleLeft, ToggleRight, Zap, Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MetricCard } from '@/components/ui/MetricCard';
+import { FEATURE_CATALOG, type FeatureInfo } from '@/lib/featureCatalog';
 
-type PlatformTab = 'companies' | 'pending' | 'tickets' | 'contacts' | 'plans' | 'audit' | 'health';
+type PlatformTab = 'companies' | 'pending' | 'features' | 'tickets' | 'contacts' | 'plans' | 'audit' | 'health';
 
 const STATUS_COLORS: Record<string, string> = {
   TRIAL:      'bg-blue-100 text-blue-800',
@@ -153,6 +154,7 @@ export default function PlatformPage() {
   const TABS: { id: PlatformTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'companies', label: 'Companies',   icon: <Building2 size={14} /> },
     { id: 'pending',   label: 'Pending',     icon: <Clock size={14} />,         badge: (pendingOrgs as any[]).length },
+    { id: 'features',  label: 'Features',    icon: <Shield size={14} /> },
     { id: 'tickets',   label: 'Support',     icon: <MessageSquare size={14} />, badge: openTickets },
     { id: 'contacts',  label: 'Contacts',    icon: <Headphones size={14} /> },
     { id: 'plans',     label: 'Plans',       icon: <CreditCard size={14} /> },
@@ -501,6 +503,11 @@ export default function PlatformPage() {
         </div>
       )}
 
+      {/* ── FEATURES TAB ─────────────────────────────────────────────────────── */}
+      {tab === 'features' && (
+        <FeaturesTab orgs={orgs} />
+      )}
+
       {/* ── AUDIT LOG TAB ─────────────────────────────────────────────────────── */}
       {tab === 'audit' && (
         <div className="space-y-4">
@@ -685,6 +692,243 @@ export default function PlatformPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURES TAB — Super Admin controls which features each company can use
+// ═══════════════════════════════════════════════════════════════════════════
+const CORE_CODES = new Set([
+  'core.dashboard','core.vehicles','gps.live_map','gps.history',
+  'gps.geofences','core.drivers','core.alerts','core.maintenance',
+  'core.documents','core.agreements','core.finance','core.customers','core.reports',
+]);
+
+function FeaturesTab({ orgs }: { orgs: any[] }) {
+  const qc = useQueryClient();
+  const [selectedOrg, setSelectedOrg] = useState<any>(orgs[0] ?? null);
+  const [search, setSearch] = useState('');
+
+  // Load entitlements for selected org
+  const { data: entitlements = [], isLoading: entLoading } = useQuery<any[]>({
+    queryKey: ['org-entitlements', selectedOrg?.id],
+    queryFn: () => selectedOrg
+      ? apiClient.get('/entitlements', { params: { organizationId: selectedOrg.id } })
+          .then(r => r.data).catch(() => [])
+      : Promise.resolve([]),
+    enabled: !!selectedOrg,
+  });
+
+  const enabledCodes = new Set((entitlements as any[]).map((e: any) => e.featureCode));
+
+  const grantMutation = useMutation({
+    mutationFn: (featureCode: string) =>
+      apiClient.post('/entitlements', { organizationId: selectedOrg!.id, featureCode }).then(r => r.data),
+    onSuccess: (_data, featureCode) => {
+      qc.invalidateQueries({ queryKey: ['org-entitlements', selectedOrg?.id] });
+      toast.success(`Feature enabled: ${FEATURE_CATALOG[featureCode]?.name ?? featureCode}`);
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to enable feature'),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (featureCode: string) => {
+      const ent = (entitlements as any[]).find((e: any) => e.featureCode === featureCode);
+      if (!ent) return Promise.reject(new Error('Entitlement not found'));
+      return apiClient.delete(`/entitlements/${ent.id}`).then(r => r.data);
+    },
+    onSuccess: (_data, featureCode) => {
+      qc.invalidateQueries({ queryKey: ['org-entitlements', selectedOrg?.id] });
+      toast.success(`Feature disabled: ${FEATURE_CATALOG[featureCode]?.name ?? featureCode}`);
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to disable feature'),
+  });
+
+  function toggleFeature(code: string, currentlyEnabled: boolean) {
+    if (CORE_CODES.has(code)) return; // core features cannot be toggled
+    if (currentlyEnabled) revokeMutation.mutate(code);
+    else grantMutation.mutate(code);
+  }
+
+  function enableAll() {
+    const premiumCodes = Object.keys(FEATURE_CATALOG).filter(c => !CORE_CODES.has(c) && !enabledCodes.has(c));
+    premiumCodes.forEach(code => grantMutation.mutate(code));
+  }
+
+  function disableAll() {
+    const premiumEnabled = (entitlements as any[]).filter((e: any) => !CORE_CODES.has(e.featureCode));
+    premiumEnabled.forEach((e: any) => apiClient.delete(`/entitlements/${e.id}`).then(() => {
+      qc.invalidateQueries({ queryKey: ['org-entitlements', selectedOrg?.id] });
+    }));
+    toast.success('All premium features disabled');
+  }
+
+  const allFeatures = Object.values(FEATURE_CATALOG);
+  const categories = Array.from(new Set(allFeatures.map(f => f.category)));
+
+  const filtered = search
+    ? allFeatures.filter(f =>
+        f.name.toLowerCase().includes(search.toLowerCase()) ||
+        f.code.toLowerCase().includes(search.toLowerCase()) ||
+        f.description.toLowerCase().includes(search.toLowerCase()))
+    : allFeatures;
+
+  const premiumEnabled  = allFeatures.filter(f => !CORE_CODES.has(f.code) && enabledCodes.has(f.code)).length;
+  const premiumTotal    = allFeatures.filter(f => !CORE_CODES.has(f.code)).length;
+
+  return (
+    <div className="space-y-5">
+      {/* Org selector */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Select Company</label>
+            <select
+              value={selectedOrg?.id ?? ''}
+              onChange={e => setSelectedOrg(orgs.find(o => o.id === e.target.value) ?? null)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {orgs.length === 0 && <option value="">No companies yet</option>}
+              {orgs.map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedOrg && (
+            <div className="flex items-center gap-2 shrink-0">
+              <div className={cn(
+                'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full',
+                selectedOrg.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              )}>
+                <div className={cn('w-1.5 h-1.5 rounded-full', selectedOrg.status === 'ACTIVE' ? 'bg-green-500' : 'bg-gray-400')} />
+                {selectedOrg.status}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {selectedOrg && (
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
+            <div className="text-sm text-gray-600">
+              <span className="font-semibold text-brand-700">{CORE_CODES.size}</span> core features always on ·{' '}
+              <span className="font-semibold text-green-700">{premiumEnabled}</span> / {premiumTotal} premium features enabled
+            </div>
+            <div className="flex gap-2">
+              <button onClick={enableAll}
+                className="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition flex items-center gap-1.5">
+                <Zap size={12} /> Enable all premium
+              </button>
+              <button onClick={disableAll}
+                className="text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg font-medium transition flex items-center gap-1.5">
+                <Lock size={12} /> Disable all premium
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search features…"
+          className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {!selectedOrg ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
+          Select a company above to manage its features
+        </div>
+      ) : entLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[...Array(9)].map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {(search ? ['Search results'] : categories).map(cat => {
+            const items = search
+              ? filtered
+              : filtered.filter(f => f.category === cat);
+            if (!items.length) return null;
+            return (
+              <div key={cat}>
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">{cat}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {items.map(feature => {
+                    const isCore    = CORE_CODES.has(feature.code);
+                    const isEnabled = isCore || enabledCodes.has(feature.code);
+                    const isLoading = grantMutation.isPending || revokeMutation.isPending;
+
+                    return (
+                      <div key={feature.code}
+                        className={cn(
+                          'rounded-xl border p-4 transition-all',
+                          isCore
+                            ? 'border-brand-200 bg-brand-50'
+                            : isEnabled
+                              ? 'border-green-200 bg-green-50'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                        )}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className={cn('text-sm font-semibold truncate',
+                                isCore ? 'text-brand-800' : isEnabled ? 'text-green-800' : 'text-gray-800')}>
+                                {feature.name}
+                              </p>
+                              {isCore && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-brand-200 text-brand-700 px-1.5 py-0.5 rounded-full shrink-0">CORE</span>
+                              )}
+                              {!isCore && isEnabled && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-green-200 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">ON</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 leading-snug line-clamp-2">{feature.description}</p>
+                            <p className="text-[10px] text-gray-400 mt-1.5">
+                              Min plan: <span className="font-medium">{feature.minPlan}</span>
+                            </p>
+                          </div>
+
+                          {/* Toggle */}
+                          <button
+                            disabled={isCore || isLoading}
+                            onClick={() => toggleFeature(feature.code, isEnabled)}
+                            className={cn(
+                              'shrink-0 mt-0.5 transition',
+                              isCore ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:scale-110'
+                            )}
+                            title={isCore ? 'Core feature — always enabled' : isEnabled ? 'Click to disable' : 'Click to enable'}
+                          >
+                            {isEnabled
+                              ? <ToggleRight size={28} className={isCore ? 'text-brand-400' : 'text-green-500'} />
+                              : <ToggleLeft size={28} className="text-gray-300" />}
+                          </button>
+                        </div>
+
+                        {/* Benefits preview */}
+                        {isEnabled && feature.benefits.length > 0 && (
+                          <div className="mt-2.5 pt-2.5 border-t border-green-100 space-y-0.5">
+                            {feature.benefits.slice(0, 2).map(b => (
+                              <p key={b} className="text-[10px] text-green-700 flex items-start gap-1">
+                                <CheckCircle size={9} className="shrink-0 mt-0.5" /> {b}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

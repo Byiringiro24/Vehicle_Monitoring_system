@@ -2,12 +2,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, financialApi, expenseApi, reportApi } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { format, subDays } from 'date-fns';
-import { Download, Calendar, BarChart3, Truck, Users, DollarSign,
+import { Download, FileSpreadsheet, Calendar, BarChart3, Truck, Users, DollarSign,
   MapPin, TrendingUp, AlertTriangle, Fuel } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 
 type Tab = 'summary' | 'fleet' | 'vehicles' | 'drivers' | 'financial' | 'daily';
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#14b8a6'];
@@ -32,6 +34,36 @@ function exportCSV(data: object[], filename: string) {
   a.click();
 }
 
+// ─── Excel export helper ─────────────────────────────────────────────────────
+function buildReportHeader(ws: XLSX.WorkSheet, orgName: string, reportTitle: string, from: string, to: string, startRow: number = 0) {
+  XLSX.utils.sheet_add_aoa(ws, [
+    ['ARTIC VMS — ' + orgName],
+    [reportTitle],
+    [`Date range: ${from} to ${to}`],
+    [`Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`],
+    [],
+  ], { origin: { r: startRow, c: 0 } });
+}
+
+function exportToExcel(sheets: { name: string; headers: string[]; rows: (string | number | null)[][] }[], filename: string, orgName: string, reportTitle: string, from: string, to: string) {
+  const wb = XLSX.utils.book_new();
+  for (const sheet of sheets) {
+    const ws = XLSX.utils.aoa_to_sheet([]);
+    // Header block
+    buildReportHeader(ws, orgName, reportTitle, from, to, 0);
+    // Column headers
+    XLSX.utils.sheet_add_aoa(ws, [sheet.headers], { origin: { r: 5, c: 0 } });
+    // Data rows
+    XLSX.utils.sheet_add_aoa(ws, sheet.rows, { origin: { r: 6, c: 0 } });
+    // Style widths
+    ws['!cols'] = sheet.headers.map((_, i) => ({ wch: Math.max(16, ...sheet.rows.map(r => String(r[i] ?? '').length)) }));
+    // Merge title row
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: sheet.headers.length - 1 } }];
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name.substring(0, 31));
+  }
+  XLSX.writeFile(wb, `${filename}_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+}
+
 function DateRange({ from, to, setFrom, setTo }: any) {
   return (
     <div className="flex items-center gap-4 flex-wrap bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
@@ -52,6 +84,15 @@ function ExportBtn({ data, name }: { data: object[]; name: string }) {
     <button onClick={() => exportCSV(data, name)}
       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition">
       <Download size={14} /> Export CSV
+    </button>
+  );
+}
+
+function ExcelBtn({ onClick, label = 'Export Excel' }: { onClick: () => void; label?: string }) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm rounded-lg transition">
+      <FileSpreadsheet size={14} /> {label}
     </button>
   );
 }
@@ -479,6 +520,8 @@ function FinancialTab({ from, to }: { from: string; to: string }) {
 }
 
 function DailyPaymentsTab() {
+  const { user } = useAuthStore();
+  const orgName  = (user as any)?.organization?.name ?? 'ARTIC VMS';
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -488,18 +531,69 @@ function DailyPaymentsTab() {
     queryFn: () => reportApi.dailyPayments({ month, year }),
   });
 
-  const vehicles = data?.vehicles ?? [];
-  const grid = data?.grid ?? {};
+  const vehicles    = data?.vehicles ?? [];
+  const grid        = data?.grid ?? {};
   const daysInMonth = data?.daysInMonth ?? new Date(year, month, 0).getDate();
-  const dayKeys = Array.from({ length: daysInMonth }, (_, index) => {
-    const day = index + 1;
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const dayKeys     = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = i + 1;
+    return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   });
-  const totalsByDay = dayKeys.map((key) => {
-    const values = Object.values(grid[key] ?? {});
-    return values.reduce((sum: number, value: any) => sum + Number(value || 0), 0);
-  });
+  const totalsByDay = dayKeys.map(key =>
+    Object.values(grid[key] ?? {}).reduce((s: number, v: any) => s + Number(v || 0), 0)
+  );
   const grandTotal = (data?.grandTotal ?? 0).toLocaleString();
+
+  function exportDailyExcel() {
+    if (!vehicles.length) return;
+    const monthLabel = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+    const dayNums    = dayKeys.map(k => Number(k.split('-')[2]));
+
+    // Sheet 1: Daily grid (vehicles × days)
+    const gridHeaders = ['Plate / Vehicle', ...dayNums.map(d => `${d}`), 'TOTAL'];
+    const gridRows: (string | number)[][] = vehicles.map((v: any) => {
+      const rowVals = dayKeys.map(key => Number(grid[key]?.[v.id] ?? 0));
+      const total   = rowVals.reduce((s, n) => s + n, 0);
+      return [`${v.plate} — ${v.name}`, ...rowVals, total];
+    });
+    // Totals row
+    const totalRow: (string | number)[] = ['TOTAL BY DAY',
+      ...totalsByDay,
+      totalsByDay.reduce((s, n) => s + n, 0),
+    ];
+    gridRows.push(totalRow);
+
+    // Sheet 2: Per-vehicle summary
+    const summaryHeaders = ['Plate', 'Vehicle Name', 'Total Collected (RWF)', 'Days Paid', 'Days Missed'];
+    const summaryRows: (string | number)[][] = vehicles.map((v: any) => {
+      const dayVals  = dayKeys.map(key => Number(grid[key]?.[v.id] ?? 0));
+      const total    = dayVals.reduce((s, n) => s + n, 0);
+      const paid     = dayVals.filter(n => n > 0).length;
+      const missed   = daysInMonth - paid;
+      return [v.plate, v.name, total, paid, missed];
+    });
+    summaryRows.push(['', 'GRAND TOTAL', data?.grandTotal ?? 0, '', '']);
+
+    // Sheet 3: Audit log — daily totals
+    const auditHeaders = ['Date', 'Day', 'Total Collected (RWF)', 'Vehicles Paid'];
+    const auditRows: (string | number)[][] = dayKeys.map((key, i) => {
+      const dayTotal   = totalsByDay[i];
+      const paidCount  = vehicles.filter((v: any) => Number(grid[key]?.[v.id] ?? 0) > 0).length;
+      return [key, new Date(key).toLocaleDateString('en-RW', { weekday: 'long' }), dayTotal, paidCount];
+    });
+
+    exportToExcel(
+      [
+        { name: `Daily Grid — ${monthLabel}`, headers: gridHeaders,   rows: gridRows },
+        { name: 'Vehicle Summary',            headers: summaryHeaders, rows: summaryRows },
+        { name: 'Daily Audit Log',            headers: auditHeaders,   rows: auditRows },
+      ],
+      `daily-payments-${year}-${String(month).padStart(2,'0')}`,
+      orgName,
+      `Daily Vehicle Payments — ${monthLabel}`,
+      `${year}-${String(month).padStart(2,'0')}-01`,
+      `${year}-${String(month).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`,
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -508,7 +602,7 @@ function DailyPaymentsTab() {
           <h2 className="text-lg font-semibold text-gray-800">Daily Payments Grid</h2>
           <p className="text-sm text-gray-500">Vehicle-by-day reconciliation for the selected month</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select value={month} onChange={(e) => setMonth(Number(e.target.value))}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500">
             {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
@@ -517,6 +611,7 @@ function DailyPaymentsTab() {
           </select>
           <input type="number" min={2024} value={year} onChange={(e) => setYear(Number(e.target.value))}
             className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+          <ExcelBtn onClick={exportDailyExcel} label="Download Excel" />
         </div>
       </div>
 
@@ -583,15 +678,90 @@ function DailyPaymentsTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
+  const { user }  = useAuthStore();
+  const orgName   = (user as any)?.organization?.name ?? 'ARTIC VMS';
   const [tab, setTab]   = useState<Tab>('summary');
   const [from, setFrom] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [to, setTo]     = useState(format(new Date(), 'yyyy-MM-dd'));
 
+  const { data: finData } = useQuery({
+    queryKey: ['fin-dash-export', from, to],
+    queryFn:  () => financialApi.dashboard({ from, to }),
+    enabled:  tab === 'summary' || tab === 'financial',
+  });
+  const { data: profData } = useQuery({
+    queryKey: ['fin-prof-export', from, to],
+    queryFn:  () => financialApi.profitability({ from, to }),
+    enabled:  tab === 'vehicles',
+  });
+  const { data: driverData } = useQuery({
+    queryKey: ['fin-drivers-export', from, to],
+    queryFn:  () => financialApi.driverPayments({ from, to }),
+    enabled:  tab === 'drivers',
+  });
+
+  function exportCurrentTab() {
+    const title = TABS.find(t => t.id === tab)?.label ?? 'Report';
+
+    if (tab === 'summary') {
+      const today  = finData?.today  ?? {};
+      const month  = finData?.month  ?? {};
+      const sheets = [{
+        name: 'Financial Summary',
+        headers: ['Period', 'Income (RWF)', 'Expenses (RWF)', 'Profit (RWF)'],
+        rows: [
+          ['Today',      today.income ?? 0, today.expenses ?? 0, today.profit ?? 0],
+          ['This Month', month.income ?? 0, month.expenses ?? 0, month.profit ?? 0],
+        ] as (string | number)[][],
+      }];
+      exportToExcel(sheets, 'financial-summary', orgName, title, from, to);
+    }
+
+    if (tab === 'vehicles') {
+      const rows: (string | number)[][] = (profData?.data ?? []).map((v: any) => [
+        v.vehicle?.licensePlate ?? '',
+        v.vehicle?.name ?? '',
+        v.income ?? 0,
+        v.expenses ?? 0,
+        v.netProfit ?? 0,
+        v.margin ?? 0,
+      ]);
+      exportToExcel([{
+        name: 'Vehicle Profitability',
+        headers: ['Plate', 'Name', 'Income (RWF)', 'Expenses (RWF)', 'Net Profit (RWF)', 'Margin (%)'],
+        rows,
+      }], 'vehicle-profitability', orgName, title, from, to);
+    }
+
+    if (tab === 'drivers') {
+      const rows: (string | number)[][] = (driverData?.data ?? []).map((d: any) => [
+        d.driver?.user?.firstName + ' ' + d.driver?.user?.lastName,
+        d.amount ?? 0,
+        d.status ?? '',
+        d.paidDate ? format(new Date(d.paidDate), 'yyyy-MM-dd') : '',
+        d.month ?? '',
+        d.year ?? '',
+      ]);
+      exportToExcel([{
+        name: 'Driver Payments',
+        headers: ['Driver', 'Amount (RWF)', 'Status', 'Paid Date', 'Month', 'Year'],
+        rows,
+      }], 'driver-payments', orgName, title, from, to);
+    }
+  }
+
+  const showExcelBtn = ['summary', 'vehicles', 'drivers'].includes(tab);
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-        <p className="text-gray-500 text-sm">Fleet analytics, driver performance, financial statements</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+          <p className="text-gray-500 text-sm">Fleet analytics, driver performance, financial statements</p>
+        </div>
+        {showExcelBtn && (
+          <ExcelBtn onClick={exportCurrentTab} label={`Export ${TABS.find(t => t.id === tab)?.label ?? ''} Excel`} />
+        )}
       </div>
 
       {/* Tab bar */}

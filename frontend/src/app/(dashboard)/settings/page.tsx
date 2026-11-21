@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   Clock,
   Shield,
+  Upload,
+  X,
+  ImageIcon,
 } from 'lucide-react';
 
 import { apiClient, alertApi, membershipApi, userApi } from '@/lib/api';
@@ -73,6 +76,38 @@ export default function SettingsPage() {
     },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to update organization details'),
   });
+
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  const logoMutation = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('logo', file);
+      return apiClient.post('/organizations/me/logo', form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org'] });
+      setLogoFile(null);
+      setLogoPreview(null);
+      toast.success('Company logo updated');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to upload logo'),
+  });
+
+  const logoDeleteMutation = useMutation({
+    mutationFn: () => apiClient.delete('/organizations/me/logo').then(r => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['org'] }); toast.success('Logo removed'); },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
+  });
+
+  function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2 MB'); return; }
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  }
 
   useEffect(() => {
     if (org) {
@@ -197,6 +232,55 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
+
+          {/* ── Logo upload ─────────────────────────────────────────────── */}
+          {isAdmin && (
+            <div className="mb-5 flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="relative">
+                {logoPreview || org?.logoUrl ? (
+                  <img
+                    src={logoPreview ?? `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}${org?.logoUrl}`}
+                    alt="Company logo"
+                    className="h-16 w-16 rounded-xl object-contain border border-gray-200 bg-white p-1"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white">
+                    <ImageIcon size={22} className="text-gray-300" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800">Company Logo</p>
+                <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, WEBP or SVG · max 2 MB · used in contracts and reports</p>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <label className="cursor-pointer flex items-center gap-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 px-3 py-1.5 text-xs font-medium text-white transition">
+                    <Upload size={12} />
+                    {logoPreview ? 'Change' : 'Upload logo'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={onLogoChange} className="hidden" />
+                  </label>
+                  {logoPreview && logoFile && (
+                    <button onClick={() => logoMutation.mutate(logoFile)} disabled={logoMutation.isPending}
+                      className="flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 hover:bg-green-100 px-3 py-1.5 text-xs font-medium text-green-700 transition disabled:opacity-60">
+                      {logoMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                      Save logo
+                    </button>
+                  )}
+                  {logoPreview && (
+                    <button onClick={() => { setLogoFile(null); setLogoPreview(null); }}
+                      className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 transition">
+                      <X size={12} /> Cancel
+                    </button>
+                  )}
+                  {org?.logoUrl && !logoPreview && (
+                    <button onClick={() => logoDeleteMutation.mutate()} disabled={logoDeleteMutation.isPending}
+                      className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition">
+                      <Trash2 size={12} /> Remove logo
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1 text-sm font-medium text-gray-700">
