@@ -231,8 +231,14 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
   try {
     const { email, password, firstName, lastName, role, roles, phone } = req.body;
     const requestedRoles = normalizeRoleList(roles ?? role);
-    if (!email || !password || !firstName || !lastName || !requestedRoles.length) {
-      res.status(400).json({ error: 'email, password, firstName, lastName and at least one role are required' });
+
+    // Require either email or phone (not necessarily both)
+    if (!email && !phone) {
+      res.status(400).json({ error: 'Either email or phone number is required' });
+      return;
+    }
+    if (!password || !firstName || !lastName || !requestedRoles.length) {
+      res.status(400).json({ error: 'password, firstName, lastName and at least one role are required' });
       return;
     }
 
@@ -270,10 +276,25 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
     const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.$transaction(async tx => {
+      // Check uniqueness only if values provided
+      if (email) {
+        const existing = await tx.user.findUnique({ where: { email: email.toLowerCase() } });
+        if (existing) throw new Error('EMAIL_TAKEN');
+      }
+      if (phone) {
+        const existingPhone = await tx.user.findFirst({ where: { phone } });
+        if (existingPhone) throw new Error('PHONE_TAKEN');
+      }
+
       const newUser = await tx.user.create({
         data: {
-          email: email.toLowerCase(), passwordHash,
-          firstName, lastName, role: primaryRole as any, roles: activeRoles as any, pendingRoles: pendingRoles as any, phone,
+          email:        email ? email.toLowerCase() : `phone-${phone}-${Date.now()}@placeholder.local`,
+          passwordHash,
+          firstName, lastName,
+          role:         primaryRole as any,
+          roles:        activeRoles as any,
+          pendingRoles: pendingRoles as any,
+          phone:        phone ?? null,
           organizationId: orgId,
         },
         select: { id: true, email: true, firstName: true, lastName: true, role: true, roles: true, pendingRoles: true },
@@ -298,9 +319,12 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
       return newUser;
     });
 
-    sendWelcomeEmail(user.email, user.firstName).catch(e =>
-      logger.warn(`[USERS] Welcome email failed for ${email}: ${e.message}`)
-    );
+    // Only send email if address is real (not phone-placeholder)
+    if (user.email && !user.email.includes('@placeholder.local')) {
+      sendWelcomeEmail(user.email, user.firstName).catch(e =>
+        logger.warn(`[USERS] Welcome email failed for ${user.email}: ${e.message}`)
+      );
+    }
 
     await notifyOrgOwnersOfSensitiveUserAction(
       orgId,
@@ -313,7 +337,15 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
     res.status(201).json(user);
   } catch (err: any) {
     if (err?.code === 'P2002') {
+      res.status(409).json({ error: 'A user with this email or phone already exists' });
+      return;
+    }
+    if (err?.message === 'EMAIL_TAKEN') {
       res.status(409).json({ error: 'A user with this email already exists' });
+      return;
+    }
+    if (err?.message === 'PHONE_TAKEN') {
+      res.status(409).json({ error: 'A user with this phone number already exists' });
       return;
     }
     if (err instanceof Error && err.message.includes('Only two Super Admins')) {

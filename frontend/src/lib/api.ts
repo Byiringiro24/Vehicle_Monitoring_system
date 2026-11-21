@@ -42,7 +42,7 @@ apiClient.interceptors.response.use(
 export const authApi = {
   register:         (data: object) => apiClient.post('/auth/register', data).then(r => r.data),
   registerPersonal: (data: object) => apiClient.post('/auth/register-personal', data).then(r => r.data),
-  login:            (email: string, password: string) => apiClient.post('/auth/login', { email, password }).then(r => r.data),
+  login:            (data: { email?: string; phone?: string; password: string }) => apiClient.post('/auth/login', data).then(r => r.data),
   me:               () => apiClient.get('/auth/me').then(r => r.data),
   switchOrganization: (organizationId: string) =>
     apiClient.post('/auth/switch-organization', { organizationId }).then(r => r.data),

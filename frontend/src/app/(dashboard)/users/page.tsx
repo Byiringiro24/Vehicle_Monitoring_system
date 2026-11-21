@@ -103,7 +103,9 @@ function UserModal({ isSuperAdmin, editing, onClose, onSave, saving }: {
     const e: Record<string, string> = {};
     if (!form.firstName.trim()) e.firstName = 'Required';
     if (!form.lastName.trim())  e.lastName  = 'Required';
-    if (!form.email.trim() || !form.email.includes('@')) e.email = 'Valid email required';
+    // Email OR phone required
+    if (!form.email.trim() && !form.phone.trim()) e.email = 'Email or phone number is required';
+    if (form.email.trim() && !form.email.includes('@')) e.email = 'Valid email required';
     if (isNew && form.password.length < 8) e.password = 'Minimum 8 characters';
     if (!isSuperAdmin && !form.roles.length) e.roles = 'Select at least one role';
     setErr(e);
@@ -160,14 +162,20 @@ function UserModal({ isSuperAdmin, editing, onClose, onSave, saving }: {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Email *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Email {form.phone.trim() ? <span className="text-gray-400 font-normal">(optional)</span> : '*'}
+              </label>
               <input type="email" value={form.email} onChange={e => setForm(p=>({...p,email:e.target.value}))} disabled={!!editing}
+                placeholder="user@company.com"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none disabled:bg-gray-50 disabled:text-gray-400" />
               {err.email && <p className="text-xs text-red-500 mt-1">{err.email}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Phone (optional)</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Phone {form.email.trim() ? <span className="text-gray-400 font-normal">(optional)</span> : '*'}
+              </label>
               <input value={form.phone} onChange={e => setForm(p=>({...p,phone:e.target.value}))}
+                placeholder="+250 788 000 000"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
             </div>
           </div>

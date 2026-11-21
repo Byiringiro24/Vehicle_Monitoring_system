@@ -83,9 +83,13 @@ async function getEffectiveUserRole(userId: string, organizationId: string, fall
   return roles[0] ?? fallbackRole;
 }
 
-export async function loginUser(email: string, password: string) {
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
+export async function loginUser(emailOrPhone: string, password: string) {
+  // Support login by email OR phone number
+  const isPhone = !emailOrPhone.includes('@');
+  const user = await prisma.user.findFirst({
+    where: isPhone
+      ? { phone: emailOrPhone }
+      : { email: emailOrPhone.toLowerCase() },
     include: { organization: { select: { id: true, name: true, slug: true, status: true } } },
   });
   if (!user || !user.isActive) throw new AppError(401, 'Invalid credentials');

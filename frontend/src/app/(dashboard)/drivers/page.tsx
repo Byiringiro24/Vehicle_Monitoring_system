@@ -68,7 +68,7 @@ function useDriverForm() {
   const [emergencyContact, setEmergency]  = init('');
   const [emergencyPhone, setEmergencyPhone] = init('');
   const [licenseNumber, setLicenseNumber] = init('');
-  const [licenseClass, setLicenseClass]   = init('');
+  const [licenseClasses, setLicenseClasses] = useState<string[]>([]);
   const [licenseExpiry, setLicenseExpiry] = init('');
   const [licenseIssue, setLicenseIssue]   = init('');
   const [licenseCountry, setLicenseCountry] = init('Rwanda');
@@ -96,9 +96,9 @@ function useDriverForm() {
 
   const build = () => ({
     firstName, lastName, middleName, gender, dateOfBirth: dob, nationality,
-    nationalId, passportNumber: passportNo, phone, altPhone, email, address,
+    nationalId, passportNumber: passportNo, phone, altPhone, email: email || undefined, address,
     city, district, emergencyContact, emergencyPhone,
-    licenseNumber, licenseClass, licenseExpiry, licenseIssueDate: licenseIssue,
+    licenseNumber, licenseClasses, licenseExpiry, licenseIssueDate: licenseIssue,
     licenseCountry, licenseRestrictions: restrictions,
     yearsDriving: yearsDriving ? parseInt(yearsDriving) : undefined,
     taxiExperience: taxiExp, truckExperience: truckExp,
@@ -119,7 +119,7 @@ function useDriverForm() {
       phone, setPhone, altPhone, setAltPhone, email, setEmail,
       address, setAddress, city, setCity, district, setDistrict,
       emergencyContact, setEmergency, emergencyPhone, setEmergencyPhone,
-      licenseNumber, setLicenseNumber, licenseClass, setLicenseClass,
+      licenseNumber, setLicenseNumber, licenseClasses, setLicenseClasses,
       licenseExpiry, setLicenseExpiry, licenseIssue, setLicenseIssue,
       licenseCountry, setLicenseCountry, restrictions, setRestrictions,
       yearsDriving, setYearsDriving, taxiExp, setTaxiExp,
@@ -311,7 +311,7 @@ export default function DriversPage() {
                   <Field label="Passport Number"><Inp val={f.passportNo} set={f.setPassportNo} /></Field>
                   <Field label="Phone *"><Inp val={f.phone} set={f.setPhone} placeholder="+250 788 000 000" /></Field>
                   <Field label="Alternative Phone"><Inp val={f.altPhone} set={f.setAltPhone} /></Field>
-                  <Field label="Email *"><Inp val={f.email} set={f.setEmail} type="email" placeholder="driver@example.com" /></Field>
+                  <Field label="Email (optional if phone given)"><Inp val={f.email} set={f.setEmail} type="email" placeholder="driver@example.com" /></Field>
                   <Field label="Password (initial)"><Inp val={f.password} set={f.setPassword} type="password" /></Field>
                   <Field label="Address"><Inp val={f.address} set={f.setAddress} placeholder="KG 123 St, Kigali" /></Field>
                   <Field label="City"><Inp val={f.city} set={f.setCity} placeholder="Kigali" /></Field>
@@ -324,7 +324,33 @@ export default function DriversPage() {
               {step === 'license' && (
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="License Number *"><Inp val={f.licenseNumber} set={f.setLicenseNumber} placeholder="RWXXX12345" /></Field>
-                  <Field label="License Class"><Sel val={f.licenseClass} set={f.setLicenseClass} opts={LICENSE_CLASSES} /></Field>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-2">
+                      License Class(es) <span className="text-gray-400 font-normal">— select all that apply</span>
+                    </label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {LICENSE_CLASSES.map(cls => {
+                        const checked = f.licenseClasses.includes(cls);
+                        return (
+                          <button key={cls} type="button"
+                            onClick={() => f.setLicenseClasses(prev =>
+                              prev.includes(cls) ? prev.filter(c => c !== cls) : [...prev, cls]
+                            )}
+                            className={cn(
+                              'px-3 py-2 rounded-lg border-2 text-sm font-bold transition',
+                              checked
+                                ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-brand-400 hover:text-brand-600'
+                            )}>
+                            {cls}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {f.licenseClasses.length > 0 && (
+                      <p className="text-xs text-brand-600 mt-1.5">Selected: {f.licenseClasses.join(', ')}</p>
+                    )}
+                  </div>
                   <Field label="Issue Date"><Inp val={f.licenseIssue} set={f.setLicenseIssue} type="date" /></Field>
                   <Field label="Expiry Date"><Inp val={f.licenseExpiry} set={f.setLicenseExpiry} type="date" /></Field>
                   <Field label="Issuing Country"><Inp val={f.licenseCountry} set={f.setLicenseCountry} placeholder="Rwanda" /></Field>
@@ -408,7 +434,7 @@ export default function DriversPage() {
               </div>
               {isLastStep ? (
                 <button onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending || !f.firstName || !f.lastName || !f.licenseNumber || !f.phone}
+                  disabled={createMutation.isPending || !f.firstName || !f.lastName || !f.licenseNumber || (!f.phone && !f.email)}
                   className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-60">
                   {createMutation.isPending ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : 'Create Driver'}
                 </button>

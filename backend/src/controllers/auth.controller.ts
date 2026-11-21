@@ -171,9 +171,10 @@ export async function registerPersonal(req: Request, res: Response, next: NextFu
 
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) throw new AppError(400, 'Email and password required');
-    const result = await loginUser(email, password);
+    const { email, phone, password } = req.body;
+    const identifier = email ?? phone;
+    if (!identifier || !password) throw new AppError(400, 'Email or phone number and password are required');
+    const result = await loginUser(identifier, password);
     res.json(result);
   } catch (err) { next(err); }
 }

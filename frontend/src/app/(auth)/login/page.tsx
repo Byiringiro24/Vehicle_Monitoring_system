@@ -1,74 +1,82 @@
 'use client';
 import { useState, Suspense } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, Loader2, Truck, Mail, Lock, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Truck, Mail, Lock, Phone, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ROLE_HOME } from '@/lib/roles';
 
-const schema = z.object({
-  email:    z.string().email('Enter a valid email'),
-  password: z.string().min(6, 'At least 6 characters'),
-});
-type Form = z.infer<typeof schema>;
-
-// Role → first page after login
-const ROLE_HOME: Record<string, string> = {
+// Role → first page after login (kept locally for performance)
+const ROLE_HOME_MAP: Record<string, string> = {
   SUPER_ADMIN:        '/platform',
   ADMIN:              '/dashboard',
-  FLEET_MANAGER:      '/dashboard',
+  FLEET_MANAGER:      '/dispatch',
   FINANCE_MANAGER:    '/finance',
   DRIVER:             '/dashboard',
   VIEWER:             '/dashboard',
-  DISPATCHER:         '/dispatch',
   HR_MANAGER:         '/staff',
   MECHANIC:           '/workshop',
   COMPLIANCE_OFFICER: '/compliance',
   RENTAL_MANAGER:     '/rentals',
+  SALES_AGENT:        '/sales',
+  AUDITOR:            '/audit-view',
 };
 
 function LoginForm() {
-  const router      = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const { setAuth } = useAuthStore();
-  const [show, setShow] = useState(false);
+  const { setAuth }  = useAuthStore();
 
-  // Show success banner when redirected here after account activation (invite flow)
+  const [mode,     setMode]     = useState<'email' | 'phone'>('email');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [show,     setShow]     = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [errors,   setErrors]   = useState<Record<string, string>>({});
+
   const activated = searchParams.get('activated') === '1';
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } =
-    useForm<Form>({ resolver: zodResolver(schema), mode: 'onTouched' });
+  function validate() {
+    const e: Record<string, string> = {};
+    if (!identifier.trim()) e.identifier = mode === 'email' ? 'Email is required' : 'Phone number is required';
+    if (mode === 'email' && identifier && !identifier.includes('@')) e.identifier = 'Enter a valid email address';
+    if (!password)          e.password   = 'Password is required';
+    if (password && password.length < 6) e.password = 'At least 6 characters';
+    setErrors(e);
+    return !Object.keys(e).length;
+  }
 
-  async function onSubmit(data: Form) {
+  async function onSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!validate()) return;
+    setLoading(true);
     try {
-      const result = await authApi.login(data.email, data.password);
+      const payload = mode === 'email'
+        ? { email: identifier.trim(), password }
+        : { phone: identifier.trim(), password };
+      const result = await authApi.login(payload as any);
       setAuth(result.user, result.accessToken, result.refreshToken);
       toast.success(`Welcome back, ${result.user.firstName}!`);
 
       const allRoles = Array.from(new Set([result.user.role, ...(result.user.roles ?? [])])).filter(Boolean) as string[];
       const intendedRole = (result.user as any).intendedRole as string | undefined;
 
-      // If user has multiple roles, let them pick before entering the dashboard
       if (allRoles.length > 1 && !intendedRole) {
         router.push('/select-role');
         return;
       }
 
-      const PERSONAL_ROLE_HOME: Record<string, string> = {
-        owner:    '/owner',
-        driver:   '/dashboard',
-        customer: '/dashboard',
-      };
-      const personalHome = intendedRole ? PERSONAL_ROLE_HOME[intendedRole] : undefined;
-      const primaryRole = allRoles[0] ?? result.user.role;
-      const home = personalHome ?? ROLE_HOME[primaryRole] ?? '/dashboard';
-      router.push(home);
+      const PERSONAL: Record<string, string> = { owner: '/owner', driver: '/dashboard', customer: '/dashboard' };
+      const personalHome = intendedRole ? PERSONAL[intendedRole] : undefined;
+      const primaryRole  = allRoles[0] ?? result.user.role;
+      router.push(personalHome ?? ROLE_HOME_MAP[primaryRole] ?? '/dashboard');
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Login failed. Check your credentials.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -88,9 +96,8 @@ function LoginForm() {
       {/* Card */}
       <div className="w-full max-w-md bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl">
         <h2 className="text-xl font-bold text-white mb-1">Sign in</h2>
-        <p className="text-slate-400 text-sm mb-6">Enter your credentials to access your workspace</p>
+        <p className="text-slate-400 text-sm mb-5">Enter your credentials to access your workspace</p>
 
-        {/* Account activated banner — shown after invite setup */}
         {activated && (
           <div className="flex items-center gap-2.5 bg-green-500/15 border border-green-500/30 rounded-xl px-4 py-3 mb-5">
             <CheckCircle2 size={16} className="text-green-400 shrink-0" />
@@ -98,21 +105,39 @@ function LoginForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Email */}
+        <form onSubmit={onSubmit} className="space-y-4">
+
+          {/* Email / Phone toggle */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Email address</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-medium text-slate-300">
+                {mode === 'email' ? 'Email address' : 'Phone number'}
+              </label>
+              <button type="button"
+                onClick={() => { setMode(m => m === 'email' ? 'phone' : 'email'); setIdentifier(''); setErrors({}); }}
+                className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition">
+                {mode === 'email'
+                  ? <><Phone size={12} /> Use phone instead</>
+                  : <><Mail size={12} /> Use email instead</>}
+              </button>
+            </div>
             <div className="relative">
-              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {mode === 'email'
+                ? <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                : <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />}
               <input
-                {...register('email')}
-                type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
-                className="w-full pl-9 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                type={mode === 'email' ? 'email' : 'tel'}
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
+                autoComplete={mode === 'email' ? 'email' : 'tel'}
+                placeholder={mode === 'email' ? 'you@company.com' : '+250 788 000 000'}
+                className={cn(
+                  'w-full pl-9 pr-4 py-2.5 bg-white/10 border rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition',
+                  errors.identifier ? 'border-red-500/60' : 'border-white/20'
+                )}
               />
             </div>
-            {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
+            {errors.identifier && <p className="text-red-400 text-xs mt-1">{errors.identifier}</p>}
           </div>
 
           {/* Password */}
@@ -121,18 +146,22 @@ function LoginForm() {
             <div className="relative">
               <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                {...register('password')}
                 type={show ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="w-full pl-9 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                className={cn(
+                  'w-full pl-9 pr-10 py-2.5 bg-white/10 border rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition',
+                  errors.password ? 'border-red-500/60' : 'border-white/20'
+                )}
               />
               <button type="button" onClick={() => setShow(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition">
                 {show ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
+            {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password}</p>}
           </div>
 
           {/* Forgot */}
@@ -143,16 +172,12 @@ function LoginForm() {
           </div>
 
           {/* Submit */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-60 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25"
-          >
-            {isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Signing in…</> : 'Sign in'}
+          <button type="submit" disabled={loading}
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-60 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25">
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Signing in…</> : 'Sign in'}
           </button>
         </form>
 
-        {/* Register link */}
         <p className="text-center text-sm text-slate-400 mt-6">
           New company?{' '}
           <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium transition">

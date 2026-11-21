@@ -17,7 +17,7 @@ export async function createDriver(req: AuthenticatedRequest, res: Response, nex
   try {
     const {
       email, firstName, lastName, middleName, phone, altPhone,
-      licenseNumber, licenseExpiry, licenseClass, licenseCountry,
+      licenseNumber, licenseExpiry, licenseClass, licenseClasses, licenseCountry,
       nationalId, passportNumber, gender, dateOfBirth, nationality,
       address, city, district, employeeNumber, department, position,
       employmentDate, baseSalary, commissionRate, bloodGroup,
@@ -25,14 +25,33 @@ export async function createDriver(req: AuthenticatedRequest, res: Response, nex
       password,
     } = req.body;
 
-    if (!email)         throw new AppError(400, 'Email is required');
     if (!firstName)     throw new AppError(400, 'First name is required');
     if (!lastName)      throw new AppError(400, 'Last name is required');
     if (!licenseNumber) throw new AppError(400, 'License number is required');
 
-    // Check if email already exists
-    const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (existingUser) throw new AppError(409, 'A user with this email already exists');
+    // Require either email or phone
+    if (!email && !phone) throw new AppError(400, 'Either email or phone number is required for a driver account');
+
+    // Support single licenseClass (string) or multiple licenseClasses (array)
+    // Store as JSON string for multi-class, plain string for single
+    const resolvedLicenseClass: string = (() => {
+      if (licenseClasses && Array.isArray(licenseClasses) && licenseClasses.length > 0) {
+        return licenseClasses.join(','); // store as comma-separated e.g. "A,B,C1"
+      }
+      return licenseClass ?? '';
+    })();
+
+    // Check email uniqueness only if provided
+    if (email) {
+      const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+      if (existingUser) throw new AppError(409, 'A user with this email already exists');
+    }
+
+    // Check phone uniqueness if no email
+    if (!email && phone) {
+      const existingPhone = await prisma.user.findFirst({ where: { phone } });
+      if (existingPhone) throw new AppError(409, 'A user with this phone number already exists');
+    }
 
     // Check if license number already taken
     const existingLicense = await prisma.driver.findUnique({ where: { licenseNumber } });
@@ -40,16 +59,21 @@ export async function createDriver(req: AuthenticatedRequest, res: Response, nex
 
     const passwordHash = await bcrypt.hash(password ?? uuidv4(), 12);
 
+    // Build a unique email for phone-only drivers (not sent to anyone, just satisfies DB constraint)
+    const userEmail = email
+      ? email.toLowerCase()
+      : `driver-${phone}-${Date.now()}@placeholder.local`;
+
     const user = await prisma.user.create({
       data: {
-        email: email.toLowerCase(),
+        email: userEmail,
         passwordHash,
         firstName,
         lastName,
         middleName,
-        phone,
-        altPhone,
-        nationalId,
+        phone: phone ?? null,
+        altPhone: altPhone ?? null,
+        nationalId: nationalId ?? null,
         role: 'DRIVER',
         organizationId: req.user!.organizationId,
       },
@@ -61,9 +85,9 @@ export async function createDriver(req: AuthenticatedRequest, res: Response, nex
         organizationId: req.user!.organizationId,
         licenseNumber,
         licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : null,
-        licenseClass,
+        licenseClass: resolvedLicenseClass || null,
         licenseCountry,
-        nationalId: nationalId || null,  // only set if provided to avoid unique constraint conflicts
+        nationalId: nationalId || null,
         passportNumber,
         gender,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
