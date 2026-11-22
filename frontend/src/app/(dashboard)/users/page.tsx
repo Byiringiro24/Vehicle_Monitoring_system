@@ -118,10 +118,12 @@ function UserModal({ isSuperAdmin, editing, onClose, onSave, saving }: {
     const payload: any = {
       firstName: form.firstName.trim(),
       lastName:  form.lastName.trim(),
-      email:     form.email.trim().toLowerCase(),
-      phone:     form.phone.trim() || undefined,
       roles:     isSuperAdmin ? ['ADMIN'] : form.roles,
     };
+    // Only include email if actually provided
+    if (form.email.trim()) payload.email = form.email.trim().toLowerCase();
+    // Only include phone if actually provided
+    if (form.phone.trim()) payload.phone = form.phone.trim();
     if (form.password) payload.password = form.password;
     onSave(payload);
   }

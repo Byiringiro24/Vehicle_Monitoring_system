@@ -89,7 +89,11 @@ export async function loginUser(emailOrPhone: string, password: string) {
   const user = await prisma.user.findFirst({
     where: isPhone
       ? { phone: emailOrPhone }
-      : { email: emailOrPhone.toLowerCase() },
+      : {
+          email: emailOrPhone.toLowerCase(),
+          // Reject placeholder emails — phone-only users must log in by phone
+          NOT: { email: { contains: '@placeholder.local' } },
+        },
     include: { organization: { select: { id: true, name: true, slug: true, status: true } } },
   });
   if (!user || !user.isActive) throw new AppError(401, 'Invalid credentials');

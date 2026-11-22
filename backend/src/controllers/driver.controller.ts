@@ -76,6 +76,7 @@ export async function createDriver(req: AuthenticatedRequest, res: Response, nex
         nationalId: nationalId ?? null,
         role: 'DRIVER',
         organizationId: req.user!.organizationId,
+        emailVerified: !!email,
       },
     });
 

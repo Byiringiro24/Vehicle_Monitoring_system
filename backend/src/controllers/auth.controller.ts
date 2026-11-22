@@ -52,6 +52,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
           lastName:     lastName.trim(),
           role:         'ADMIN',
           organizationId: org.id,
+          emailVerified: true, // email was provided at registration
         },
       });
       // Create active membership in the new identity system

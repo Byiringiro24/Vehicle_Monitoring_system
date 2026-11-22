@@ -296,8 +296,10 @@ router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), async (req: any, res, next) 
           pendingRoles: pendingRoles as any,
           phone:        phone ?? null,
           organizationId: orgId,
+          // Mark email as verified if a real email was provided at creation time
+          emailVerified: !!email,
         },
-        select: { id: true, email: true, firstName: true, lastName: true, role: true, roles: true, pendingRoles: true },
+        select: { id: true, email: true, firstName: true, lastName: true, role: true, roles: true, pendingRoles: true, phone: true },
       });
 
       if (subscription) {
