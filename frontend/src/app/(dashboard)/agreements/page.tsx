@@ -91,7 +91,7 @@ export default function AgreementsPage() {
 
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
-    queryFn:  () => apiClient.get('/contracts/customers').then(r => r.data),
+    queryFn:  () => apiClient.get('/contracts/customers').then(r => r.data?.data ?? r.data ?? []),
     enabled: showModal,
   });
 

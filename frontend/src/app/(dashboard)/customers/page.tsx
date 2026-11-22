@@ -45,7 +45,7 @@ export default function CustomersPage() {
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers'],
-    queryFn: () => apiClient.get('/contracts/customers').then(r => r.data),
+    queryFn: () => apiClient.get('/contracts/customers').then(r => r.data?.data ?? r.data ?? []),
   });
 
   const saveMutation = useMutation({
