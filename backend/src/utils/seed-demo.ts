@@ -98,13 +98,13 @@ async function main() {
       passwordHash: adminHash,
       role: 'ADMIN', roles: ['ADMIN'] as any,
       organizationId: testingOrg.id, isActive: true, emailVerified: true,
-      phone: '0787585826',
+      phone: '0797585826', // updated from 0787585826
     },
     create: {
       email: 'byiringirofabrice6@gmail.com', passwordHash: adminHash,
       firstName: 'Fabrice', lastName: 'Admin',
       role: 'ADMIN', roles: ['ADMIN'] as any,
-      phone: '0787585826',
+      phone: '0797585826',
       organizationId: testingOrg.id, isActive: true, emailVerified: true,
     },
   });

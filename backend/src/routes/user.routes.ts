@@ -409,20 +409,47 @@ router.put('/:id', async (req: any, res, next) => {
         return;
       }
     } else {
-      const adminData: any = { ...rest };
-      if (role && role !== 'SUPER_ADMIN') adminData.role = role;
-      if (role === 'SUPER_ADMIN') {
-        res.status(403).json({ error: 'SUPER_ADMIN role cannot be assigned through this endpoint' });
-        return;
+      // Admin editing another user's account
+      // Only SUPER_ADMIN can assign SUPER_ADMIN role (blocked entirely here)
+      // ADMIN can add/remove any role except SUPER_ADMIN from users in their org
+      const adminData: any = {};
+
+      // Update basic fields if provided
+      const allowedFields = ['firstName', 'lastName', 'phone', 'altPhone'];
+      for (const f of allowedFields) {
+        if (f in rest) adminData[f] = rest[f] ?? null;
       }
-      if (Array.isArray(roles) && roles.length) {
-        adminData.roles = roles;
-        const primaryRole = roles[0];
-        if (primaryRole) adminData.role = primaryRole;
+
+      // Role update — this is the core of "edit roles" for company admin
+      if (Array.isArray(roles) && roles.length > 0) {
+        // Filter out SUPER_ADMIN — nobody can assign it here
+        const safeRoles = (roles as string[]).filter(r => r !== 'SUPER_ADMIN' && VALID_ROLES.has(r));
+        if (!safeRoles.length) {
+          res.status(400).json({ error: 'At least one valid non-SUPER_ADMIN role is required' });
+          return;
+        }
+        adminData.roles    = safeRoles as any;
+        adminData.role     = safeRoles[0] as any; // primary role = first in array
+      } else if (role) {
+        // Single role string provided
+        if (role === 'SUPER_ADMIN') {
+          res.status(403).json({ error: 'SUPER_ADMIN role cannot be assigned through this endpoint' });
+          return;
+        }
+        if (VALID_ROLES.has(role)) {
+          adminData.role  = role as any;
+          adminData.roles = [role] as any;
+        }
       }
+
       if (password) adminData.passwordHash = await bcrypt.hash(password, 12);
 
       Object.assign(data, adminData);
+
+      if (!Object.keys(data).length) {
+        res.status(400).json({ error: 'No fields to update were provided' });
+        return;
+      }
     }
 
     const user = await prisma.user.update({
