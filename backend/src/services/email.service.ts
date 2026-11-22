@@ -229,6 +229,36 @@ export async function sendSensitiveAccountAlertEmail(
   await send(to, 'ARTIC VMS — Sensitive account activity', layout('Sensitive account activity', body));
 }
 
+// ── Email verification OTP ────────────────────────────────────────────────────
+export async function sendEmailVerificationOTP(
+  to: string,
+  firstName: string,
+  otp: string,
+): Promise<void> {
+  const appUrl = process.env.APP_URL ?? 'https://articvms.ddnsgeek.com';
+  const body = `
+    <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">Verify your email address</h2>
+    <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Hi ${firstName}, you requested to link <strong>${to}</strong> to your ARTIC VMS account.
+      Use the code below to confirm — it expires in <strong>15 minutes</strong>.
+    </p>
+    <div style="text-align:center;margin:32px 0;">
+      <div style="display:inline-block;background:#f1f5f9;border:2px dashed #cbd5e1;border-radius:12px;padding:24px 48px;">
+        <p style="margin:0;color:#94a3b8;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Verification Code</p>
+        <p style="margin:0;color:#1e293b;font-size:40px;font-weight:800;letter-spacing:8px;font-family:monospace;">${otp}</p>
+      </div>
+    </div>
+    <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 16px;">
+      Enter this code in the ARTIC VMS app to verify your email. After verification, you can use this email address to log in.
+    </p>
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:14px 16px;margin:16px 0;">
+      <p style="margin:0;color:#713f12;font-size:13px;">
+        <strong>Didn't request this?</strong> Ignore this email — your account is safe. The code will expire automatically.
+      </p>
+    </div>`;
+  await send(to, 'ARTIC VMS — Verify your email address', layout('Verify your email', body));
+}
+
 // ── Overdue payment reminder ──────────────────────────────────────────────────
 export async function sendOverduePaymentEmail(
   to: string,

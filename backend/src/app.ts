@@ -39,6 +39,7 @@ import attendanceRoutes    from './routes/attendance.routes';
 import remittanceRoutes    from './routes/remittance.routes';
 import motoRoutes          from './routes/moto.routes';
 
+import emailVerificationRoutes from './routes/emailVerification.routes';
 import deviceRoutes       from './routes/device.routes';
 
 const app = express();
@@ -81,6 +82,7 @@ app.get('/health', (_req, res) => {
 const api = '/api/v1';
 app.use(`${api}/health`,        healthRoutes);
 app.use(`${api}/auth`,          authLimiter, authRoutes);
+app.use(`${api}/auth/verify-email`, apiLimiter, emailVerificationRoutes);
 // Register has its own stricter limit (5 per hour per IP)
 app.use(`${api}/auth/register`, rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: { error: 'Too many registration attempts' }, standardHeaders: true, legacyHeaders: false }));
 app.use(`${api}/organizations`, apiLimiter,  organizationRoutes);

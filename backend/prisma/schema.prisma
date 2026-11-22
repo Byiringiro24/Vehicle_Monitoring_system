@@ -313,6 +313,12 @@ model User {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  // Email verification — for phone-only accounts that add email later
+  emailVerified              Boolean   @default(false)
+  emailVerificationToken     String?   // hashed OTP / link token
+  emailVerificationExpiry    DateTime?
+  emailVerificationPending   String?   // the unverified email being confirmed
+
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 

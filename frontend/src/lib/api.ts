@@ -51,6 +51,16 @@ export const authApi = {
   forgotPassword:   (email: string) => apiClient.post('/auth/forgot-password', { email }).then(r => r.data),
   resetPassword:    (token: string, newPassword: string) =>
     apiClient.post('/auth/reset-password', { token, newPassword }).then(r => r.data),
+
+  // ── Email verification (for phone-only accounts) ──────────────────────────
+  emailVerifyStatus:  () =>
+    apiClient.get('/auth/verify-email/status').then(r => r.data),
+  emailVerifyRequest: (email: string) =>
+    apiClient.post('/auth/verify-email/request', { email }).then(r => r.data),
+  emailVerifyConfirm: (otp: string) =>
+    apiClient.post('/auth/verify-email/confirm', { otp }).then(r => r.data),
+  emailVerifyResend:  () =>
+    apiClient.post('/auth/verify-email/resend').then(r => r.data),
 };
 
 // ─── Vehicles ─────────────────────────────────────────────────────────────────

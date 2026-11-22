@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { User, Key, Shield, Loader2, Building2, Mail, Phone, Clock, CheckCircle2, ArrowRight } from 'lucide-react';
+import { User, Key, Shield, Loader2, Building2, Mail, Phone, Clock, CheckCircle2, ArrowRight, AlertCircle, ShieldCheck, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,164 @@ const pwdSchema = z.object({
 
 type ProfileForm = z.infer<typeof profileSchema>;
 type PwdForm     = z.infer<typeof pwdSchema>;
+
+// ─── Link Email Section ───────────────────────────────────────────────────────
+// Shown for phone-only users (placeholder email) or unverified email users.
+function LinkEmailSection() {
+  const { data: status, refetch } = useQuery({
+    queryKey: ['email-verify-status'],
+    queryFn:  authApi.emailVerifyStatus,
+  });
+
+  const [step,     setStep]     = useState<'idle' | 'sent' | 'done'>('idle');
+  const [email,    setEmail]    = useState('');
+  const [otp,      setOtp]      = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [err,      setErr]      = useState('');
+  const [cooldown, setCooldown] = useState(0);
+
+  // Cooldown timer for resend
+  const startCooldown = () => {
+    setCooldown(60);
+    const t = setInterval(() => setCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
+  };
+
+  async function requestOTP() {
+    setErr('');
+    if (!email.trim() || !email.includes('@')) { setErr('Enter a valid email address'); return; }
+    setLoading(true);
+    try {
+      await authApi.emailVerifyRequest(email.trim().toLowerCase());
+      setStep('sent');
+      startCooldown();
+      toast.success(`Code sent to ${email}`);
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? 'Failed to send code');
+    } finally { setLoading(false); }
+  }
+
+  async function confirmOTP() {
+    setErr('');
+    if (otp.trim().length !== 6) { setErr('Enter the 6-digit code'); return; }
+    setLoading(true);
+    try {
+      await authApi.emailVerifyConfirm(otp.trim());
+      setStep('done');
+      refetch();
+      toast.success('Email verified! You can now log in with this email.');
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? 'Invalid or expired code');
+    } finally { setLoading(false); }
+  }
+
+  async function resend() {
+    setLoading(true);
+    try {
+      await authApi.emailVerifyResend();
+      startCooldown();
+      toast.success('New code sent');
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? 'Failed to resend');
+    } finally { setLoading(false); }
+  }
+
+  // If verified and not placeholder — nothing to show
+  if (status?.emailVerified && !status?.hasPlaceholderEmail) return null;
+  // If still loading
+  if (!status) return null;
+
+  const hasPending = !!status.pendingEmail;
+
+  return (
+    <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-5 space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+          <Mail size={16} className="text-amber-500" />
+        </div>
+        <div>
+          <p className="font-semibold text-gray-900 text-sm">Link an email address</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Your account uses a phone number only. Add a verified email to log in with email too.
+          </p>
+        </div>
+      </div>
+
+      {step === 'done' ? (
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+          <ShieldCheck size={18} className="text-green-500 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-green-800">Email verified!</p>
+            <p className="text-xs text-green-600 mt-0.5">You can now log in with <strong>{status.pendingEmail ?? email}</strong></p>
+          </div>
+        </div>
+      ) : step === 'idle' && !hasPending ? (
+        // Step 1 — enter email
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Email address</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setErr(''); }}
+                  placeholder="your@email.com"
+                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+              <button onClick={requestOTP} disabled={loading}
+                className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-60">
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+                Send code
+              </button>
+            </div>
+            {err && <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><AlertCircle size={11} />{err}</p>}
+          </div>
+        </div>
+      ) : (
+        // Step 2 — enter OTP (also shown if hasPending from a previous session)
+        <div className="space-y-3">
+          {hasPending && step === 'idle' && (
+            <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              A code was sent to <strong>{status.pendingEmail}</strong>. Enter it below to verify.
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">6-digit verification code</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={otp}
+                onChange={e => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 6)); setErr(''); }}
+                placeholder="123456"
+                maxLength={6}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-center tracking-[0.4em] focus:ring-2 focus:ring-brand-500 outline-none"
+              />
+              <button onClick={confirmOTP} disabled={loading || otp.length < 6}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-60">
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                Verify
+              </button>
+            </div>
+            {err && <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><AlertCircle size={11} />{err}</p>}
+          </div>
+          <div className="flex items-center justify-between">
+            <button onClick={() => { setStep('idle'); setOtp(''); setErr(''); }}
+              className="text-xs text-gray-400 hover:text-gray-600 underline transition">
+              Use a different email
+            </button>
+            <button onClick={resend} disabled={loading || cooldown > 0}
+              className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+              <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+              {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type TabId = 'profile' | 'security' | 'org';
 
@@ -165,10 +323,13 @@ export default function ProfilePage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
               <div className="relative">
                 <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input value={user?.email ?? ''} disabled
+                <input value={user?.email?.includes('@placeholder.local') ? '(no email — phone login only)' : user?.email ?? ''} disabled
                   className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed" />
               </div>
-              <p className="text-xs text-gray-400 mt-1">Email cannot be changed. Contact your administrator.</p>
+              {user?.email?.includes('@placeholder.local')
+                ? <p className="text-xs text-amber-600 mt-1 flex items-center gap-1"><AlertCircle size={11} />No email linked — see "Link email" section below.</p>
+                : <p className="text-xs text-gray-400 mt-1">Email cannot be changed here. Contact your administrator.</p>
+              }
             </div>
 
             <button type="submit" disabled={profileMutation.isPending}
@@ -180,6 +341,9 @@ export default function ProfilePage() {
           </form>
         </div>
       )}
+
+      {/* Link email — only shown for phone-only accounts */}
+      {tab === 'profile' && <LinkEmailSection />}
 
       {/* ── SECURITY TAB ─────────────────────────────────────────────────── */}
       {tab === 'security' && (
