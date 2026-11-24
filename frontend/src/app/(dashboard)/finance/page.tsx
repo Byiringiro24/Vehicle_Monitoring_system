@@ -293,10 +293,12 @@ function ExpensesTab() {
     litres: '', pricePerLitre: '', maintenanceType: '', fineNumber: '', fineReason: '',
   });
   const { data: expenses } = useQuery({ queryKey: ['expenses-list'], queryFn: () => expenseApi.list({ limit: 100 }) });
+  const { data: vehiclesResp } = useQuery({ queryKey: ['vehicles-exp'], queryFn: () => apiClient.get('/vehicles?limit=200').then(r => r.data), enabled: showForm });
+  const vehicleOpts: any[] = vehiclesResp?.data ?? vehiclesResp ?? [];
 
   const createMutation = useMutation({
-    mutationFn: () => expenseApi.create({ ...form, amount: parseFloat(form.amount) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses-list'] }); toast.success('Expense recorded'); setShowForm(false); },
+    mutationFn: () => { if (!form.vehicleId) throw new Error('Please select a vehicle'); return expenseApi.create({ ...form, amount: parseFloat(form.amount) }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses-list'] }); toast.success('Expense recorded'); setShowForm(false); setForm({ vehicleId: '', category: 'FUEL', amount: '', description: '', date: '', supplier: '', invoiceNumber: '', litres: '', pricePerLitre: '', maintenanceType: '', fineNumber: '', fineReason: '' }); },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
   });
 
@@ -358,6 +360,15 @@ function ExpensesTab() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold">Record Expense</h2>
             <div className="grid grid-cols-2 gap-3">
+              {/* Vehicle selector - required */}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Vehicle *</label>
+                <select value={form.vehicleId} onChange={e => setForm(p => ({ ...p, vehicleId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                  <option value="">— Select vehicle —</option>
+                  {vehicleOpts.map((v: any) => <option key={v.id} value={v.id}>{v.licensePlate} — {v.name}</option>)}
+                </select>
+              </div>
               {[
                 { label: 'Category', key: 'category', type: 'select', opts: EXPENSE_CATEGORIES },
                 { label: 'Date',     key: 'date',     type: 'date' },

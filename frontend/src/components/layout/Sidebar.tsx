@@ -5,13 +5,12 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { getNavItems, type AppRole } from '@/lib/roles';
-import { getRouteFeature, FEATURE_CATALOG } from '@/lib/featureCatalog';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import {
   LayoutDashboard, Truck, Bell, Map, Users, Settings,
   BarChart3, MapPin, UserCheck, User, X,
   DollarSign, Activity, ChevronRight, ChevronDown, Wrench, Globe, FileText,
-  Headphones, Lock as LockIcon, Ban, Navigation, Hammer, ShieldCheck,
+  Headphones, Navigation, Hammer, ShieldCheck,
   CalendarDays, Users2, UsersRound, CheckSquare, Car, FolderOpen,
   Bike, ShoppingBag, Tag, Eye, ArrowLeftRight,
 } from 'lucide-react';
@@ -21,12 +20,6 @@ const ICONS: Record<string, React.ElementType> = {
   BarChart3, MapPin, UserCheck, User, DollarSign, Activity, Wrench, Globe,
   FileText, Headphones, Navigation, Hammer, ShieldCheck, CalendarDays,
   Users2, UsersRound, CheckSquare, Car, FolderOpen, Bike, ShoppingBag, Tag, Eye,
-};
-
-const ROLE_SENSITIVE: Record<string, AppRole[]> = {
-  '/platform': ['SUPER_ADMIN'],
-  '/users':    ['SUPER_ADMIN', 'ADMIN'],
-  '/finance':  ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER'],
 };
 
 // ── Sidebar nav categories ────────────────────────────────────────────────────
@@ -39,7 +32,7 @@ const NAV_GROUPS: { label: string; icon: React.ElementType; paths: string[] }[] 
   {
     label: 'Vehicle Fleet',
     icon:  Truck,
-    paths: ['/vehicles', '/vehicle-report', '/vehicle-report/payments', '/vehicle-report/garage', '/vehicle-report/fines', '/vehicle-report/reports', '/map', '/telemetry', '/geofences', '/alerts'],
+    paths: ['/vehicles', '/vehicle-report', '/vehicle-report/payments', '/vehicle-report/daily-report', '/vehicle-report/garage', '/vehicle-report/fines', '/vehicle-report/reports', '/map', '/telemetry', '/geofences', '/alerts'],
   },
   {
     label: 'Operations',
@@ -155,18 +148,11 @@ export function Sidebar({ onClose }: SidebarProps) {
       {/* ── Navigation groups ──────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
         {NAV_GROUPS.map(group => {
-          // Items that belong to this group and are visible
+          // Items that belong to this group and are visible TO THIS ROLE ONLY
           const groupItems = group.paths
             .map(p => itemMap[p])
             .filter(Boolean)
-            .filter(item => {
-              const isAllowed   = allowed.has(item.href);
-              const featureCode = getRouteFeature(item.href);
-              const isRoleBlocked = !isAllowed &&
-                ROLE_SENSITIVE[item.href] !== undefined &&
-                !(ROLE_SENSITIVE[item.href] as string[]).some(r => r === role);
-              return isAllowed || !!featureCode || isRoleBlocked;
-            });
+            .filter(item => allowed.has(item.href)); // strict: only items this role can use
 
           if (!groupItems.length) return null;
 
@@ -201,49 +187,30 @@ export function Sidebar({ onClose }: SidebarProps) {
               {isOpen && (
                 <div className="ml-2 mt-0.5 space-y-0.5">
                   {groupItems.map(item => {
-                    const Icon      = ICONS[item.icon] ?? FileText;
-                    const active    = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
-                    const isAllowed = allowed.has(item.href);
-                    const featureCode = getRouteFeature(item.href);
-                    const featureInfo = featureCode ? FEATURE_CATALOG[featureCode] : null;
-                    const isPlanLocked = false;
-                    const isRoleBlocked = !isAllowed && !isPlanLocked &&
-                      ROLE_SENSITIVE[item.href] !== undefined &&
-                      !(ROLE_SENSITIVE[item.href] as string[]).some(r => r === role);
+                    const Icon   = ICONS[item.icon] ?? FileText;
+                    const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
 
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
                         onClick={onClose}
-                        title={
-                          isPlanLocked && featureInfo
-                            ? `${featureInfo.name} — requires ${featureInfo.minPlan} plan`
-                            : isRoleBlocked
-                            ? 'Your role cannot access this'
-                            : item.label
-                        }
+                        title={item.label}
                         className={cn(
                           'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 group',
-                          active && isAllowed
+                          active
                             ? 'bg-gradient-to-r from-brand-600/90 to-cyan-500/80 text-white shadow-[0_6px_16px_rgba(37,99,235,0.28)]'
-                            : isAllowed
-                            ? 'text-slate-300 hover:bg-white/8 hover:text-white'
-                            : 'text-slate-500/70 cursor-pointer hover:bg-white/4',
+                            : 'text-slate-300 hover:bg-white/8 hover:text-white',
                         )}>
                         <Icon
                           size={16}
                           className={cn(
                             'shrink-0 transition-colors',
-                            active && isAllowed ? 'text-white' :
-                            isAllowed           ? 'text-brand-300/80 group-hover:text-white' :
-                                                  'text-brand-500/50',
+                            active ? 'text-white' : 'text-brand-300/80 group-hover:text-white',
                           )}
                         />
                         <span className="flex-1 truncate">{item.label}</span>
-                        {isPlanLocked && <LockIcon size={11} className="text-brand-500/70 shrink-0" />}
-                        {isRoleBlocked && <Ban size={11} className="text-slate-500/70 shrink-0" />}
-                        {active && isAllowed && <ChevronRight size={12} className="opacity-50 shrink-0" />}
+                        {active && <ChevronRight size={12} className="opacity-50 shrink-0" />}
                       </Link>
                     );
                   })}

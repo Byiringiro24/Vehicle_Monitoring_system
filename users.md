@@ -49,3 +49,15 @@ To be clear: a user can have multiple roles **regardless** of whether they regis
 cd "d:\Projectts 2026\SANO IRENE\New folder (2)\backend"
 node_modules\.bin\tsx src/utils/seed-demo.ts
 ```
+
+
+
+
+
+
+
+
+
+
+
+also make sure creating, users, drivers, vehicles, generating reports, adding expenses, all of the system fetures works in all users, make sure that everything in the sidebars works perfectly, and are well alligned

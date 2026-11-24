@@ -33,16 +33,61 @@ router.get('/', async (req: any, res, next) => {
 
 router.post('/', authorize('SUPER_ADMIN', 'ADMIN', 'FLEET_MANAGER', 'FINANCE_MANAGER'), async (req: any, res, next) => {
   try {
+    const {
+      vehicleId, category, amount, description, notes,
+      date, litres, pricePerLitre, invoiceNumber, receiptUrl,
+      supplier, fuelStation, maintenanceType, mechanicName,
+      fineNumber, fineReason, fineDate, fineLocation, officerName,
+      insuranceCompany, policyNumber, coverType, driverId,
+    } = req.body;
+
+    if (!category || !amount) {
+      res.status(400).json({ error: 'category and amount are required' });
+      return;
+    }
+    // vehicleId is required by DB — use a placeholder flag if not provided
+    if (!vehicleId) {
+      res.status(400).json({ error: 'vehicleId is required' });
+      return;
+    }
+
     const expense = await prisma.vehicleExpense.create({
       data: {
-        ...req.body,
         organizationId: req.user.organizationId,
-        date: req.body.date ? new Date(req.body.date) : new Date(),
+        vehicleId,
+        category,
+        amount:      parseFloat(String(amount)),
+        description: description ?? null,
+        notes:       notes       ?? null,
+        date:        date ? new Date(date) : new Date(),
+        ...(litres          !== undefined && { litres:          parseFloat(litres) }),
+        ...(pricePerLitre   !== undefined && { pricePerLitre:   parseFloat(pricePerLitre) }),
+        ...(invoiceNumber   !== undefined && { invoiceNumber }),
+        ...(receiptUrl      !== undefined && { receiptUrl }),
+        ...(supplier        !== undefined && { supplier }),
+        ...(fuelStation     !== undefined && { fuelStation }),
+        ...(maintenanceType !== undefined && { maintenanceType }),
+        ...(mechanicName    !== undefined && { mechanicName }),
+        ...(fineNumber      !== undefined && { fineNumber }),
+        ...(fineReason      !== undefined && { fineReason }),
+        ...(fineDate        !== undefined && { fineDate: new Date(fineDate) }),
+        ...(fineLocation    !== undefined && { fineLocation }),
+        ...(officerName     !== undefined && { officerName }),
+        ...(insuranceCompany !== undefined && { insuranceCompany }),
+        ...(policyNumber    !== undefined && { policyNumber }),
+        ...(coverType       !== undefined && { coverType }),
+        ...(driverId        !== undefined && { driverId }),
       },
       include: { vehicle: { select: { name: true, licensePlate: true } } },
     });
     res.status(201).json(expense);
-  } catch (err) { next(err); }
+  } catch (err: any) {
+    if (err?.code === 'P2003') {
+      res.status(400).json({ error: 'Invalid vehicleId — vehicle not found in your organisation.' });
+      return;
+    }
+    next(err);
+  }
 });
 
 router.put('/:id', authorize('SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER'), async (req: any, res, next) => {

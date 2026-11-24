@@ -69,6 +69,7 @@ function useDriverForm() {
   const [emergencyPhone, setEmergencyPhone] = init('');
   const [licenseNumber, setLicenseNumber] = init('');
   const [licenseClasses, setLicenseClasses] = useState<string[]>([]);
+  const [licenseFile, setLicenseFile]     = useState<File | null>(null);
   const [licenseExpiry, setLicenseExpiry] = init('');
   const [licenseIssue, setLicenseIssue]   = init('');
   const [licenseCountry, setLicenseCountry] = init('Rwanda');
@@ -119,7 +120,7 @@ function useDriverForm() {
       phone, setPhone, altPhone, setAltPhone, email, setEmail,
       address, setAddress, city, setCity, district, setDistrict,
       emergencyContact, setEmergency, emergencyPhone, setEmergencyPhone,
-      licenseNumber, setLicenseNumber, licenseClasses, setLicenseClasses,
+      licenseNumber, setLicenseNumber, licenseClasses, setLicenseClasses, licenseFile, setLicenseFile,
       licenseExpiry, setLicenseExpiry, licenseIssue, setLicenseIssue,
       licenseCountry, setLicenseCountry, restrictions, setRestrictions,
       yearsDriving, setYearsDriving, taxiExp, setTaxiExp,
@@ -157,7 +158,24 @@ export default function DriversPage() {
   const vehicles = vehiclesResp ?? [];
 
   const createMutation = useMutation({
-    mutationFn: () => apiClient.post('/drivers', build()).then(r => r.data),
+    mutationFn: async () => {
+      // 1. Create the driver record
+      const driver = await apiClient.post('/drivers', build()).then(r => r.data);
+
+      // 2. If a license file was selected, upload it immediately as a document
+      if (f.licenseFile && driver.id) {
+        const formData = new FormData();
+        formData.append('file',      f.licenseFile);
+        formData.append('ownerType', 'DRIVER');
+        formData.append('ownerId',   driver.id);
+        formData.append('category',  'LICENSE');
+        formData.append('label',     `Driving License — ${f.firstName} ${f.lastName}`);
+        if (f.licenseExpiry) formData.append('expiresAt', new Date(f.licenseExpiry).toISOString());
+        await apiClient.post('/documents/upload-and-create', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+
+      return driver;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['drivers'] });
       toast.success('Driver created successfully');
@@ -324,6 +342,46 @@ export default function DriversPage() {
               {step === 'license' && (
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="License Number *"><Inp val={f.licenseNumber} set={f.setLicenseNumber} placeholder="RWXXX12345" /></Field>
+                  {/* Optional license document upload */}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Upload License Document <span className="text-gray-400 font-normal">(optional — image or PDF, max 15 MB)</span>
+                    </label>
+                    <label className={cn(
+                      'flex items-center gap-3 px-4 py-3 border-2 border-dashed rounded-xl cursor-pointer transition',
+                      f.licenseFile ? 'border-brand-400 bg-brand-50' : 'border-gray-300 hover:border-brand-400 hover:bg-gray-50'
+                    )}>
+                      <div className="w-9 h-9 rounded-lg bg-brand-100 flex items-center justify-center shrink-0">
+                        <span className="text-lg">{f.licenseFile ? '✅' : '📄'}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {f.licenseFile ? (
+                          <>
+                            <p className="text-sm font-medium text-brand-700 truncate">{f.licenseFile.name}</p>
+                            <p className="text-xs text-gray-400">{(f.licenseFile.size / 1024).toFixed(0)} KB — tap to change</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-600">Click to upload license copy</p>
+                            <p className="text-xs text-gray-400">JPG, PNG, WEBP, HEIC or PDF</p>
+                          </>
+                        )}
+                      </div>
+                      {f.licenseFile && (
+                        <button type="button" onClick={e => { e.preventDefault(); f.setLicenseFile(null); }}
+                          className="shrink-0 text-xs text-red-500 hover:text-red-700 font-medium">
+                          Remove
+                        </button>
+                      )}
+                      <input type="file" className="hidden"
+                        accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file && file.size > 15 * 1024 * 1024) { toast.error('File must be under 15 MB'); return; }
+                          f.setLicenseFile(file ?? null);
+                        }} />
+                    </label>
+                  </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-2">
                       License Class(es) <span className="text-gray-400 font-normal">— select all that apply</span>

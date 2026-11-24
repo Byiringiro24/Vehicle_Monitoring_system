@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { vehicleApi, fleetApi } from '@/lib/api';
+import { vehicleApi, fleetApi, apiClient } from '@/lib/api';
 import { X, Loader2, Truck, Fuel, Settings, Shield, FileText, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -126,6 +126,7 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
   const qc   = useQueryClient();
   const isEdit = !!vehicle;
   const [step, setStep] = useState<Step>('basic');
+  const [yellowCardFile, setYellowCardFile] = useState<File | null>(null);
 
   const { data: fleets } = useQuery({ queryKey: ['fleets'], queryFn: fleetApi.list });
 
@@ -154,7 +155,26 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
   const isHybrid   = energyType === 'HYBRID' || energyType === 'PHEV';
 
   const mutation = useMutation({
-    mutationFn: (data: VehicleForm) => isEdit ? vehicleApi.update(vehicle.id, data) : vehicleApi.create(data),
+    mutationFn: async (data: VehicleForm) => {
+      const result = isEdit
+        ? await vehicleApi.update(vehicle.id, data)
+        : await vehicleApi.create(data);
+
+      // Upload yellow card document if provided (create only, or new file on edit)
+      if (yellowCardFile && result.id) {
+        const form = new FormData();
+        form.append('file',      yellowCardFile);
+        form.append('ownerType', 'VEHICLE');
+        form.append('ownerId',   result.id);
+        form.append('category',  'INSURANCE');
+        form.append('label',     `Yellow Card — ${data.licensePlate}`);
+        await apiClient.post('/documents/upload-and-create', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      return result;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vehicles'] });
       // Also invalidate the single vehicle detail query so the detail page refreshes
@@ -354,6 +374,44 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
             {/* ── COMPLIANCE ───────────────────────────────────────────── */}
             {step === 'compliance' && (
               <div className="grid grid-cols-2 gap-4">
+                {/* Yellow card upload — prominent at top of compliance step */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Yellow Card (Insurance Certificate) <span className="text-gray-400 font-normal">— optional upload</span>
+                  </label>
+                  <label className={cn(
+                    'flex items-center gap-3 px-4 py-3 border-2 border-dashed rounded-xl cursor-pointer transition',
+                    yellowCardFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-brand-400 hover:bg-gray-50'
+                  )}>
+                    <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 text-lg">
+                      {yellowCardFile ? '✅' : '🟡'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {yellowCardFile ? (
+                        <>
+                          <p className="text-sm font-medium text-green-700 truncate">{yellowCardFile.name}</p>
+                          <p className="text-xs text-gray-400">{(yellowCardFile.size / 1024).toFixed(0)} KB — tap to change</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-gray-700">Upload Yellow Card</p>
+                          <p className="text-xs text-gray-400">Insurance certificate — JPG, PNG, PDF (max 15 MB)</p>
+                        </>
+                      )}
+                    </div>
+                    {yellowCardFile && (
+                      <button type="button" onClick={e => { e.preventDefault(); setYellowCardFile(null); }}
+                        className="shrink-0 text-xs text-red-500 hover:text-red-700 font-medium">Remove</button>
+                    )}
+                    <input type="file" className="hidden"
+                      accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file && file.size > 15 * 1024 * 1024) { toast.error('File must be under 15 MB'); return; }
+                        setYellowCardFile(file ?? null);
+                      }} />
+                  </label>
+                </div>
                 <Field label="Road Tax Expiry">
                   <Input reg={register('roadTaxExpiry')} type="date" />
                 </Field>
