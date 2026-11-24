@@ -168,16 +168,16 @@ function RegisterForm() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 flex flex-col items-center justify-center p-4 py-10">
-      {/* Logo */}
-      <div className="text-center mb-7">
-        <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-600 rounded-2xl mb-3 shadow-xl shadow-brand-600/40">
+      {/* Logo — clicking takes you back to login */}
+      <Link href="/login" className="text-center mb-7 group cursor-pointer">
+        <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-600 group-hover:bg-brand-500 rounded-2xl mb-3 shadow-xl shadow-brand-600/40 transition">
           <Truck size={26} className="text-white" />
         </div>
-        <h1 className="text-2xl font-black text-white tracking-wide">
+        <h1 className="text-2xl font-black text-white tracking-wide group-hover:text-cyan-300 transition">
           ARTIC<span className="text-cyan-400">.</span>VMS
         </h1>
         <p className="text-brand-300 text-xs mt-0.5 tracking-widest uppercase">Vehicle Monitoring System</p>
-      </div>
+      </Link>
 
       {/* Progress bar */}
       {accountType && (
@@ -207,8 +207,31 @@ function RegisterForm() {
           {step === 'type' && (
             <motion.div key="type" variants={fadeUp} initial="hidden" animate="show" exit="hidden"
               className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-7 shadow-2xl">
-              <h2 className="text-xl font-bold text-white mb-1">Create your account</h2>
-              <p className="text-brand-300 text-sm mb-6">What best describes you?</p>
+
+              {/* Marketing headline */}
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-black text-white mb-2">Start for free today</h2>
+                <p className="text-brand-300 text-sm">Join thousands of fleets already monitoring smarter</p>
+
+                {/* Feature bullets */}
+                <div className="mt-4 grid grid-cols-2 gap-2 text-left">
+                  {[
+                    { icon: '📍', text: 'Live GPS tracking — see every vehicle in real time' },
+                    { icon: '🏍️', text: 'Motorcycles, cars, trucks — manage any vehicle type' },
+                    { icon: '💰', text: 'Daily payments, debt tracking and Excel reports' },
+                    { icon: '🔒', text: 'Remote engine lock/unlock from your phone' },
+                    { icon: '📄', text: 'Digital contracts — signed, printed, managed' },
+                    { icon: '🚗', text: 'Get a vehicle or bike to drive — apply in 30 seconds' },
+                  ].map(({ icon, text }) => (
+                    <div key={text} className="flex items-start gap-2 bg-white/5 rounded-lg px-3 py-2">
+                      <span className="text-base shrink-0">{icon}</span>
+                      <p className="text-xs text-brand-200 leading-snug">{text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-brand-300 text-sm font-medium mb-3 text-center">What best describes you?</p>
 
               <div className="space-y-3">
                 <button

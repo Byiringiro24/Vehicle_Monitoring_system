@@ -84,9 +84,7 @@ export async function createVehicle(req: AuthenticatedRequest, res: Response, ne
 
     if (!rest.name)         throw new AppError(400, 'Vehicle name is required');
     if (!rest.licensePlate) throw new AppError(400, 'License plate is required');
-    if (!rest.manufacturer) throw new AppError(400, 'Manufacturer is required');
-    if (!rest.model)        throw new AppError(400, 'Model is required');
-    if (!year)              throw new AppError(400, 'Year is required');
+    // manufacturer, model, year are optional — no validation required
 
     // Helper: only include date if it's a non-empty string
     const toDate = (v: any) => (v && String(v).trim() !== '') ? new Date(v) : undefined;
@@ -100,7 +98,10 @@ export async function createVehicle(req: AuthenticatedRequest, res: Response, ne
         ...(rawFleetId && rawFleetId !== '' ? { fleetId: rawFleetId } : {}),
         organizationId: req.user!.organizationId,
         deviceToken:    uuidv4(),
-        year:           parseInt(year, 10),
+        // manufacturer and model are NOT NULL in DB — default to 'Unknown' if not provided
+        manufacturer: rest.manufacturer || 'Unknown',
+        model:        rest.model        || 'Unknown',
+        year:         year ? parseInt(year, 10) : new Date().getFullYear(),
         // Numerics
         fuelCapacity:        fuelCapacity        ? parseFloat(fuelCapacity)        : undefined,
         purchasePrice:       purchasePrice       ? parseFloat(purchasePrice)       : undefined,

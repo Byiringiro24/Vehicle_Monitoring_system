@@ -18,12 +18,15 @@ const optionalNumber = z.preprocess(
 );
 
 const schema = z.object({
-  // Basic
-  name:             z.string().min(1, 'Name required'),
-  licensePlate:     z.string().min(1, 'Plate required'),
-  manufacturer:     z.string().min(1, 'Manufacturer required'),
-  model:            z.string().min(1, 'Model required'),
-  year:             z.coerce.number().min(1990).max(2030),
+  // Basic — only name and plate are mandatory
+  name:             z.string().min(1, 'Vehicle name is required'),
+  licensePlate:     z.string().min(1, 'Plate number is required'),
+  manufacturer:     z.string().optional(),
+  model:            z.string().optional(),
+  year:             z.preprocess(
+    v => v === '' || v === null || v === undefined ? undefined : v,
+    z.coerce.number().min(1900).max(2035).optional()
+  ),
   vehicleClass:     z.string().default('SEDAN'),
   vehicleType:      z.string().default('CAR'),
   purpose:          z.string().default('COMPANY'),
@@ -197,9 +200,11 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
         {/* Form body */}
         <form onSubmit={handleSubmit(
           d => mutation.mutate(d),
-          () => {
-            setStep('basic');
-            toast.error('Please complete the required Basic Info fields before saving.');
+          (errs) => {
+            if (errs.name || errs.licensePlate) {
+              setStep('basic');
+              toast.error('Vehicle name and plate number are required.');
+            }
           },
         )} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto p-6">
@@ -207,23 +212,26 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
             {/* ── BASIC INFO ───────────────────────────────────────────── */}
             {step === 'basic' && (
               <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 bg-brand-50 border border-brand-200 rounded-xl px-4 py-2.5 text-xs text-brand-700">
+                  Only <strong>Vehicle Name</strong> and <strong>Plate Number</strong> are required. All other fields are optional and can be filled in later.
+                </div>
                 <Field label="Vehicle Name *" error={errors.name?.message}>
                   <Input reg={register('name')} placeholder="e.g. Truck Alpha" />
                 </Field>
                 <Field label="License Plate * (e.g. RAB 001 A)" error={errors.licensePlate?.message}>
                   <Input reg={register('licensePlate')} placeholder="RAB 001 A" />
                 </Field>
-                <Field label="Manufacturer *" error={errors.manufacturer?.message}>
-                  <Input reg={register('manufacturer')} placeholder="Toyota, Isuzu, BYD…" />
+                <Field label="Manufacturer" error={errors.manufacturer?.message}>
+                  <Input reg={register('manufacturer')} placeholder="Toyota, Isuzu, BYD… (optional)" />
                 </Field>
-                <Field label="Model *" error={errors.model?.message}>
-                  <Input reg={register('model')} placeholder="Hilux, NQR, Atto 3…" />
+                <Field label="Model" error={errors.model?.message}>
+                  <Input reg={register('model')} placeholder="Hilux, NQR, Atto 3… (optional)" />
                 </Field>
-                <Field label="Year *" error={errors.year?.message}>
-                  <Input reg={register('year')} type="number" placeholder="2024" />
+                <Field label="Year" error={(errors.year as any)?.message}>
+                  <Input reg={register('year')} type="number" placeholder={String(new Date().getFullYear())} />
                 </Field>
                 <Field label="Color">
-                  <Input reg={register('color')} placeholder="White, Blue…" />
+                  <Input reg={register('color')} placeholder="White, Blue… (optional)" />
                 </Field>
                 <Field label="Vehicle Class">
                   <Select reg={register('vehicleClass')} opts={VEHICLE_CLASSES} />
@@ -232,7 +240,7 @@ export function VehicleModal({ vehicle, onClose }: { vehicle?: any; onClose: () 
                   <Select reg={register('purpose')} opts={PURPOSES} />
                 </Field>
                 <Field label="VIN / Chassis Number">
-                  <Input reg={register('vin')} placeholder="JTMHE3FJ…" />
+                  <Input reg={register('vin')} placeholder="JTMHE3FJ… (optional)" />
                 </Field>
                 <Field label="Engine Number">
                   <Input reg={register('engineNumber')} placeholder="Optional" />

@@ -67,8 +67,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 20,
-  message: { error: 'Too many requests' }, standardHeaders: true, legacyHeaders: false,
+  windowMs: 15 * 60 * 1000,
+  // Higher limit in development so normal testing doesn't hit 429
+  max: process.env.NODE_ENV === 'production' ? 20 : 200,
+  message: { error: 'Too many requests, please wait a minute and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // only count failed attempts toward the limit
 });
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, max: 300,
