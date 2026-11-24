@@ -416,8 +416,8 @@ export const motoApi = {
   reportSummary: (params?: object) => apiClient.get('/moto/reports/summary', { params }).then(r => r.data),
 
   // Contract approval workflow
-  submitContract: (driverId: string, notes?: string) =>
-    apiClient.patch(`/moto/drivers/${driverId}/contract/submit`, { contractNotes: notes }).then(r => r.data),
+  submitContract: (driverId: string, notes?: string, dailyRate?: number, weeklyRate?: number, paymentDeadline?: string) =>
+    apiClient.patch(`/moto/drivers/${driverId}/contract/submit`, { contractNotes: notes, dailyRate, weeklyRate, paymentDeadline }).then(r => r.data),
   approveContract: (driverId: string, notes?: string) =>
     apiClient.patch(`/moto/drivers/${driverId}/contract/approve`, { contractNotes: notes }).then(r => r.data),
   rejectContract:  (driverId: string, reason?: string) =>

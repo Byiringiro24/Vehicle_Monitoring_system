@@ -31,6 +31,11 @@ export default function VehicleContractPage() {
 
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
+  // Rate fields that fleet manager sets when submitting
+  const [showRateEditor, setShowRateEditor] = useState(false);
+  const [submitDailyRate, setSubmitDailyRate]   = useState('');
+  const [submitWeeklyRate, setSubmitWeeklyRate] = useState('');
+  const [submitDeadline, setSubmitDeadline]     = useState('');
 
   const { data: driver, isLoading } = useQuery({
     queryKey: ['vehicle-driver-contract', driverId],
@@ -38,8 +43,14 @@ export default function VehicleContractPage() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => motoApi.submitContract(driverId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['vehicle-driver-contract', driverId] }); toast.success('Contract submitted for admin approval'); },
+    mutationFn: () => motoApi.submitContract(
+      driverId,
+      undefined,
+      submitDailyRate ? parseFloat(submitDailyRate) : undefined,
+      submitWeeklyRate ? parseFloat(submitWeeklyRate) : undefined,
+      submitDeadline || undefined,
+    ),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['vehicle-driver-contract', driverId] }); setShowRateEditor(false); toast.success('Contract submitted for admin approval'); },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed'),
   });
 
@@ -79,11 +90,30 @@ export default function VehicleContractPage() {
 
           {/* FLEET_MANAGER / ADMIN: submit for approval (if still draft or rejected) */}
           {canSubmit && (contractSt === 'DRAFT' || contractSt === 'REJECTED') && (
-            <button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending}
-              className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition disabled:opacity-60">
-              {submitMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-              Submit for Approval
-            </button>
+            <>
+              {/* Rate editor — fleet manager must confirm rate before submitting */}
+              {showRateEditor ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input type="number" value={submitDailyRate} onChange={e => setSubmitDailyRate(e.target.value)}
+                    placeholder="Daily rate (RWF)" className="w-36 px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+                  <input type="number" value={submitWeeklyRate} onChange={e => setSubmitWeeklyRate(e.target.value)}
+                    placeholder="Weekly rate" className="w-32 px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+                  <input type="time" value={submitDeadline} onChange={e => setSubmitDeadline(e.target.value)}
+                    placeholder="Deadline" className="w-28 px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" />
+                  <button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || !submitDailyRate}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition disabled:opacity-60">
+                    {submitMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    Confirm & Submit
+                  </button>
+                  <button onClick={() => setShowRateEditor(false)} className="text-xs text-gray-400 hover:text-gray-600 underline">Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowRateEditor(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition disabled:opacity-60">
+                  <Send size={13} /> Submit for Approval
+                </button>
+              )}
+            </>
           )}
 
           {/* ADMIN only: approve / reject (if pending) */}

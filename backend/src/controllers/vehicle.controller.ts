@@ -138,7 +138,11 @@ export async function createVehicle(req: AuthenticatedRequest, res: Response, ne
     });
     res.status(201).json(vehicle);
   } catch (err: any) {
-    console.error('[createVehicle]', err?.message);
+    if (err?.code === 'P2002') {
+      const field = err.meta?.target?.includes('licensePlate') ? 'license plate' : 'field';
+      res.status(409).json({ error: `A vehicle with this ${field} already exists. Please use a different plate number.` });
+      return;
+    }
     next(err);
   }
 }

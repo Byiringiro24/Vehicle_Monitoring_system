@@ -482,6 +482,8 @@ router.post('/fines', authorize(...MOTO_ROLES) as any, async (req: any, res, nex
     const { driverId, plateNumber, fineDate, reason, amount, paidByCompany, notes } = req.body;
     if (!plateNumber || !reason || !amount) throw new AppError(400, 'plateNumber, reason and amount are required');
 
+    const fineAmount = parseFloat(amount);
+
     const fine = await prisma.motoFine.create({
       data: {
         organizationId: req.user.organizationId,
@@ -489,12 +491,40 @@ router.post('/fines', authorize(...MOTO_ROLES) as any, async (req: any, res, nex
         plateNumber,
         fineDate:       fineDate ? new Date(fineDate) : new Date(),
         reason,
-        amount:         parseFloat(amount),
+        amount:         fineAmount,
         paidByCompany:  paidByCompany ?? false,
         notes,
       },
     });
-    res.status(201).json(fine);
+
+    // If the driver is responsible (not paid by company), add the fine to their totalDebt
+    if (driverId && !(paidByCompany ?? false)) {
+      const driver = await prisma.motoDriver.findFirst({
+        where: { id: driverId, organizationId: req.user.organizationId },
+      });
+      if (driver) {
+        await prisma.motoDriver.update({
+          where: { id: driverId },
+          data:  { totalDebt: driver.totalDebt + fineAmount },
+        });
+        auditLog({
+          organizationId: req.user.organizationId,
+          userId:    req.user.userId,
+          action:    'moto_fine.add_debt',
+          targetType:'moto_driver',
+          targetId:  driverId,
+          after:     { fine: reason, amount: fineAmount, newDebt: driver.totalDebt + fineAmount },
+          ipAddress: getIp(req),
+        });
+      }
+    }
+
+    res.status(201).json({
+      ...fine,
+      message: driverId && !(paidByCompany ?? false)
+        ? `Fine of RWF ${fineAmount.toLocaleString()} added to driver's debt.`
+        : 'Fine recorded — paid by company.',
+    });
   } catch (err) { next(err); }
 });
 
@@ -578,19 +608,23 @@ router.patch('/drivers/:id/contract/submit', authorize('SUPER_ADMIN', 'ADMIN', '
       return;
     }
 
-    const { contractNotes } = req.body;
+    const { contractNotes, dailyRate, weeklyRate, paymentDeadline } = req.body;
     const updated = await (prisma.motoDriver as any).update({
       where: { id: req.params.id },
       data: {
         contractStatus:    'PENDING_APPROVAL',
         contractCreatedBy: req.user.userId,
-        ...(contractNotes !== undefined && { contractNotes }),
+        ...(contractNotes    !== undefined && { contractNotes }),
+        // Fleet manager sets the agreed payment rate when submitting the contract
+        ...(dailyRate        !== undefined && { dailyRate: parseFloat(dailyRate) }),
+        ...(weeklyRate       !== undefined && { weeklyRate: parseFloat(weeklyRate) }),
+        ...(paymentDeadline  !== undefined && { paymentDeadline }),
       },
     });
 
     auditLog({ organizationId: req.user.organizationId, userId: req.user.userId,
       action: 'moto_contract.submit', targetType: 'moto_driver', targetId: driver.id,
-      after: { driver: `${driver.firstName} ${driver.lastName}`, status: 'PENDING_APPROVAL' },
+      after: { driver: `${driver.firstName} ${driver.lastName}`, status: 'PENDING_APPROVAL', dailyRate },
       ipAddress: getIp(req) });
 
     res.json({ ...updated, message: 'Contract submitted for admin approval.' });
