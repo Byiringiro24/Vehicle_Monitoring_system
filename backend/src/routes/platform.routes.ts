@@ -23,7 +23,7 @@ router.get('/stats', async (_req, res, next) => {
       planBreakdown,
     ] = await Promise.all([
       prisma.organization.count(),
-      prisma.organization.count({ where: { isActive: true } as any }),
+      prisma.organization.count({ where: { status: 'ACTIVE' } }),
       prisma.user.count(),
       prisma.vehicle.count(),
       prisma.subscription.groupBy({ by: ['status'], _count: true }),

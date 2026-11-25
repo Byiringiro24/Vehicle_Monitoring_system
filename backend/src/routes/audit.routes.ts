@@ -12,7 +12,7 @@ const router = Router();
 router.use(authenticate as any);
 
 // ── GET /audit — org-level audit logs ─────────────────────────────────────────
-router.get('/', authorize('SUPER_ADMIN', 'ADMIN') as any, async (req: any, res, next) => {
+router.get('/', authorize('SUPER_ADMIN', 'ADMIN', 'AUDITOR') as any, async (req: any, res, next) => {
   try {
     const orgId  = req.user.organizationId;
     const limit  = Math.min(parseInt((req.query.limit as string) ?? '100'), 500);
