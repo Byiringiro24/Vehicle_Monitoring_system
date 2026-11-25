@@ -777,10 +777,46 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Date range (hide for summary which uses built-in today/month) */}
-      {tab !== 'summary' && (
-        <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
-      )}
+      {/* Date range — shown on ALL tabs with quick presets */}
+      <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Quick presets */}
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { label: 'Today',    days: 0 },
+              { label: 'Week',     days: 7 },
+              { label: 'Month',    days: 30 },
+              { label: '3 Months', days: 90 },
+              { label: 'Year',     days: 365 },
+            ].map(({ label, days }) => {
+              const f = format(subDays(new Date(), days), 'yyyy-MM-dd');
+              const t = format(new Date(), 'yyyy-MM-dd');
+              const active = from === f && to === t;
+              return (
+                <button key={label}
+                  onClick={() => { setFrom(f); setTo(t); }}
+                  className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition',
+                    active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
+            <Calendar size={14} className="text-gray-400 shrink-0" />
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 shrink-0">From</label>
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-brand-500 outline-none" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 shrink-0">To</label>
+              <input type="date" value={to} onChange={e => setTo(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-brand-500 outline-none" />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {tab === 'summary'   && <SummaryTab   from={from} to={to} />}
       {tab === 'fleet'     && <FleetTab     from={from} to={to} />}

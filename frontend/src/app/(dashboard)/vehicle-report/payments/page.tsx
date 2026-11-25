@@ -60,9 +60,27 @@ export default function MotoPaymentsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Daily Collection</h1>
-        <p className="text-gray-500 text-sm mt-0.5">{formatDate(new Date())} — Record payments from motorcycle drivers</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Daily Collection</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{formatDate(new Date())} — Record payments from motorcycle/vehicle drivers</p>
+        </div>
+        {/* Mark all unrecorded as overdue */}
+        {todaySummary?.notRecorded > 0 && (
+          <button
+            onClick={() => {
+              const unrecorded = (drivers as any[]).filter((d: any) => d.todayStatus === 'NOT_RECORDED');
+              if (!unrecorded.length) return;
+              if (!window.confirm(`Mark ${unrecorded.length} unrecorded driver(s) as OVERDUE for today? This adds today's rate to their debt.`)) return;
+              Promise.all(unrecorded.map((d: any) =>
+                recordPayment.mutateAsync({ driverId: d.id, date: today, paidAmount: 0, notes: 'Auto-marked overdue at end of day' })
+              )).then(() => toast.success(`${unrecorded.length} drivers marked as overdue`))
+                .catch(() => toast.error('Some records failed'));
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition shadow-sm">
+            <AlertTriangle size={14} /> Mark {todaySummary.notRecorded} unrecorded as Overdue
+          </button>
+        )}
       </div>
 
       {/* Today's summary KPIs */}
@@ -113,12 +131,15 @@ export default function MotoPaymentsPage() {
                     {d.plateNumber && (
                       <span className="text-[10px] font-mono font-bold bg-gray-100 px-1.5 py-0.5 rounded">{d.plateNumber}</span>
                     )}
-                    <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium',
-                      d.todayStatus === 'PAID' ? 'bg-green-100 text-green-700' :
-                      d.todayStatus === 'DEBT' ? 'bg-red-100 text-red-700' :
-                      d.todayStatus === 'PARTIAL' ? 'bg-amber-100 text-amber-700' :
-                      'bg-slate-100 text-slate-500')}>
-                      {d.todayStatus?.replace('_',' ') ?? 'NOT RECORDED'}
+                    <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold border',
+                      d.todayStatus === 'PAID'         ? 'bg-green-100 text-green-700 border-green-200' :
+                      d.todayStatus === 'PARTIAL'      ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                      d.todayStatus === 'DEBT'         ? 'bg-red-100 text-red-700 border-red-200' :
+                      'bg-slate-100 text-slate-500 border-slate-200')}>
+                      {d.todayStatus === 'PAID'         ? '✓ PAID' :
+                       d.todayStatus === 'PARTIAL'      ? '⚠ PARTIAL' :
+                       d.todayStatus === 'DEBT'         ? '✗ OVERDUE' :
+                       '⏳ NOT RECORDED'}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
@@ -130,9 +151,20 @@ export default function MotoPaymentsPage() {
 
                 {/* Today's payment or record button */}
                 {d.todayStatus === 'PAID' ? (
-                  <span className="text-xs text-green-600 font-medium shrink-0">
-                    ✓ RWF {d.todayPaid?.toLocaleString()} paid
-                  </span>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-green-600 font-semibold">✓ RWF {d.todayPaid?.toLocaleString()} paid</p>
+                    {d.totalDebt > 0 && (
+                      <p className="text-[10px] text-red-500 mt-0.5">Old debt: RWF {d.totalDebt.toLocaleString()}</p>
+                    )}
+                  </div>
+                ) : d.todayStatus === 'PARTIAL' ? (
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-amber-600 font-semibold">RWF {d.todayPaid?.toLocaleString()} paid</p>
+                    <button onClick={() => { setPaying(d.id); setPayAmount(''); }}
+                      className="text-[10px] text-brand-600 hover:underline mt-0.5">
+                      + Add more
+                    </button>
+                  </div>
                 ) : paying === d.id ? (
                   <div className="flex items-center gap-2 shrink-0">
                     <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}

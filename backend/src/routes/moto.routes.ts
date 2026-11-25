@@ -307,12 +307,15 @@ router.post('/payments', authorize('SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'F
       // Paid full or more — excess covers previous debt
       const excess = totalPaid - expectedAmount;
       debtAfter = Math.max(0, debtBefore - excess);
-      status = debtAfter > 0 && excess < debtBefore ? 'PARTIAL' : 'PAID';
+      // PAID = today's amount covered in full (regardless of old debt)
+      // PAID_WITH_DEBT = today covered but still has outstanding balance
+      status = 'PAID';
     } else {
       // Paid less than expected — shortfall added to debt
       const shortfall = expectedAmount - totalPaid;
       debtAfter = debtBefore + shortfall;
-      status = 'DEBT';
+      // PARTIAL = paid something but not the full daily amount
+      status = 'PARTIAL';
     }
 
     // Find existing or create new (one per driver per day)

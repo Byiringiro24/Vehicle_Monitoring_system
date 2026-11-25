@@ -153,9 +153,9 @@ export default function DriversPage() {
 
   const { data: vehiclesResp } = useQuery({
     queryKey: ['vehicles-list'],
-    queryFn: () => apiClient.get('/vehicles').then(r => r.data.data ?? []),
+    queryFn: () => apiClient.get('/vehicles?limit=200').then(r => r.data?.data ?? r.data ?? []),
   });
-  const vehicles = vehiclesResp ?? [];
+  const vehicles: any[] = Array.isArray(vehiclesResp) ? vehiclesResp : [];
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -189,9 +189,11 @@ export default function DriversPage() {
       apiClient.patch(`/drivers/${driverId}/assign`, { vehicleId }).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['drivers'] });
-      toast.success('Assignment updated');
+      toast.success(selectedVehicle ? 'Vehicle assigned successfully' : 'Vehicle unassigned');
       setAssignModal(null);
+      setSelectedVehicle('');
     },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Assignment failed'),
   });
 
   const stepIdx = STEPS.findIndex(s => s.id === step);
@@ -512,20 +514,36 @@ export default function DriversPage() {
       {assignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h2 className="text-lg font-semibold">
-              Assign Vehicle — {assignModal.user.firstName} {assignModal.user.lastName}
-            </h2>
+            <div>
+              <h2 className="text-lg font-semibold">Assign Vehicle</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Driver: <strong>{assignModal.user?.firstName ?? assignModal.firstName} {assignModal.user?.lastName ?? assignModal.lastName}</strong>
+              </p>
+              {assignModal.currentVehicle && (
+                <p className="text-xs text-brand-600 mt-1">
+                  Currently assigned: <strong>{assignModal.currentVehicle.licensePlate}</strong>
+                </p>
+              )}
+            </div>
             <select value={selectedVehicle} onChange={e => setSelectedVehicle(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none">
-              <option value="">No Vehicle (Unassign)</option>
+              <option value="">— Unassign (no vehicle) —</option>
+              {vehicles.length === 0 && (
+                <option disabled>No vehicles in system — register a vehicle first</option>
+              )}
               {vehicles.map((v: any) => (
                 <option key={v.id} value={v.id}>
-                  {v.licensePlate} — {v.name} ({v.status})
+                  {v.licensePlate} — {v.name} [{v.status}]
                 </option>
               ))}
             </select>
+            {vehicles.length === 0 && (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                No vehicles found. Go to Vehicles page to register vehicles first.
+              </p>
+            )}
             <div className="flex gap-3">
-              <button onClick={() => setAssignModal(null)}
+              <button onClick={() => { setAssignModal(null); setSelectedVehicle(''); }}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">
                 Cancel
               </button>
@@ -533,7 +551,7 @@ export default function DriversPage() {
                 onClick={() => assignMutation.mutate({ driverId: assignModal.id, vehicleId: selectedVehicle || null })}
                 disabled={assignMutation.isPending}
                 className="flex-1 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition disabled:opacity-60">
-                {assignMutation.isPending ? 'Assigning…' : 'Assign'}
+                {assignMutation.isPending ? 'Saving…' : selectedVehicle ? 'Assign Vehicle' : 'Unassign'}
               </button>
             </div>
           </div>
