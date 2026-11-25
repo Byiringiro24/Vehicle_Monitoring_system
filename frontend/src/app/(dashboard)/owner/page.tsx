@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Building2, Car, DollarSign, Plus, TrendingDown, TrendingUp } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Link from 'next/link';
 
 import { apiClient } from '@/lib/api';
@@ -17,7 +18,7 @@ export default function OwnerPage() {
 
   const { data: ownedVehicles = [], isLoading, refetch } = useQuery({
     queryKey: ['owner-vehicles'],
-    queryFn: () => apiClient.get('/owner/vehicles').then((r) => r.data),
+    queryFn: () => apiClient.get('/owner/vehicles').then((r) => r.data?.data ?? r.data ?? []),
   });
 
   const { data: statementsData } = useQuery({
@@ -48,7 +49,7 @@ export default function OwnerPage() {
       setShowClaim(false);
       setClaimVehicleId('');
     } catch (error: any) {
-      alert(error.response?.data?.error ?? 'Failed to claim vehicle');
+      toast.error(error.response?.data?.error ?? 'Failed to claim vehicle');
     } finally {
       setClaiming(false);
     }

@@ -15,6 +15,8 @@ export default function ApprovalsPage() {
   const qc = useQueryClient();
   const rawRoles = Array.isArray(user?.roles) ? user.roles : user ? [user.role] : [];
   const canManageRegistrations = rawRoles.includes('SUPER_ADMIN') || rawRoles.includes('ADMIN');
+  const [rejectReqId, setRejectReqId] = useState<string | null>(null);
+  const [rejectReqReason, setRejectReqReason] = useState('');
   const isFinanceApprover = rawRoles.includes('FINANCE_MANAGER') || rawRoles.includes('SUPER_ADMIN') || rawRoles.includes('ADMIN');
   const [tab, setTab] = useState<TabId>(isFinanceApprover ? 'finance-approvals' : 'pending-orgs');
   const [rejectModal, setRejectModal] = useState<any>(null);
@@ -268,18 +270,17 @@ export default function ApprovalsPage() {
                         <CheckCircle2 size={14} /> Approve
                       </button>
                       <button
-                        onClick={() => requisitionReject.mutate({ id: item.id, reason: 'Rejected from approvals queue' })}
+                        onClick={() => { setRejectReqId(item.id); setRejectReqReason(''); }}
                         disabled={requisitionReject.isPending}
                         className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition disabled:opacity-60">
                         <XCircle size={14} /> Reject
                       </button>
                     </>
                   ) : (
-                    <button
-                      onClick={() => toast.success(`${item.queueType === 'PAYROLL' ? 'Payroll' : 'Owner payout'} item reviewed`)}
+                    <a href={`/payouts`}
                       className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition">
-                      <CheckCircle2 size={14} /> Review
-                    </button>
+                      <CheckCircle2 size={14} /> Go to Payouts
+                    </a>
                   )}
                 </div>
               </div>
@@ -356,6 +357,31 @@ export default function ApprovalsPage() {
                 disabled={!rejectReason.trim() || rejectMutation.isPending}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-60">
                 {rejectMutation.isPending ? 'Rejecting…' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requisition reject reason modal */}
+      {rejectReqId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Reason for rejection</h2>
+              <button onClick={() => setRejectReqId(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16} /></button>
+            </div>
+            <textarea value={rejectReqReason} onChange={e => setRejectReqReason(e.target.value)} rows={3}
+              placeholder="Explain why this requisition is being rejected…"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-400 outline-none resize-none" />
+            <div className="flex gap-3">
+              <button onClick={() => setRejectReqId(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
+              <button
+                onClick={() => requisitionReject.mutate({ id: rejectReqId, reason: rejectReqReason.trim() || 'Rejected' })}
+                disabled={requisitionReject.isPending}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-60">
+                {requisitionReject.isPending ? 'Rejecting…' : 'Confirm'}
               </button>
             </div>
           </div>

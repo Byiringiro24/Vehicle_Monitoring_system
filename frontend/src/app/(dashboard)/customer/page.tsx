@@ -155,37 +155,14 @@ export default function CustomerPage() {
       {tab === 'payments' && <CustomerPayments />}
 
       {tab === 'history' && (
-        <div className="app-panel p-5">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Recent activity</h2>
-            <span className="rounded-full bg-brand-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-700">
-              Updated today
-            </span>
           </div>
-
-          <div className="space-y-3">
-            {[
-              { label: 'Agreement confirmed', detail: 'Toyota Hilux — recurring monthly plan', time: '2h ago' },
-              { label: 'Payment scheduled', detail: 'Next invoice due in 6 days', time: '1 day ago' },
-              { label: 'Document verified', detail: 'National ID and insurance uploaded successfully', time: '3 days ago' },
-            ].map((item) => (
-              <div key={item.label} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
-                <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                  <CheckCircle2 size={14} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-900">{item.label}</p>
-                  <p className="text-xs text-slate-500">{item.detail}</p>
-                </div>
-                <span className="text-[11px] text-slate-400">{item.time}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex justify-end">
-            <a href="/support" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600">
-              Need help
-              <ArrowRight size={14} />
+          <div className="text-center py-8">
+            <p className="text-gray-500 text-sm">Your agreement and payment history will appear here as you use the system.</p>
+            <a href="/support" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+              Need help? Contact support <ArrowRight size={14} />
             </a>
           </div>
         </div>

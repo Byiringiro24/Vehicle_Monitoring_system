@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { ShieldCheck, AlertTriangle, FileText, Truck, Clock, Search, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, FileText, Truck, Clock, Search, CheckCircle2, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const DOC_STATUS_COLORS: Record<string, string> = {
   VERIFIED:       'bg-green-100 text-green-700',
@@ -19,8 +20,24 @@ type TabId = 'review' | 'expiry' | 'all';
 
 export default function CompliancePage() {
   const { user } = useAuthStore();
+  const qc = useQueryClient();
   const [tab, setTab] = useState<TabId>('review');
   const [search, setSearch] = useState('');
+  const [rejectDocId, setRejectDocId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const verifyMutation = useMutation({
+    mutationFn: (id: string) => apiClient.post(`/documents/${id}/verify`).then(r => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['compliance-docs'] }); toast.success('Document verified ✓'); },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to verify document'),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      apiClient.post(`/documents/${id}/reject`, { reason }).then(r => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['compliance-docs'] }); toast.success('Document rejected'); setRejectDocId(null); setRejectReason(''); },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to reject document'),
+  });
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ['compliance-docs'],
@@ -160,10 +177,17 @@ export default function CompliancePage() {
                       <td className="px-4 py-3 text-xs">
                         {d.status === 'PENDING_REVIEW' && (
                           <div className="flex gap-2">
-                            <button onClick={() => apiClient.post(`/documents/${d.id}/verify`).then(() => window.location.reload())}
-                              className="text-green-600 hover:text-green-700 font-medium">Verify</button>
-                            <button onClick={() => apiClient.post(`/documents/${d.id}/reject`, { reason: 'Rejected' }).then(() => window.location.reload())}
-                              className="text-red-500 hover:text-red-600 font-medium">Reject</button>
+                            <button
+                              onClick={() => verifyMutation.mutate(d.id)}
+                              disabled={verifyMutation.isPending}
+                              className="text-green-600 hover:text-green-700 font-medium disabled:opacity-50">
+                              Verify
+                            </button>
+                            <button
+                              onClick={() => { setRejectDocId(d.id); setRejectReason(''); }}
+                              className="text-red-500 hover:text-red-600 font-medium">
+                              Reject
+                            </button>
                           </div>
                         )}
                       </td>
@@ -172,6 +196,36 @@ export default function CompliancePage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Reject reason modal */}
+      {rejectDocId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Reason for rejection</h2>
+              <button onClick={() => setRejectDocId(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16} /></button>
+            </div>
+            <p className="text-xs text-gray-500">This reason will be visible to the document owner so they know what to fix.</p>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Document is blurry, wrong vehicle plate, expired certificate…"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-400 outline-none resize-none"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => setRejectDocId(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
+              <button
+                onClick={() => rejectMutation.mutate({ id: rejectDocId, reason: rejectReason.trim() || 'Document rejected' })}
+                disabled={rejectMutation.isPending}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-60">
+                {rejectMutation.isPending ? 'Rejecting…' : 'Confirm Rejection'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -23,7 +23,7 @@ export default function RiderPage() {
   // Fetch driver profile (rider uses driver model)
   const { data: driverList = [] } = useQuery({
     queryKey: ['my-driver-profile'],
-    queryFn: () => apiClient.get('/drivers').then(r => r.data ?? []),
+    queryFn: () => apiClient.get('/drivers').then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
   });
 
   // Find the current user's driver profile
@@ -181,7 +181,7 @@ export default function RiderPage() {
             />
             <button
               onClick={() => recordPayment.mutate()}
-              disabled={!payAmount || recordPayment.isPending}
+              disabled={!payAmount || Number(payAmount) <= 0 || recordPayment.isPending}
               className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-60">
               {recordPayment.isPending ? 'Saving…' : 'Save'}
             </button>

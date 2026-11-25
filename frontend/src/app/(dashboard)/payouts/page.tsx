@@ -32,7 +32,7 @@ export default function PayoutsPage() {
 
   const { data: owners = [] } = useQuery({
     queryKey: ['owner-vehicles'],
-    queryFn: () => apiClient.get('/owner/vehicles').then(r => r.data),
+    queryFn: () => apiClient.get('/owner/vehicles').then(r => r.data?.data ?? r.data ?? []),
   });
 
   const createMutation = useMutation({

@@ -36,11 +36,13 @@ export default function AlertsPage() {
   const ackMutation = useMutation({
     mutationFn: alertApi.acknowledge,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts'] }); toast.success('Alert acknowledged'); },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to acknowledge'),
   });
 
   const resolveMutation = useMutation({
     mutationFn: alertApi.resolve,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts'] }); toast.success('Alert resolved'); },
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to resolve'),
   });
 
   // Real-time new alerts

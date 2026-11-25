@@ -25,7 +25,7 @@ export default function StaffPage() {
 
   const { data: drivers = [], isLoading } = useQuery({
     queryKey: ['staff-drivers'],
-    queryFn: () => apiClient.get('/drivers').then(r => r.data ?? []),
+    queryFn: () => apiClient.get('/drivers').then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
     refetchInterval: 60000,
   });
 
